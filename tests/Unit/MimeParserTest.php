@@ -36,7 +36,7 @@ class MimeParserTest extends TestCase {
 	}
 
 	public function testMultipartWithBase64Attachment(): void {
-		$pdf = "%PDF-1.4 fake pdf content";
+		$pdf = '%PDF-1.4 fake pdf content';
 		$raw = "From: applicant@example.org\r\n"
 			. "To: jobs+backend-dev@company.com\r\n"
 			. "Subject: My application\r\n"

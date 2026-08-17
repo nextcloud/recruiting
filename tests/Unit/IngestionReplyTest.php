@@ -67,22 +67,7 @@ class IngestionReplyTest extends TestCase {
 		$this->client = $this->createMock(ImapClient::class);
 		$client = $this->client;
 
-		$this->service = new class(
-			$client,
-			$this->config,
-			$this->createMock(OpeningMapper::class),
-			$this->candidateMapper,
-			$this->seenMail,
-			$this->teamMapper,
-			$this->candidates,
-			$this->documents,
-			$this->createMock(MailService::class),
-			$this->timeline,
-			$this->notifications,
-			$this->createMock(AiService::class),
-			$this->timeFactoryMock(),
-			new NullLogger(),
-		) extends IngestionService {
+		$this->service = new class($client, $this->config, $this->createMock(OpeningMapper::class), $this->candidateMapper, $this->seenMail, $this->teamMapper, $this->candidates, $this->documents, $this->createMock(MailService::class), $this->timeline, $this->notifications, $this->createMock(AiService::class), $this->timeFactoryMock(), new NullLogger(), ) extends IngestionService {
 			public function __construct(
 				private ImapClient $testClient,
 				...$args,

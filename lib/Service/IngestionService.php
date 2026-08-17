@@ -17,12 +17,12 @@ use OCA\Recruiting\Db\SeenMailMapper;
 use OCA\Recruiting\Db\TeamMember;
 use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Db\TimelineEvent;
-use OCP\AppFramework\Db\DoesNotExistException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Imap\ImapClient;
 use OCA\Recruiting\Imap\ImapException;
 use OCA\Recruiting\Imap\MimeParser;
 use OCA\Recruiting\Imap\ParsedMail;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use Psr\Log\LoggerInterface;
 

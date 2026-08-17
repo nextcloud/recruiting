@@ -665,7 +665,6 @@ class CandidateService {
 		return $result;
 	}
 
-
 	private function displayName(string $uid): string {
 		return $this->userManager->getDisplayName($uid) ?? $uid;
 	}

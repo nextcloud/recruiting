@@ -9,11 +9,11 @@ declare(strict_types=1);
 namespace OCA\Recruiting\Controller;
 
 use OCA\Recruiting\Db\DocumentMapper;
+use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\PermissionService;
 use OCA\Recruiting\Service\TimelineService;
-use OCA\Recruiting\Db\TimelineEvent;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;

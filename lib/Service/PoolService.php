@@ -13,7 +13,6 @@ use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Exception\NotPermittedException;
-use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IURLGenerator;
 use OCP\Security\ISecureRandom;
