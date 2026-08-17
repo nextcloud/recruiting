@@ -1,0 +1,7 @@
+SPDX-License-Identifier: AGPL-3.0-or-later
+SPDX-FileCopyrightText: recruiting developers
+
+This file is generated from multiple sources. Included packages:
+- recruiting
+	- version: 0.1.0
+	- license: AGPL-3.0-or-later

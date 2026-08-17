@@ -1,0 +1,7 @@
+/build/
+/node_modules/
+/vendor/
+/vendor-bin/*/vendor/
+/tests/.phpunit.cache/
+.php-cs-fixer.cache
+.DS_Store

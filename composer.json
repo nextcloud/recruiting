@@ -1,0 +1,52 @@
+{
+	"name": "nextcloud/recruiting",
+	"description": "Manage job applications, screening, interviews and rejections in Nextcloud",
+	"type": "project",
+	"license": "AGPL-3.0-or-later",
+	"require": {
+		"php": "^8.2"
+	},
+	"require-dev": {
+		"bamarni/composer-bin-plugin": "^1.8",
+		"phpunit/phpunit": "^11"
+	},
+	"config": {
+		"optimize-autoloader": true,
+		"sort-packages": true,
+		"allow-plugins": {
+			"bamarni/composer-bin-plugin": true
+		}
+	},
+	"extra": {
+		"bamarni-bin": {
+			"bin-links": false,
+			"forward-command": false
+		}
+	},
+	"scripts": {
+		"post-install-cmd": [
+			"@composer bin all install --ansi",
+			"composer dump-autoload"
+		],
+		"post-update-cmd": [
+			"@composer bin all install --ansi",
+			"composer dump-autoload"
+		],
+		"lint": "find . -name \\*.php -not -path './vendor/*' -not -path './vendor-bin/*' -not -path './build/*' -print0 | xargs -0 -n200 php -l",
+		"cs:check": "php-cs-fixer fix --dry-run --diff",
+		"cs:fix": "php-cs-fixer fix",
+		"psalm": "psalm --no-cache",
+		"psalm:update-baseline": "psalm --threads=1 --update-baseline",
+		"test:unit": "phpunit -c tests/phpunit.xml --colors=always --fail-on-warning --fail-on-risky"
+	},
+	"autoload": {
+		"psr-4": {
+			"OCA\\Recruiting\\": "lib/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"OCA\\Recruiting\\Tests\\": "tests/"
+		}
+	}
+}

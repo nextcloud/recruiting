@@ -1,0 +1,19 @@
+/*!
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+/**
+ * One accent color per pipeline stage, shared by the board columns, the
+ * table chips and the reports funnel so a stage looks the same everywhere.
+ * Chosen to read as accents on both the light and the dark theme.
+ */
+@mixin vars {
+	--recruiting-stage-new: #1e7bd0;
+	--recruiting-stage-screening: #a8620a;
+	--recruiting-stage-interview: #7a5ea8;
+	--recruiting-stage-offer: #2d8659;
+	--recruiting-stage-hired: var(--color-success, #2d7b41);
+	--recruiting-stage-rejected: var(--color-error, #b3251e);
+	--recruiting-stage-withdrawn: var(--color-text-maxcontrast, #6b6b6b);
+}

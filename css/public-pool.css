@@ -1,0 +1,44 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Hand-written (not build output) — served via style('recruiting', 'public-pool').
+ */
+.recruiting-pool-consent {
+	max-width: 420px;
+	margin: 0 auto;
+	text-align: start;
+	color: var(--color-main-text);
+	background-color: var(--color-main-background);
+	border-radius: var(--border-radius-container, 16px);
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.recruiting-pool-consent h2 {
+	margin: 0;
+	font-size: 1.3em;
+}
+
+.recruiting-pool-consent p {
+	margin: 0;
+}
+
+.recruiting-pool-consent__hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
+}
+
+.recruiting-pool-consent button.primary {
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border: none;
+	border-radius: var(--border-radius-element, 25px);
+	padding: 12px 24px;
+	font-size: 1em;
+	font-weight: 600;
+	cursor: pointer;
+	width: 100%;
+}

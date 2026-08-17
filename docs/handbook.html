@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<!--
+  - SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+  -
+  - Source of docs/handbook.pdf — render with:
+  -   chrome --headless --print-to-pdf=handbook.pdf --no-pdf-header-footer handbook.html
+  -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recruiting Handbook</title>
+<style>
+	:root {
+		--blue: #1e7bd0;
+		--amber: #a8620a;
+		--violet: #7a5ea8;
+		--green: #2d8659;
+		--ink: #1b2430;
+		--muted: #5b6675;
+		--line: #dde3ea;
+		--bg-soft: #f4f7fa;
+	}
+
+	* { box-sizing: border-box; margin: 0; padding: 0; }
+
+	@page { size: A4; margin: 14mm 15mm 16mm; }
+
+	body {
+		font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+		color: var(--ink);
+		font-size: 10.5pt;
+		line-height: 1.55;
+	}
+
+	/* ---------- cover ---------- */
+	.cover {
+		height: 250mm;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		page-break-after: always;
+	}
+	.cover .app-badge {
+		width: 72px; height: 72px;
+		border-radius: 18px;
+		background: linear-gradient(135deg, var(--blue), #0e5aa7);
+		color: #fff;
+		display: flex; align-items: center; justify-content: center;
+		font-size: 38px;
+		margin-bottom: 28px;
+	}
+	.cover h1 { font-size: 34pt; letter-spacing: -0.5pt; }
+	.cover .subtitle { font-size: 14pt; color: var(--muted); margin-top: 10px; max-width: 32em; }
+	.cover .pipeline { display: flex; align-items: center; gap: 8px; margin-top: 44px; flex-wrap: wrap; }
+	.cover .pipeline .stage {
+		padding: 7px 18px; border-radius: 999px; color: #fff; font-weight: 600; font-size: 10pt;
+	}
+	.cover .pipeline .arrow { color: var(--muted); font-size: 13pt; }
+	.cover .meta { margin-top: 48px; color: var(--muted); font-size: 9.5pt; }
+
+	.s-new { background: var(--blue); }
+	.s-screening { background: var(--amber); }
+	.s-interview { background: var(--violet); }
+	.s-offer { background: var(--green); }
+	.s-hired { background: #1c6b34; }
+
+	/* ---------- toc ---------- */
+	.toc { page-break-after: always; }
+	.toc h2 { margin-bottom: 18px; }
+	.toc ol { list-style: none; counter-reset: toc; column-count: 2; column-gap: 36px; }
+	.toc li {
+		counter-increment: toc;
+		padding: 7px 0 7px 40px;
+		position: relative;
+		border-bottom: 1px solid var(--line);
+		break-inside: avoid;
+		font-weight: 600;
+	}
+	.toc li::before {
+		content: counter(toc, decimal-leading-zero);
+		position: absolute; left: 0; top: 7px;
+		color: var(--blue); font-weight: 700;
+	}
+	.toc li span { display: block; font-weight: 400; color: var(--muted); font-size: 9pt; }
+
+	/* ---------- chapters ---------- */
+	section.chapter { page-break-before: always; }
+	section.chapter:first-of-type { page-break-before: avoid; }
+
+	h2.chapter-title {
+		font-size: 19pt;
+		padding-bottom: 8px;
+		border-bottom: 3px solid var(--accent, var(--blue));
+		margin-bottom: 4px;
+		letter-spacing: -0.3pt;
+	}
+	h2 .no { color: var(--accent, var(--blue)); margin-right: 10px; }
+	.chapter-lede { color: var(--muted); font-size: 11pt; margin: 10px 0 18px; max-width: 42em; }
+
+	h3 { font-size: 12.5pt; margin: 22px 0 8px; }
+	h4 { font-size: 10.5pt; margin: 14px 0 4px; }
+	p { margin: 8px 0; }
+	ul, ol { margin: 8px 0 8px 22px; }
+	li { margin: 3px 0; }
+	strong { color: var(--ink); }
+
+	/* ---------- figures ---------- */
+	figure { margin: 14px 0 18px; page-break-inside: avoid; }
+	figure img {
+		max-width: 100%;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		box-shadow: 0 2px 10px rgba(27, 36, 48, 0.08);
+	}
+	figure.plain img { border: none; box-shadow: none; border-radius: 0; }
+	figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 6px; }
+
+	/* small UI crops inline with text */
+	img.ui {
+		height: 22px; width: auto;
+		vertical-align: middle;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		box-shadow: 0 1px 3px rgba(27, 36, 48, 0.10);
+		margin: 0 2px;
+	}
+	img.ui-lg { height: 30px; }
+
+	/* side-by-side */
+	.duo { display: flex; gap: 14px; align-items: flex-start; }
+	.duo > * { flex: 1; min-width: 0; }
+	.duo figure { margin-top: 0; }
+
+	/* ---------- callouts ---------- */
+	.callout {
+		border-radius: 8px;
+		padding: 10px 14px 10px 44px;
+		margin: 12px 0;
+		position: relative;
+		page-break-inside: avoid;
+		font-size: 9.5pt;
+	}
+	.callout::before { position: absolute; left: 14px; top: 9px; font-size: 13pt; }
+	.callout.tip { background: #eef6ee; }
+	.callout.tip::before { content: "💡"; }
+	.callout.note { background: var(--bg-soft); }
+	.callout.note::before { content: "ℹ️"; }
+	.callout.privacy { background: #f0edf7; }
+	.callout.privacy::before { content: "🔒"; }
+	.callout.warn { background: #fdf3e3; }
+	.callout.warn::before { content: "⚠️"; }
+
+	/* ---------- tables ---------- */
+	table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 9.5pt; page-break-inside: avoid; }
+	th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); font-size: 9pt; }
+	td .pill { display: inline-block; padding: 1px 10px; border-radius: 999px; color: #fff; font-size: 8.5pt; font-weight: 600; }
+
+	.kbd {
+		background: var(--bg-soft);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		padding: 0 5px;
+		font-family: ui-monospace, Menlo, monospace;
+		font-size: 8.5pt;
+	}
+	code {
+		font-family: ui-monospace, Menlo, monospace;
+		font-size: 9pt;
+		background: var(--bg-soft);
+		border-radius: 4px;
+		padding: 0 4px;
+	}
+
+	.steps { counter-reset: step; list-style: none; margin-left: 0; }
+	.steps > li {
+		counter-increment: step;
+		padding: 6px 0 6px 40px;
+		position: relative;
+	}
+	.steps > li::before {
+		content: counter(step);
+		position: absolute; left: 0; top: 6px;
+		width: 24px; height: 24px;
+		border-radius: 50%;
+		background: var(--accent, var(--blue));
+		color: #fff;
+		font-weight: 700;
+		font-size: 10pt;
+		display: flex; align-items: center; justify-content: center;
+	}
+</style>
+</head>
+<body>
+
+<!-- ================================================== COVER -->
+<div class="cover">
+	<div class="app-badge">🧑‍💼</div>
+	<h1>Recruiting Handbook</h1>
+	<p class="subtitle">The friendly guide to hiring with Nextcloud — from the first application
+	in your inbox to the signed offer. Written for HR teams and hiring managers; no
+	technical knowledge needed.</p>
+	<div class="pipeline">
+		<span class="stage s-new">New</span><span class="arrow">→</span>
+		<span class="stage s-screening">Screening</span><span class="arrow">→</span>
+		<span class="stage s-interview">Interview</span><span class="arrow">→</span>
+		<span class="stage s-offer">Offer</span><span class="arrow">→</span>
+		<span class="stage s-hired">Hired 🎉</span>
+	</div>
+	<p class="meta">For Recruiting 0.7 · August 2026 · Everything in this handbook stays on your own server.</p>
+</div>
+
+<!-- ================================================== TOC -->
+<div class="toc">
+	<h2>What's inside</h2>
+	<ol>
+		<li>Recruiting in five minutes <span>The idea, the pipeline, and who sees what</span></li>
+		<li>Finding your way around <span>Navigation, the board, and the anatomy of a candidate card</span></li>
+		<li>How applications arrive <span>Email intake, the mail tag, replies, and the triage inbox</span></li>
+		<li>The candidate file <span>The five tabs: Profile, Votes, Interviews, Offer, Log</span></li>
+		<li>Screening &amp; votes <span>Unbiased reviews, assigning screeners, "My reviews"</span></li>
+		<li>Interviews <span>Booking against real calendars, the candidate's scheduling page</span></li>
+		<li>Offers <span>Draft, four-eyes approval, sending, and tracking the answer</span></li>
+		<li>Rejecting &amp; the talent pool <span>Respectful rejections and consent-based keeping-in-touch</span></li>
+		<li>Staying on top of things <span>The Stuck lens, aging colors, notifications and the digest</span></li>
+		<li>Mail templates <span>Your voice, with placeholders that cannot break</span></li>
+		<li>Reports <span>Funnel, time-to-hire and applications per week</span></li>
+		<li>Privacy &amp; GDPR <span>What is stored, who can see it, and what is deleted when</span></li>
+	</ol>
+</div>
+
+<!-- ================================================== 1 -->
+<section class="chapter" style="--accent: var(--blue)">
+	<h2 class="chapter-title"><span class="no">01</span>Recruiting in five minutes</h2>
+	<p class="chapter-lede">Recruiting manages your whole hiring funnel inside Nextcloud.
+	Applications become cards on a board, your team votes on them without influencing each
+	other, interviews book themselves against real calendars, and offers need a second pair
+	of eyes before they go out.</p>
+
+	<h3>The pipeline</h3>
+	<p>Every candidate moves through the same four active stages — <strong>New → Screening →
+	Interview → Offer</strong> — and ends in exactly one of three final states:
+	<strong>Hired</strong>, <strong>Rejected</strong> or <strong>Withdrawn</strong>. Each stage
+	has its own color, used everywhere in the app: board columns, table chips and report
+	charts. Once you know that Screening is amber and Offer is green, you can read any screen
+	at a glance.</p>
+
+	<h3>Who sees what</h3>
+	<p>There is no separate user management. You work with the Nextcloud accounts your
+	colleagues already have, in one of four roles:</p>
+	<table>
+		<tr><th style="width:11em">Role</th><th>Who</th><th>What they can do and see</th></tr>
+		<tr>
+			<td><strong>Recruiter</strong></td>
+			<td>Members of the HR group (your admin configures which group)</td>
+			<td>Everything: all openings, all candidates, templates, the triage inbox, the
+			talent pool, reports, GDPR actions</td>
+		</tr>
+		<tr>
+			<td><strong>Hiring manager</strong></td>
+			<td>Picked per opening</td>
+			<td>Runs the process for their opening: sees all its candidates, moves stages,
+			assigns screeners, books interviews, creates offers, sends mail</td>
+		</tr>
+		<tr>
+			<td><strong>Interviewer / screener</strong></td>
+			<td>Picked per opening or per candidate</td>
+			<td>Sees <em>only the candidates assigned to them</em>. Reads the profile and
+			documents, votes, joins the discussion. <strong>Never</strong> sees salary or
+			offer data</td>
+		</tr>
+		<tr>
+			<td><strong>Observer</strong></td>
+			<td>Picked per opening</td>
+			<td>May watch the pipeline and reports of that opening, but not act</td>
+		</tr>
+	</table>
+
+	<div class="callout privacy">A Nextcloud <em>administrator</em> has no candidate access at
+	all — being admin only allows configuring the mailbox and retention settings. Candidate
+	documents never appear in anyone's Files app; they live in protected app storage.</div>
+
+	<h3>The golden rules</h3>
+	<ul>
+		<li><strong>Nothing goes out unreviewed.</strong> Every mail to a candidate shows you
+		a preview first — you can edit every word before it is sent.</li>
+		<li><strong>Every action is logged.</strong> Stage moves, votes, mails, offers — the
+		candidate's Log tab is the complete history.</li>
+		<li><strong>Votes are blind.</strong> You cannot see your colleagues' votes until you
+		have cast your own.</li>
+		<li><strong>Offers need four eyes.</strong> You can never approve your own offer.</li>
+	</ul>
+</section>
+
+<!-- ================================================== 2 -->
+<section class="chapter" style="--accent: var(--blue)">
+	<h2 class="chapter-title"><span class="no">02</span>Finding your way around</h2>
+	<p class="chapter-lede">One left sidebar, one board. That's the whole app.</p>
+
+	<div class="duo">
+		<div>
+			<h3>The navigation</h3>
+			<ul>
+				<li><strong>New opening</strong> — create a job opening (recruiters).</li>
+				<li><strong>Triage inbox</strong> — applications that arrived by mail without
+				a matching opening. The badge counts what's waiting.</li>
+				<li><strong>My reviews</strong> — candidates <em>you</em> still owe a vote.</li>
+				<li><strong>My interviews</strong> — interviews where you are on the panel.</li>
+				<li><strong>Mail templates</strong> — the texts used for invitations,
+				rejections, offers and confirmations.</li>
+				<li><strong>Reports</strong> — live numbers over your openings.</li>
+				<li><strong>Talent pool</strong> — candidates who agreed to be considered for
+				future openings.</li>
+				<li><strong>Openings</strong> — one entry per job, with the number of active
+				candidates. Closed openings collapse at the bottom.</li>
+				<li><strong>Handbook</strong> — this document, always one click away.</li>
+			</ul>
+		</div>
+		<figure>
+			<img src="img/nav-sidebar.png" alt="The left navigation">
+			<figcaption>The navigation: your personal to-do lists sit at the top, the openings below.</figcaption>
+		</figure>
+	</div>
+
+	<h3>The board</h3>
+	<figure>
+		<img src="../screenshots/01-pipeline-board.png" alt="The pipeline board">
+		<figcaption>The pipeline board of one opening. Every column is a stage; every card a candidate.</figcaption>
+	</figure>
+
+	<p>Move a candidate by <strong>dragging the card</strong> to another column, or use the
+	card's <strong>⋮ menu</strong> if you prefer clicks (it works fully with the keyboard,
+	too). Every move is logged and visible to the hiring team. The column header
+	<img class="ui" src="img/column-header.png" alt="column header"> always shows the
+	<em>true</em> total — if a stage holds more than 100 candidates, the column loads them in
+	pages with a <em>Show more</em> button.</p>
+
+	<h3>Anatomy of a card</h3>
+	<div class="duo">
+		<figure>
+			<img src="img/card-anatomy.png" alt="A candidate card">
+			<figcaption>Attachments · votes (👍 1 🤔 1) · the screeners (a <strong>green ring</strong>
+			means this person has voted — never <em>what</em> they voted) · time in this stage.</figcaption>
+		</figure>
+		<figure>
+			<img src="img/card-stuck.png" alt="A stuck candidate card">
+			<figcaption>The ⚠️ <strong>Stuck</strong> chip: something needs your attention here.
+			Hover it to see why.</figcaption>
+		</figure>
+	</div>
+	<p>The time-in-stage indicator changes color as candidates wait: <strong>amber after two
+	weeks</strong>, <strong style="color:#b3251e">red after a month</strong>. Nobody should
+	be forgotten in a column.</p>
+
+	<h3>The toolbar</h3>
+	<p>
+		<img class="ui ui-lg" src="img/filter-box.png" alt="Filter box"> narrows the board to
+		matching names or email addresses.&ensp;
+		<img class="ui ui-lg" src="img/btn-stuck.png" alt="Stuck filter"> shows only candidates
+		where something is stuck (more in chapter 9).&ensp;
+		<img class="ui ui-lg" src="img/btn-add-candidate.png" alt="Add candidate"> adds a
+		candidate manually — with drag-and-drop CV upload.
+	</p>
+
+	<p>Below the board, three chips summarize the finished candidates —
+	<img class="ui ui-lg" src="img/terminal-chips.png" alt="Hired / Rejected / Withdrawn chips"> —
+	click one to jump to the table view where they are listed.</p>
+
+	<h3>The table view</h3>
+	<figure>
+		<img src="../screenshots/02-candidate-table.png" alt="The table view">
+		<figcaption>The same candidates as a sortable table — including hired, rejected and withdrawn ones.</figcaption>
+	</figure>
+	<p>Click any column header to sort (a third click restores the original order). Managers
+	get checkboxes: select several candidates and the bulk bar appears —
+	<img class="ui ui-lg" src="img/bulk-bar.png" alt="Bulk bar"> — to move them together or
+	start a rejection round. Even in bulk, the rejection mail preview appears for each
+	candidate individually: nothing goes out unreviewed.</p>
+</section>
+
+<!-- ================================================== 3 -->
+<section class="chapter" style="--accent: var(--amber)">
+	<h2 class="chapter-title"><span class="no">03</span>How applications arrive</h2>
+	<p class="chapter-lede">Most applications should reach the board without anyone lifting a
+	finger. That's the zero-touch intake.</p>
+
+	<h3>By email — the normal way</h3>
+	<p>Your admin connects a dedicated application mailbox (for example
+	<code>jobs@your-company.com</code>). The app checks it every five minutes. Every new mail
+	becomes a candidate: name and address are read from the sender, the mail text lands on
+	the candidate's timeline, and attachments become documents.</p>
+
+	<p>Every opening has a <strong>mail tag</strong>, shown in its header:
+	<img class="ui" src="img/mail-tag.png" alt="Opening header with mail tag"></p>
+	<ul>
+		<li>Mails to <code>jobs+senior-backend-engineer@…</code> land <strong>directly on that
+		opening's board</strong>, in the "New" column.</li>
+		<li>The same works with <code>[senior-backend-engineer]</code> anywhere in the subject.</li>
+		<li>Everything else goes to the <strong>triage inbox</strong>.</li>
+	</ul>
+
+	<div class="callout tip">Put the tagged address into your job postings —
+	<code>jobs+product-designer@…</code> on the design job ad, and applications sort
+	themselves. An automatic confirmation of receipt can be sent per opening, so applicants
+	immediately know their documents arrived.</div>
+
+	<h3>When candidates reply</h3>
+	<p>Mails the app sends carry a personal reply address for each candidate. When Grace
+	answers your interview invitation, her reply — attachments included — lands on <em>her</em>
+	timeline and the hiring managers are notified. Replies never clutter the inbox as
+	duplicate "applications".</p>
+
+	<h3>The triage inbox</h3>
+	<figure>
+		<img src="../screenshots/11-triage-inbox.png" alt="The triage inbox">
+		<figcaption>Unmatched applications wait here — assign them to an opening or delete spam.</figcaption>
+	</figure>
+	<p>Open a row and use <strong>Assign to an opening</strong> in the profile tab: the
+	application moves into that opening's "New" column and its hiring managers are notified.
+	Spam goes into the bin via the row's ⋮ menu — permanently, documents included.</p>
+	<p>The heartbeat line <img class="ui" src="img/heartbeat.png" alt="Mailbox heartbeat">
+	shows when the mailbox was last checked. If a check fails, a warning appears here — so a
+	broken mailbox can never silently swallow applications.</p>
+
+	<h3>Adding candidates by hand</h3>
+	<p>Somebody applied at a job fair or on paper? <img class="ui ui-lg" src="img/btn-add-candidate.png"
+	alt="Add candidate"> on the opening's board opens a small form — name, contact details,
+	drag the CV in, done. The candidate starts in "New" like everyone else.</p>
+</section>
+
+<!-- ================================================== 4 -->
+<section class="chapter" style="--accent: var(--violet)">
+	<h2 class="chapter-title"><span class="no">04</span>The candidate file</h2>
+	<p class="chapter-lede">Click any card and the candidate file opens on the right — five
+	tabs that hold everything about this person.</p>
+
+	<p style="text-align:center"><img class="ui" style="height:44px" src="img/tab-bar.png" alt="The five tabs"></p>
+
+	<h3>Profile</h3>
+	<div class="duo">
+		<figure>
+			<img src="../screenshots/03-candidate-profile.png" alt="The profile tab">
+			<figcaption>Contact details, source, application date — and the current stage at the top.</figcaption>
+		</figure>
+		<figure>
+			<img src="../screenshots/04-candidate-documents.png" alt="Documents in the profile tab">
+			<figcaption>Documents live at the bottom of the profile: CVs open right in the browser.</figcaption>
+		</figure>
+	</div>
+	<ul>
+		<li><strong>Contact details</strong> are editable by managers (Edit contact details).</li>
+		<li>If the same address applied before, a <strong>duplicate warning</strong> links to
+		the earlier application.</li>
+		<li>With Nextcloud Assistant installed, an <strong>AI summary</strong> of the
+		application can be generated — always labeled, never a decision.</li>
+		<li><strong>Documents</strong>: upload more, preview PDFs in the browser, delete.
+		Stored privately in the app — never visible in Files.</li>
+		<li>At the very bottom sits the red <strong>Reject …</strong> button — deliberately
+		out of the way of everyday clicking (chapter 8).</li>
+	</ul>
+
+	<h3>The header menu (…)</h3>
+	<p>Next to the candidate's name: <strong>Book interview</strong>, <strong>Move to …</strong>
+	any stage, and for recruiters the GDPR actions — <strong>Export data</strong> (a ZIP with
+	everything about this person, for data-access requests) and <strong>Delete
+	permanently</strong>.</p>
+
+	<h3>Log — the complete story</h3>
+	<figure>
+		<img src="../screenshots/07-activity-timeline.png" alt="The Log tab">
+		<figcaption>Every event in order — including the candidate's own reply ("The candidate
+		replied…") — merged with the team discussion.</figcaption>
+	</figure>
+	<p>The Log tab is the timeline (stage moves, votes cast, every mail with its full text,
+	interviews, offer steps) plus the <strong>team discussion</strong>. Write a comment and
+	<strong>@mention</strong> a colleague to notify them — the conversation stays with the
+	candidate instead of scattering across chats.</p>
+
+	<div class="callout note">The Votes, Interviews and Offer tabs each have their own
+	chapter — read on.</div>
+</section>
+
+<!-- ================================================== 5 -->
+<section class="chapter" style="--accent: var(--amber)">
+	<h2 class="chapter-title"><span class="no">05</span>Screening &amp; votes</h2>
+	<p class="chapter-lede">The Votes tab is designed for one thing: honest, independent
+	opinions.</p>
+
+	<figure>
+		<img src="../screenshots/05-screening-votes.png" alt="The Votes tab">
+		<figcaption>Your vote at the top, the votes of others below, assigned screeners at the bottom.</figcaption>
+	</figure>
+
+	<h3>Casting your vote</h3>
+	<p>Pick <img class="ui ui-lg" src="img/vote-buttons.png" alt="Yes / Maybe / No"> and add a
+	comment. A <strong>"No" always needs a written reason</strong> — "not a fit" is not a
+	reason. You can update your vote at any time.</p>
+
+	<div class="callout tip"><strong>Why can't I see the other votes?</strong> Because you
+	haven't voted yet. Votes of others stay hidden until you cast your own, so your opinion
+	is really <em>yours</em>. You can see <em>who</em> has voted (their names are listed) —
+	just not what they said. This is by design and cannot be bypassed, not even via the
+	timeline.</div>
+
+	<h3>Assigning screeners</h3>
+	<p>Managers add colleagues under <strong>Assigned screeners</strong>. Every assignee gets
+	a notification and finds the candidate in <strong>My reviews</strong> — their personal
+	to-do list, sorted by what still needs a vote:</p>
+	<figure>
+		<img src="../screenshots/12-my-reviews.png" alt="My reviews">
+		<figcaption>"My reviews": what you still owe an opinion on. The badge in the navigation
+		counts pending votes.</figcaption>
+	</figure>
+	<p>On the board you can follow the review round without opening a single card: the
+	screener avatars on each card get a <strong>green ring</strong> as their vote comes in.</p>
+
+	<div class="callout note">With Assistant installed, an optional <strong>AI screening
+	hint</strong> compares the application against the opening's requirements — labeled
+	"verify yourself", because the humans decide.</div>
+</section>
+
+<!-- ================================================== 6 -->
+<section class="chapter" style="--accent: var(--violet)">
+	<h2 class="chapter-title"><span class="no">06</span>Interviews</h2>
+	<p class="chapter-lede">No email ping-pong about times: the app reads the interviewers'
+	calendars, and the candidate picks a slot themselves.</p>
+
+	<h3>Booking an interview</h3>
+	<figure class="plain" style="text-align:center">
+		<img src="img/book-dialog.png" alt="The booking dialog" style="max-width: 78%; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 10px rgba(27,36,48,0.08);">
+		<figcaption>The booking dialog: interviewers, duration, Talk room — and proposed time slots.</figcaption>
+	</figure>
+	<ol class="steps">
+		<li>Open the candidate → <strong>Interviews</strong> tab → <strong>Book interview</strong>.
+		Give it a title ("Technical interview"), pick the interviewers and a duration.</li>
+		<li>Decide whether a <strong>Talk video room</strong> should be created (if Talk is
+		installed). Switched off, you can note a meeting room — or paste a video link from
+		another tool.</li>
+		<li><strong>Find free slots</strong> looks into the interviewers' calendars (working
+		days, 9–17) and proposes times. Untick any you dislike, add slots manually.</li>
+		<li><strong>Create &amp; write invitation</strong> shows the invitation mail —
+		prefilled from your template, with the personal scheduling link. Edit freely and
+		send. (If the link gets lost while editing, the app quietly re-attaches it.)</li>
+	</ol>
+
+	<h3>What the candidate sees</h3>
+	<div class="duo">
+		<figure>
+			<img src="../screenshots/18-public-slot-picker.png" alt="The public scheduling page">
+			<figcaption>The scheduling page: no account, times in the <em>candidate's</em> timezone.</figcaption>
+		</figure>
+		<figure>
+			<img src="../screenshots/19-public-confirmed.png" alt="The confirmation page">
+			<figcaption>After confirming: 🎉, the meeting details, and
+			<img class="ui" src="img/ics-button.png" alt="Add to my calendar"> for their own calendar.</figcaption>
+		</figure>
+	</div>
+	<p>The moment the candidate confirms a slot, everything happens at once: the calendar
+	event lands in all interviewers' calendars, the Talk room is created (for video
+	interviews), the card moves to <strong>Interview</strong>, and the panel is notified.</p>
+
+	<h3>Keeping track</h3>
+	<figure>
+		<img src="../screenshots/06-interviews-tab.png" alt="The Interviews tab">
+		<figcaption>Every round with its status. "Awaiting candidate" = the link is out, no slot picked yet.</figcaption>
+	</figure>
+	<ul>
+		<li><strong>Copy scheduling link</strong> — if you want to resend it yourself, or the
+		candidate has no email address on file.</li>
+		<li><strong>Cancel interview</strong> — notifies all interviewers and removes the
+		calendar event. The candidate page shows the cancellation.</li>
+		<li><strong>My interviews</strong> in the navigation lists your own panel
+		appointments, including pending ones.</li>
+	</ul>
+	<div class="callout note">With Assistant installed, <strong>Suggest interview
+	questions</strong> drafts questions grounded in the opening's requirements — pick what
+	fits, ignore the rest.</div>
+</section>
+
+<!-- ================================================== 7 -->
+<section class="chapter" style="--accent: var(--green)">
+	<h2 class="chapter-title"><span class="no">07</span>Offers</h2>
+	<p class="chapter-lede">Salary data is sensitive — so offers live behind an extra wall,
+	and every offer needs a second pair of eyes before it can go out.</p>
+
+	<figure>
+		<img src="../screenshots/08-offer-approval.png" alt="The Offer tab">
+		<figcaption>An offer awaiting approval. Only recruiters, this opening's managers and
+		the chosen approver can see this tab at all.</figcaption>
+	</figure>
+
+	<h3>The life of an offer</h3>
+	<ol class="steps">
+		<li><strong>Draft</strong> the terms: job title, salary (amount, currency, per
+		year/month/hour), start date, validity date, internal notes. Only drafts can be
+		edited.</li>
+		<li><strong>Request approval</strong> from a colleague. You can never pick yourself —
+		four eyes are four eyes. The approver is notified, sees exactly this one candidate,
+		and either approves or sends the offer back to draft with a note.</li>
+		<li><strong>Send the offer email</strong> — with the usual preview — or use
+		<strong>Mark as sent</strong> if the offer went out another way (phone, letter).
+		Both start the validity clock. The card moves to the green Offer column.</li>
+		<li><strong>Record the answer</strong>: <em>Accepted</em> moves the candidate to
+		<strong>Hired</strong> 🎉 — remember to close the opening and tell the other
+		candidates. <em>Declined</em> keeps them in the pipeline so you decide what happens
+		next. <em>Negotiating</em> marks an ongoing conversation.</li>
+	</ol>
+
+	<div class="callout warn">Offers <strong>expire automatically</strong> after their
+	validity date. The creator is warned three days ahead — and the board shows a ⚠️ Stuck
+	chip on the candidate. An expired offer is final; draft a new one if the conversation
+	continues.</div>
+
+	<div class="callout privacy">Interviewers and observers never see offer terms — not in
+	this tab (it is hidden for them), not on the timeline, not in the activity stream. Mails
+	about offers show up for them only as "an email was sent".</div>
+</section>
+
+<!-- ================================================== 8 -->
+<section class="chapter" style="--accent: var(--amber)">
+	<h2 class="chapter-title"><span class="no">08</span>Rejecting &amp; the talent pool</h2>
+	<p class="chapter-lede">Rejections decide your reputation as an employer. The app makes
+	the respectful path the easy path.</p>
+
+	<figure>
+		<img src="../screenshots/10-reject-dialog.png" alt="The reject dialog">
+		<figcaption>Reason, previewed mail, and the talent-pool invitation — all in one dialog.</figcaption>
+	</figure>
+
+	<h3>The rejection flow</h3>
+	<ol class="steps">
+		<li>Click <strong>Reject …</strong> — the red button at the bottom of the profile
+		tab, or in the card's ⋮ menu on the board.</li>
+		<li>Pick an <strong>internal reason</strong> (not qualified, better candidate chosen,
+		position filled, withdrawn, other). Candidates never see it; your reports do.</li>
+		<li>Review the <strong>rejection mail</strong>, prefilled from your template. Edit
+		every word if you like — or reject without an email (for candidates without an
+		address, or when you called them personally).</li>
+		<li>Optionally tick <strong>"Ask to stay in our talent pool"</strong>.</li>
+	</ol>
+
+	<h3>The talent pool — strictly on consent</h3>
+	<figure>
+		<img src="../screenshots/15-talent-pool.png" alt="The talent pool">
+		<figcaption>Only people who explicitly confirmed the consent link appear here.</figcaption>
+	</figure>
+	<p>The pool invitation adds a consent link to the rejection mail. Only when the candidate
+	clicks it and confirms do they appear in the pool — nobody is kept "just in case"
+	(that's not just polite, it's the GDPR). Pool membership expires automatically after the
+	configured period.</p>
+	<p>When a fitting position opens later, <strong>Add to opening</strong> creates a fresh
+	copy of the application — documents included — in that opening's "New" column. The pool
+	entry stays until it expires or the person asks to be removed.</p>
+</section>
+
+<!-- ================================================== 9 -->
+<section class="chapter" style="--accent: var(--blue)">
+	<h2 class="chapter-title"><span class="no">09</span>Staying on top of things</h2>
+	<p class="chapter-lede">The app watches your pipeline so you don't have to.</p>
+
+	<h3>The Stuck lens</h3>
+	<p>Click <img class="ui ui-lg" src="img/btn-stuck.png" alt="Stuck filter"> in the board
+	header and only candidates where something is stuck remain. A candidate counts as stuck
+	when:</p>
+	<table>
+		<tr><th style="width:12em">Situation</th><th>After</th></tr>
+		<tr><td>Waiting in <span class="pill s-new">New</span> untouched</td><td>7 days</td></tr>
+		<tr><td>In <span class="pill s-screening">Screening</span> without a single vote</td><td>5 days</td></tr>
+		<tr><td>In <span class="pill s-interview">Interview</span> with no upcoming interview booked</td><td>3 days</td></tr>
+		<tr><td>In <span class="pill s-offer">Offer</span> without an active offer</td><td>3 days</td></tr>
+		<tr><td>A sent offer about to expire</td><td>3 days before expiry</td></tr>
+		<tr><td>Sitting in any stage</td><td>30 days</td></tr>
+	</table>
+	<p>Each stuck card carries the ⚠️ chip — hover it to read exactly what's missing. And
+	independent of the chip, the time-in-stage on every card fades from gray to
+	<strong style="color:#99570c">amber (two weeks)</strong> to
+	<strong style="color:#b3251e">red (a month)</strong>.</p>
+
+	<h3>Notifications</h3>
+	<p>You get a Nextcloud notification (bell, top right) when: a new application arrives in
+	your opening · you are asked to review someone · you are added to an interview panel ·
+	a candidate confirms or a candidate replies · an offer waits for your approval · an
+	offer is about to expire · someone @mentions you.</p>
+
+	<h3>The email digest</h3>
+	<figure>
+		<img src="../screenshots/17-personal-digest.png" alt="The digest setting">
+		<figcaption>Personal settings → Groupware: a daily or weekly recruiting summary by mail.</figcaption>
+	</figure>
+	<p>Prefer email? Enable the digest — new applications in your openings, pending reviews,
+	upcoming interviews and offers awaiting your approval, in one mail. It is only sent when
+	there is actually something to report.</p>
+
+	<div class="callout tip">Recruiting results also show up in Nextcloud's universal search
+	(<span class="kbd">Ctrl</span>+<span class="kbd">K</span> /
+	<span class="kbd">⌘</span>+<span class="kbd">K</span>) — type a candidate's name from
+	anywhere in Nextcloud.</div>
+</section>
+
+<!-- ================================================== 10 -->
+<section class="chapter" style="--accent: var(--violet)">
+	<h2 class="chapter-title"><span class="no">10</span>Mail templates</h2>
+	<p class="chapter-lede">Four mail types — confirmation of receipt, interview invitation,
+	rejection, offer — each with a built-in template you can replace with your own voice.</p>
+
+	<figure>
+		<img src="../screenshots/16-mail-templates.png" alt="Mail templates">
+		<figcaption>One column per mail type. <strong>Customize</strong> copies a built-in
+		template into an editable one; <strong>Make default</strong> activates it.</figcaption>
+	</figure>
+
+	<p>In the editor, <strong>placeholders</strong> like <code>{{candidate_name}}</code> or
+	<code>{{interview_link}}</code> appear as chips — click one to insert it at the cursor.
+	Each mail type only offers the placeholders it can actually fill, and templates are
+	validated when you save: a typo in a placeholder can never reach a candidate.</p>
+
+	<div class="callout note">Templates are the <em>starting point</em>, not the final word:
+	every send shows the resolved text first, and you can edit it per candidate.</div>
+</section>
+
+<!-- ================================================== 11 -->
+<section class="chapter" style="--accent: var(--green)">
+	<h2 class="chapter-title"><span class="no">11</span>Reports</h2>
+	<p class="chapter-lede">Honest numbers, reconstructed from what actually happened — you
+	only see openings you have access to.</p>
+
+	<figure>
+		<img src="../screenshots/14-reports.png" alt="Reports">
+		<figcaption>Headline numbers, applications per week, and per opening the funnel in stage colors.</figcaption>
+	</figure>
+
+	<ul>
+		<li><strong>Headline tiles</strong>: total candidates (with this week's trend), hired,
+		average days to hire, open offers.</li>
+		<li><strong>Applications per week</strong> — the last twelve weeks, current week
+		highlighted.</li>
+		<li><strong>Per opening</strong>: the funnel (how many candidates sit in each stage,
+		in the stage colors you know from the board), the average time spent in each stage,
+		days-to-hire, open offers, and the breakdown of rejection reasons.</li>
+	</ul>
+
+	<div class="callout privacy">Numbers survive anonymization: when a rejected candidate's
+	personal data is automatically erased after the retention period, their anonymous journey
+	still counts in the funnel and averages. Your statistics stay honest without keeping
+	personal data.</div>
+</section>
+
+<!-- ================================================== 12 -->
+<section class="chapter" style="--accent: var(--blue)">
+	<h2 class="chapter-title"><span class="no">12</span>Privacy &amp; GDPR</h2>
+	<p class="chapter-lede">Everything stays on your own server, and the compliance chores
+	run on autopilot.</p>
+
+	<h3>Where candidate data lives</h3>
+	<ul>
+		<li>All data is stored in your Nextcloud — nothing is ever sent to a third party.</li>
+		<li>Documents live in protected app storage: they never appear in the Files app, and
+		only people with access to that candidate can open them.</li>
+		<li>Access follows the roles from chapter 1 — interviewers only see their assigned
+		candidates and never any salary data.</li>
+	</ul>
+
+	<h3>Automatic retention</h3>
+	<p>Rejected and withdrawn candidates are <strong>anonymized automatically</strong> after
+	the retention period your admin configures (typically a few months). Name, contact data,
+	documents, mail texts, comments and summaries are erased; the anonymous stage history
+	stays for the reports. Expired talent-pool memberships are anonymized the same way.</p>
+
+	<h3>When a candidate asks…</h3>
+	<table>
+		<tr><th style="width:16em">Request</th><th>What you do</th></tr>
+		<tr>
+			<td>"What data do you have about me?"</td>
+			<td>Candidate header menu → <strong>Export data (GDPR)</strong>. You get a ZIP with
+			their profile, correspondence, interviews, offer terms and documents. Reviewer
+			names and internal team comments are <em>not</em> included — those are your
+			colleagues' personal data.</td>
+		</tr>
+		<tr>
+			<td>"Please delete my data."</td>
+			<td>Candidate header menu → <strong>Delete permanently (GDPR)</strong>. Removes the
+			candidate with all documents, votes, comments, interviews and notifications.
+			Irreversible, with a confirmation dialog.</td>
+		</tr>
+		<tr>
+			<td>"Keep me in mind for later."</td>
+			<td>That's the talent pool — and it only happens after the candidate confirms the
+			consent link themselves (chapter 8).</td>
+		</tr>
+	</table>
+
+	<h3>For your admin</h3>
+	<p>The administration settings (Administration → Recruiting) hold the technical setup:
+	the application mailbox (IMAP), the HR group, the sender identity, the retention period
+	and the talent-pool duration. Admins configure — they don't see candidates.</p>
+
+	<div class="callout tip">Questions this handbook doesn't answer? Ask your recruiting
+	team, or open the candidate's Log tab — chances are the answer is already in the
+	history. Happy hiring! 🎉</div>
+</section>
+
+</body>
+</html>

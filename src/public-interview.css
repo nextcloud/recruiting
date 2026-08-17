@@ -1,0 +1,114 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+.recruiting-public-page {
+	max-width: 480px;
+	margin: 0 auto;
+	text-align: start;
+	color: var(--color-main-text);
+}
+
+.recruiting-public-page .rp-card {
+	background-color: var(--color-main-background);
+	border-radius: var(--border-radius-container, 16px);
+	padding: 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.recruiting-public-page h2 {
+	margin: 0;
+	font-size: 1.3em;
+}
+
+.recruiting-public-page .rp-meta {
+	color: var(--color-text-maxcontrast);
+	margin: 0;
+}
+
+.recruiting-public-page .rp-slots {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.recruiting-public-page .rp-slot {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 10px);
+	padding: 12px 16px;
+	cursor: pointer;
+	transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.recruiting-public-page .rp-slot:hover,
+.recruiting-public-page .rp-slot:has(input:checked) {
+	border-color: var(--color-primary-element);
+	background-color: var(--color-primary-element-light);
+}
+
+.recruiting-public-page .rp-slot input {
+	accent-color: var(--color-primary-element);
+}
+
+.recruiting-public-page .rp-confirm {
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border: none;
+	border-radius: var(--border-radius-element, 25px);
+	padding: 12px 24px;
+	font-size: 1em;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.recruiting-public-page .rp-confirm:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.recruiting-public-page .rp-success {
+	font-size: 3em;
+	text-align: center;
+	margin: 0;
+}
+
+.recruiting-public-page .rp-error {
+	color: var(--color-error, #d91f2d);
+	margin: 0;
+}
+
+.recruiting-public-page .rp-talk-link {
+	display: inline-block;
+	text-align: center;
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text) !important;
+	border-radius: var(--border-radius-element, 25px);
+	padding: 12px 24px;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.recruiting-public-page .rp-ics-link {
+	display: inline-block;
+	text-align: center;
+	border: 1px solid var(--color-border-maxcontrast, var(--color-border));
+	border-radius: var(--border-radius-element, 25px);
+	padding: 10px 24px;
+	font-weight: 600;
+	text-decoration: none;
+	color: var(--color-main-text) !important;
+}
+
+.recruiting-public-page .rp-tz {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85em;
+	margin: 0;
+}

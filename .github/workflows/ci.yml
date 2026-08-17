@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP lint, cs, psalm, unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: ctype, curl, dom, gd, iconv, intl, json, mbstring, openssl, pdo_sqlite, simplexml, xml, zip
+          coverage: none
+
+      - name: Install composer dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: PHP syntax check
+        run: composer run lint
+
+      - name: Coding standard
+        run: composer run cs:check
+
+      - name: Psalm static analysis
+        run: composer run psalm
+
+      - name: Unit tests
+        run: composer run test:unit
+
+  frontend:
+    name: JS lint, stylelint, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Stylelint
+        run: npm run stylelint
+
+      - name: Build bundles
+        run: npm run build
