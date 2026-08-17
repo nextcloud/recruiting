@@ -74,6 +74,7 @@ export default {
 	props: {
 		openingId: { type: Number, required: true },
 	},
+
 	emits: ['close', 'saved'],
 	data() {
 		return {
@@ -87,16 +88,19 @@ export default {
 			},
 		}
 	},
+
 	methods: {
 		formatSize,
 		onDrop(event) {
 			this.dragOver = false
 			this.files.push(...Array.from(event.dataTransfer.files ?? []))
 		},
+
 		onPick(event) {
 			this.files.push(...Array.from(event.target.files ?? []))
 			event.target.value = ''
 		},
+
 		async save() {
 			this.saving = true
 			try {

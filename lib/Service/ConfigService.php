@@ -124,7 +124,7 @@ class ConfigService {
 	public function getImapConfig(): array {
 		return [
 			'host' => $this->appConfig->getValueString(Application::APP_ID, 'imap_host', ''),
-			'port' => (int)$this->appConfig->getValueInt(Application::APP_ID, 'imap_port', 993),
+			'port' => $this->appConfig->getValueInt(Application::APP_ID, 'imap_port', 993),
 			'security' => $this->appConfig->getValueString(Application::APP_ID, 'imap_security', 'ssl'),
 			'user' => $this->appConfig->getValueString(Application::APP_ID, 'imap_user', ''),
 			'password' => $this->getImapPassword(),

@@ -18,15 +18,29 @@
 					{{ t('recruiting', 'Members of this group are recruiters: they manage openings, templates, the triage inbox and can delete candidate data.') }}
 				</p>
 				<NcTextField v-model="settings.senderName" :label="t('recruiting', 'Sender name')" :placeholder="t('recruiting', 'e.g. HR team')" />
-				<NcTextField v-model="settings.senderEmail" type="email" :label="t('recruiting', 'Sender email address')" :placeholder="t('recruiting', 'e.g. jobs@example.com')" />
+				<NcTextField
+					v-model="settings.senderEmail"
+					type="email"
+					:label="t('recruiting', 'Sender email address')"
+					:placeholder="t('recruiting', 'e.g. jobs@example.com')" />
 				<p class="admin-recruiting__hint">
 					{{ t('recruiting', 'All candidate mail (invitations, rejections, offers) is sent with this identity via the server’s email settings. Replies go to the application mailbox below, so answers land back in the app.') }}
 				</p>
-				<NcTextField v-model.number="settings.retentionDays" type="number" min="0" max="3650" :label="t('recruiting', 'Retention period (days)')" />
+				<NcTextField
+					v-model.number="settings.retentionDays"
+					type="number"
+					min="0"
+					max="3650"
+					:label="t('recruiting', 'Retention period (days)')" />
 				<p class="admin-recruiting__hint">
 					{{ t('recruiting', 'Rejected and withdrawn candidates are anonymized automatically after this many days (GDPR). 0 disables the automation; deleting on request is always possible from the candidate view.') }}
 				</p>
-				<NcTextField v-model.number="settings.poolRetentionMonths" type="number" min="1" max="120" :label="t('recruiting', 'Talent pool membership (months)')" />
+				<NcTextField
+					v-model.number="settings.poolRetentionMonths"
+					type="number"
+					min="1"
+					max="120"
+					:label="t('recruiting', 'Talent pool membership (months)')" />
 				<p class="admin-recruiting__hint">
 					{{ t('recruiting', 'How long a talent-pool consent stays valid. Expired members are anonymized automatically.') }}
 				</p>
@@ -41,7 +55,7 @@
 					{{ t('recruiting', 'Fetch applications from the mailbox') }}
 				</NcCheckboxRadioSwitch>
 				<div class="admin-recruiting__row">
-					<NcTextField v-model="settings.imapHost" :label="t('recruiting', 'IMAP host')" :placeholder="'imap.example.com'" />
+					<NcTextField v-model="settings.imapHost" :label="t('recruiting', 'IMAP host')" placeholder="imap.example.com" />
 					<NcTextField v-model.number="settings.imapPort" type="number" :label="t('recruiting', 'Port')" />
 					<NcSelect
 						v-model="imapSecurity"
@@ -51,7 +65,7 @@
 						:clearable="false" />
 				</div>
 				<div class="admin-recruiting__row">
-					<NcTextField v-model="settings.imapUser" :label="t('recruiting', 'Mailbox user')" :placeholder="'jobs@example.com'" />
+					<NcTextField v-model="settings.imapUser" :label="t('recruiting', 'Mailbox user')" placeholder="jobs@example.com" />
 					<NcPasswordField
 						v-model="imapPassword"
 						:label="t('recruiting', 'Password')"
@@ -98,6 +112,7 @@ export default {
 		NcSettingsSection,
 		NcTextField,
 	},
+
 	data() {
 		return {
 			settings: {
@@ -111,6 +126,7 @@ export default {
 				imapUser: '',
 				imapPasswordSet: false,
 			},
+
 			imapPassword: '',
 			hrGroup: null,
 			imapSecurity: null,
@@ -119,6 +135,7 @@ export default {
 			testing: false,
 		}
 	},
+
 	computed: {
 		securityOptionsList() {
 			return [
@@ -128,6 +145,7 @@ export default {
 			]
 		},
 	},
+
 	async created() {
 		try {
 			const [{ data: settings }, { data: groups }] = await Promise.all([api.getSettings(), api.getGroups()])
@@ -140,6 +158,7 @@ export default {
 			showError(errorMessage(error, this.t('recruiting', 'Could not load the settings')))
 		}
 	},
+
 	methods: {
 		async save() {
 			this.saving = true
@@ -162,6 +181,7 @@ export default {
 				this.saving = false
 			}
 		},
+
 		async test() {
 			this.testing = true
 			try {

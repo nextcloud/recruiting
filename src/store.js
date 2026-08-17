@@ -25,7 +25,11 @@ export const useSessionStore = defineStore('session', {
 		// The stage taxonomy comes from the server — never hardcode it in a view
 		isTerminalStage: (state) => (stage) => state.terminalStages.includes(stage),
 		isActiveStage: (state) => (stage) => state.stages.includes(stage),
-		/** Board columns plus "Hired", the funnel the reports draw */
+		/**
+		 * Board columns plus "Hired", the funnel the reports draw
+		 *
+		 * @param state
+		 */
 		funnelStages: (state) => [...state.stages, 'hired'],
 	},
 	actions: {
@@ -95,6 +99,9 @@ export const useSidebarStore = defineStore('sidebar', {
 		/**
 		 * Requests can overtake each other when candidates are clicked in
 		 * quick succession — only the newest one may touch the state.
+		 *
+		 * @param candidateId
+		 * @param token
 		 */
 		isCurrentRequest(candidateId, token) {
 			return this.candidateId === candidateId && this.requestToken === token

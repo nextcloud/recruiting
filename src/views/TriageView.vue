@@ -66,11 +66,11 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import InboxArrowDown from 'vue-material-design-icons/InboxArrowDown.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
-import api, { errorMessage } from '../api.js'
-import { fromNow } from '../utils/format.js'
-import { confirmDestructive } from '../utils/confirm.js'
 import CandidateCard from '../components/CandidateCard.vue'
+import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
+import { confirmDestructive } from '../utils/confirm.js'
+import { fromNow } from '../utils/format.js'
 
 export default {
 	name: 'TriageView',
@@ -84,12 +84,14 @@ export default {
 		NcNoteCard,
 		TrashCanOutline,
 	},
+
 	setup() {
 		return {
 			sidebar: useSidebarStore(),
 			session: useSessionStore(),
 		}
 	},
+
 	data() {
 		return {
 			candidates: [],
@@ -97,15 +99,18 @@ export default {
 			loading: true,
 		}
 	},
+
 	watch: {
-		'sidebar.version'() {
+		'sidebar.version': function() {
 			this.load(true)
 		},
 	},
+
 	created() {
 		this.load()
 		this.loadIngestionStatus()
 	},
+
 	methods: {
 		fromNow,
 		async loadIngestionStatus() {
@@ -116,6 +121,7 @@ export default {
 				// the heartbeat is informational — the inbox works without it
 			}
 		},
+
 		async load(silent = false) {
 			if (!silent) {
 				this.loading = true
@@ -129,6 +135,7 @@ export default {
 				this.loading = false
 			}
 		},
+
 		async remove(candidate) {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Delete "{name}" permanently?', { name: candidate.displayName }),

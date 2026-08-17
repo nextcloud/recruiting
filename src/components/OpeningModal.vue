@@ -46,7 +46,7 @@
 				<UserPicker
 					v-model="member.user"
 					class="opening-modal__member-picker"
-					:placeholder="t('recruiting', 'Pick a person …')" />
+					:placeholder="t('recruiting', 'Pick a person …')" />
 				<NcSelect
 					v-model="member.role"
 					class="opening-modal__member-role"
@@ -91,9 +91,9 @@ import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import Close from 'vue-material-design-icons/Close.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
+import UserPicker from './UserPicker.vue'
 import api, { errorMessage } from '../api.js'
 import { roleLabel } from '../utils/format.js'
-import UserPicker from './UserPicker.vue'
 
 export default {
 	name: 'OpeningModal',
@@ -108,9 +108,11 @@ export default {
 		Plus,
 		UserPicker,
 	},
+
 	props: {
 		opening: { type: Object, default: null },
 	},
+
 	emits: ['close', 'saved'],
 	data() {
 		return {
@@ -130,20 +132,24 @@ export default {
 			},
 		}
 	},
+
 	computed: {
 		title() {
 			return this.opening
 				? this.t('recruiting', 'Edit opening')
 				: this.t('recruiting', 'New job opening')
 		},
+
 		roleOptions() {
 			return ['manager', 'interviewer', 'observer'].map((role) => ({ id: role, label: roleLabel(role) }))
 		},
 	},
+
 	methods: {
 		addMember() {
 			this.form.team.push({ user: null, role: this.roleOptions[1] })
 		},
+
 		async save() {
 			this.saving = true
 			try {

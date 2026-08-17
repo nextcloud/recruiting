@@ -30,12 +30,15 @@ export default {
 	props: {
 		id: { type: String, required: true },
 	},
+
 	setup() {
 		return { sidebar: useSidebarStore() }
 	},
+
 	data() {
 		return { error: false }
 	},
+
 	async created() {
 		try {
 			const { data } = await api.getCandidate(this.id)

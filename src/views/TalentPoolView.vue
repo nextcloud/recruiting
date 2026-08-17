@@ -22,7 +22,12 @@
 		<div v-else class="pool-view__list">
 			<div v-for="member in members" :key="member.id" class="pool-member">
 				<NcAvatar :displayName="member.displayName" :disableMenu="true" :size="36" />
-				<div class="pool-member__info" role="button" tabindex="0" @click="sidebar.open(member.id)" @keydown.enter.prevent="sidebar.open(member.id)">
+				<div
+					class="pool-member__info"
+					role="button"
+					tabindex="0"
+					@click="sidebar.open(member.id)"
+					@keydown.enter.prevent="sidebar.open(member.id)">
 					<strong>{{ member.displayName }}</strong>
 					<span class="pool-member__meta">
 						{{ member.email }}
@@ -37,7 +42,7 @@
 						:modelValue="null"
 						:options="openingOptions"
 						label="label"
-						:placeholder="t('recruiting', 'Add to opening …')"
+						:placeholder="t('recruiting', 'Add to opening …')"
 						@update:modelValue="addTo(member, $event)" />
 				</div>
 			</div>
@@ -65,12 +70,14 @@ export default {
 			sidebar: useSidebarStore(),
 		}
 	},
+
 	data() {
 		return {
 			members: [],
 			loading: true,
 		}
 	},
+
 	computed: {
 		openingOptions() {
 			return this.openings.open
@@ -78,14 +85,17 @@ export default {
 				.map((opening) => ({ id: opening.id, label: opening.title }))
 		},
 	},
+
 	watch: {
-		'sidebar.version'() {
+		'sidebar.version': function() {
 			this.load(true)
 		},
 	},
+
 	created() {
 		this.load()
 	},
+
 	methods: {
 		fromNow,
 		async load(silent = false) {
@@ -101,6 +111,7 @@ export default {
 				this.loading = false
 			}
 		},
+
 		async addTo(member, option) {
 			if (!option) {
 				return

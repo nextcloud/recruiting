@@ -17,8 +17,17 @@ if (file_exists($appRoot . '/vendor/autoload.php')) {
 	require_once $appRoot . '/vendor/autoload.php';
 }
 
+// The nextcloud/ocp package ships no composer autoload section for OCP\
+// itself, but its vendor autoloader provides the psr/* dependencies the
+// interfaces extend — load it when present.
+$ocpVendorAutoload = $appRoot . '/vendor-bin/nextcloud-ocp/vendor/autoload.php';
+if (file_exists($ocpVendorAutoload)) {
+	require_once $ocpVendorAutoload;
+}
+
 $ocpCandidates = [
-	$appRoot . '/vendor-bin/nextcloud-ocp/vendor/autoload.php',
+	// OCP/ directory of the nextcloud/ocp package (registered in the prefix map)
+	$appRoot . '/vendor-bin/nextcloud-ocp/vendor/nextcloud/ocp/OCP',
 	$appRoot . '/../../lib/public',   // app inside a server checkout
 ];
 

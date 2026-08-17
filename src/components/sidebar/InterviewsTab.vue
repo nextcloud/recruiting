@@ -19,7 +19,11 @@
 		</NcEmptyContent>
 
 		<template v-else>
-			<div v-for="interview in candidate.interviews" :key="interview.id" class="interview" :class="'interview--' + interview.status">
+			<div
+				v-for="interview in candidate.interviews"
+				:key="interview.id"
+				class="interview"
+				:class="'interview--' + interview.status">
 				<div class="interview__head">
 					<strong>{{ interview.title }}</strong>
 					<span class="interview__status" :class="'interview__status--' + interview.status">
@@ -103,12 +107,12 @@ import CalendarClock from 'vue-material-design-icons/CalendarClock.vue'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
+import AiAssist from '../AiAssist.vue'
 import api, { errorMessage } from '../../api.js'
-import { confirmDestructive } from '../../utils/confirm.js'
 import { useSessionStore, useSidebarStore } from '../../store.js'
 import { copyToClipboard } from '../../utils/clipboard.js'
+import { confirmDestructive } from '../../utils/confirm.js'
 import { formatDateTime, interviewStatusLabel } from '../../utils/format.js'
-import AiAssist from '../AiAssist.vue'
 
 export default {
 	name: 'InterviewsTab',
@@ -122,27 +126,33 @@ export default {
 		NcEmptyContent,
 		Plus,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	emits: ['schedule'],
 	setup() {
 		return { sidebar: useSidebarStore(), session: useSessionStore() }
 	},
+
 	data() {
 		return { aiQuestions: '' }
 	},
+
 	computed: {
 		isTerminal() {
 			return this.session.isTerminalStage(this.candidate.stage)
 		},
 	},
+
 	methods: {
 		formatDateTime,
 		statusLabel: interviewStatusLabel,
 		copyLink(interview) {
 			copyToClipboard(interview.publicUrl)
 		},
+
 		async cancel(interview) {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Cancel "{title}"?', { title: interview.title }),

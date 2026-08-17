@@ -129,6 +129,7 @@
 </template>
 
 <script>
+import { generateUrl } from '@nextcloud/router'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationCaption from '@nextcloud/vue/components/NcAppNavigationCaption'
@@ -148,7 +149,6 @@ import InboxArrowDown from 'vue-material-design-icons/InboxArrowDown.vue'
 import PauseCircleOutline from 'vue-material-design-icons/PauseCircleOutline.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import VoteOutline from 'vue-material-design-icons/VoteOutline.vue'
-import { generateUrl } from '@nextcloud/router'
 import CandidateSidebar from './components/CandidateSidebar.vue'
 import OpeningModal from './components/OpeningModal.vue'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from './store.js'
@@ -178,6 +178,7 @@ export default {
 		Plus,
 		VoteOutline,
 	},
+
 	setup() {
 		return {
 			session: useSessionStore(),
@@ -185,16 +186,19 @@ export default {
 			sidebar: useSidebarStore(),
 		}
 	},
-	computed: {
-		handbookUrl() {
-			return generateUrl('/apps/recruiting/handbook')
-		},
-	},
+
 	data() {
 		return {
 			showOpeningModal: false,
 		}
 	},
+
+	computed: {
+		handbookUrl() {
+			return generateUrl('/apps/recruiting/handbook')
+		},
+	},
+
 	watch: {
 		// A candidate belongs to the view it was opened from — carrying the
 		// sidebar over to the reports or the talent pool is just confusing.
@@ -204,9 +208,11 @@ export default {
 			}
 		},
 	},
+
 	created() {
 		this.openings.load()
 	},
+
 	methods: {
 		onOpeningSaved(opening) {
 			this.showOpeningModal = false

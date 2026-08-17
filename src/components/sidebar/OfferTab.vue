@@ -26,8 +26,16 @@
 			</p>
 			<NcTextField v-model="form.jobTitle" :label="t('recruiting', 'Job title')" required />
 			<div class="offer-form__row">
-				<NcTextField v-model="form.salaryAmount" inputmode="decimal" :label="t('recruiting', 'Salary')" placeholder="72000" />
-				<NcTextField v-model="form.salaryCurrency" :label="t('recruiting', 'Currency')" placeholder="EUR" maxlength="3" />
+				<NcTextField
+					v-model="form.salaryAmount"
+					inputmode="decimal"
+					:label="t('recruiting', 'Salary')"
+					placeholder="72000" />
+				<NcTextField
+					v-model="form.salaryCurrency"
+					:label="t('recruiting', 'Currency')"
+					placeholder="EUR"
+					maxlength="3" />
 				<NcSelect
 					v-model="form.salaryPeriod"
 					class="offer-form__period"
@@ -40,7 +48,11 @@
 				<NcDateTimePickerNative v-model="form.startDate" type="date" :label="t('recruiting', 'Start date')" />
 				<NcDateTimePickerNative v-model="form.validUntil" type="date" :label="t('recruiting', 'Offer valid until')" />
 			</div>
-			<NcTextArea v-model="form.notes" :label="t('recruiting', 'Internal notes')" rows="3" resize="vertical" />
+			<NcTextArea
+				v-model="form.notes"
+				:label="t('recruiting', 'Internal notes')"
+				rows="3"
+				resize="vertical" />
 			<div class="offer-tab__buttons">
 				<NcButton @click="creating = false; editing = null">
 					{{ t('recruiting', 'Cancel') }}
@@ -52,7 +64,11 @@
 		</form>
 
 		<!-- Offers, newest first -->
-		<div v-for="(offer, index) in offers" :key="offer.id" class="offer" :class="{ 'offer--past': isPast(offer) }">
+		<div
+			v-for="(offer, index) in offers"
+			:key="offer.id"
+			class="offer"
+			:class="{ 'offer--past': isPast(offer) }">
 			<div class="offer__head">
 				<strong>{{ offer.jobTitle }}</strong>
 				<span class="offer__status" :class="'offer__status--' + offer.status">
@@ -104,7 +120,9 @@
 				<!-- pending approval -->
 				<div v-else-if="offer.status === 'pending_approval'" class="offer__workflow">
 					<template v-if="offer.approverUid === session.uid">
-						<p class="offer__hint">{{ t('recruiting', 'This offer is waiting for your decision.') }}</p>
+						<p class="offer__hint">
+							{{ t('recruiting', 'This offer is waiting for your decision.') }}
+						</p>
 						<div class="offer-tab__buttons offer-tab__buttons--start">
 							<NcButton variant="primary" :disabled="working" @click="approve(offer)">
 								<template #icon>
@@ -126,7 +144,11 @@
 				<div v-else-if="offer.status === 'approved' && canManage" class="offer__workflow">
 					<template v-if="composing">
 						<NcTextField v-model="mailSubject" :label="t('recruiting', 'Subject')" />
-						<NcTextArea v-model="mailBody" :label="t('recruiting', 'Message')" rows="10" resize="vertical" />
+						<NcTextArea
+							v-model="mailBody"
+							:label="t('recruiting', 'Message')"
+							rows="10"
+							resize="vertical" />
 						<AiAssist
 							:candidateId="candidate.id"
 							action="draft_offer"
@@ -149,11 +171,11 @@
 							variant="primary"
 							:disabled="working || !candidate.email"
 							:title="t('recruiting', 'Opens the mail preview — the offer only counts as sent after you confirm. The card moves to the “Offer” column.')"
-							@click="composeSend(offer)">
+							@click="composeSend()">
 							<template #icon>
 								<SendOutline :size="20" />
 							</template>
-							{{ t('recruiting', 'Send offer email …') }}
+							{{ t('recruiting', 'Send offer email …') }}
 						</NcButton>
 						<NcButton
 							:disabled="working"
@@ -211,15 +233,19 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CheckCircleOutline from 'vue-material-design-icons/CheckCircleOutline.vue'
 import HandshakeOutline from 'vue-material-design-icons/HandshakeOutline.vue'
 import SendOutline from 'vue-material-design-icons/SendOutline.vue'
-import api, { errorMessage } from '../../api.js'
-import { confirmDestructive } from '../../utils/confirm.js'
-import { useSessionStore, useSidebarStore } from '../../store.js'
-import { formatDate, offerStatusLabel, salaryPeriodLabel } from '../../utils/format.js'
 import AiAssist from '../AiAssist.vue'
 import UserPicker from '../UserPicker.vue'
+import api, { errorMessage } from '../../api.js'
+import { useSessionStore, useSidebarStore } from '../../store.js'
+import { confirmDestructive } from '../../utils/confirm.js'
+import { formatDate, offerStatusLabel, salaryPeriodLabel } from '../../utils/format.js'
 
 const toDateInput = (value) => (value ? new Date(value + 'T00:00:00') : null)
-const fromDateInput = (value) => {
+/**
+ *
+ * @param value
+ */
+function fromDateInput(value) {
 	if (!value) {
 		return ''
 	}
@@ -242,15 +268,18 @@ export default {
 		SendOutline,
 		UserPicker,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	setup() {
 		return {
 			session: useSessionStore(),
 			sidebar: useSidebarStore(),
 		}
 	},
+
 	data() {
 		return {
 			creating: false,
@@ -263,23 +292,29 @@ export default {
 			form: this.emptyForm(),
 		}
 	},
+
 	computed: {
 		offers() {
 			return this.candidate.offers ?? []
 		},
+
 		canManage() {
 			return this.candidate.permissions.manage
 		},
+
 		isTerminal() {
 			return this.session.isTerminalStage(this.candidate.stage)
 		},
+
 		allPast() {
 			return this.offers.every((offer) => this.isPast(offer))
 		},
+
 		periodOptions() {
 			return ['year', 'month', 'hour'].map((period) => ({ id: period, label: salaryPeriodLabel(period) }))
 		},
 	},
+
 	methods: {
 		formatDate,
 		offerStatusLabel,
@@ -287,6 +322,7 @@ export default {
 		isPast(offer) {
 			return ['declined', 'expired', 'withdrawn'].includes(offer.status)
 		},
+
 		emptyForm() {
 			return {
 				jobTitle: '',
@@ -298,12 +334,14 @@ export default {
 				notes: '',
 			}
 		},
+
 		startCreate() {
 			this.form = this.emptyForm()
 			this.form.jobTitle = this.candidate.openingTitle ?? ''
 			this.creating = true
 			this.editing = null
 		},
+
 		startEdit(offer) {
 			this.form = {
 				jobTitle: offer.jobTitle,
@@ -317,6 +355,7 @@ export default {
 			this.editing = offer
 			this.creating = false
 		},
+
 		payload() {
 			return {
 				jobTitle: this.form.jobTitle,
@@ -328,6 +367,7 @@ export default {
 				notes: this.form.notes,
 			}
 		},
+
 		async run(action, successMessage = '') {
 			this.working = true
 			try {
@@ -343,6 +383,7 @@ export default {
 				this.working = false
 			}
 		},
+
 		saveDraft() {
 			const editing = this.editing
 			this.run(async () => {
@@ -355,17 +396,21 @@ export default {
 				this.editing = null
 			})
 		},
+
 		submit(offer) {
 			this.run(() => api.submitOffer(offer.id, this.approver.id), this.t('recruiting', 'Approval requested'))
 		},
+
 		approve(offer) {
 			this.run(() => api.approveOffer(offer.id), this.t('recruiting', 'Offer approved'))
 		},
+
 		declineApproval(offer) {
 			const note = prompt(this.t('recruiting', 'A short note for the offer creator (optional):')) ?? ''
 			this.run(() => api.declineOfferApproval(offer.id, note))
 		},
-		async composeSend(offer) {
+
+		async composeSend() {
 			this.working = true
 			try {
 				const { data } = await api.previewMail(this.candidate.id, 'offer')
@@ -378,15 +423,18 @@ export default {
 				this.working = false
 			}
 		},
+
 		sendWithMail(offer) {
 			this.run(async () => {
 				await api.sendOffer(offer.id, { mailSubject: this.mailSubject, mailBody: this.mailBody })
 				this.composing = false
 			}, this.t('recruiting', 'Offer sent'))
 		},
+
 		sendWithoutMail(offer) {
 			this.run(() => api.sendOffer(offer.id), this.t('recruiting', 'Offer marked as sent'))
 		},
+
 		async respond(offer, response) {
 			if (response === 'accepted'
 				&& !await confirmDestructive(
@@ -398,6 +446,7 @@ export default {
 			}
 			this.run(() => api.respondOffer(offer.id, response))
 		},
+
 		async withdraw(offer) {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Withdraw this offer?'),

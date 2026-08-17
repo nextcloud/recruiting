@@ -33,10 +33,10 @@
 			"composer dump-autoload"
 		],
 		"lint": "find . -name \\*.php -not -path './vendor/*' -not -path './vendor-bin/*' -not -path './build/*' -print0 | xargs -0 -n200 php -l",
-		"cs:check": "php-cs-fixer fix --dry-run --diff",
-		"cs:fix": "php-cs-fixer fix",
-		"psalm": "psalm --no-cache",
-		"psalm:update-baseline": "psalm --threads=1 --update-baseline",
+		"cs:check": "vendor-bin/csfixer/vendor/bin/php-cs-fixer fix --dry-run --diff",
+		"cs:fix": "vendor-bin/csfixer/vendor/bin/php-cs-fixer fix",
+		"psalm": "vendor-bin/psalm/vendor/bin/psalm --no-cache",
+		"psalm:update-baseline": "vendor-bin/psalm/vendor/bin/psalm --threads=1 --update-baseline",
 		"test:unit": "phpunit -c tests/phpunit.xml --colors=always --fail-on-warning --fail-on-risky"
 	},
 	"autoload": {

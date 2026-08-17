@@ -31,6 +31,7 @@ export default {
 			session: useSessionStore(),
 		}
 	},
+
 	computed: {
 		emptyDescription() {
 			return this.session.isRecruiter
@@ -38,6 +39,7 @@ export default {
 				: this.t('recruiting', 'You are not part of a hiring team yet. A recruiter can add you to an opening.')
 		},
 	},
+
 	watch: {
 		'openings.loaded': {
 			immediate: true,

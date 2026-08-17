@@ -40,8 +40,8 @@ import { showError } from '@nextcloud/dialogs'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import VoteOutline from 'vue-material-design-icons/VoteOutline.vue'
-import api, { errorMessage } from '../api.js'
 import CandidateCard from '../components/CandidateCard.vue'
+import api, { errorMessage } from '../api.js'
 import { useSidebarStore } from '../store.js'
 
 export default {
@@ -50,20 +50,24 @@ export default {
 	setup() {
 		return { sidebar: useSidebarStore() }
 	},
+
 	data() {
 		return {
 			cards: [],
 			loading: true,
 		}
 	},
+
 	watch: {
-		'sidebar.version'() {
+		'sidebar.version': function() {
 			this.load(true)
 		},
 	},
+
 	created() {
 		this.load()
 	},
+
 	methods: {
 		async load(silent = false) {
 			if (!silent) {

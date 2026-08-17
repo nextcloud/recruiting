@@ -10,6 +10,21 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-17
+
+### Fixed
+
+- CI actually runs on a plain checkout: the vendor-bin tool manifests
+  (php-cs-fixer, psalm, nextcloud/ocp) are committed, the composer scripts
+  call the tools by their real paths, the npm lockfile is in sync with
+  package.json, and the unit-test bootstrap loads OCP and its psr/*
+  dependencies from vendor-bin outside a server checkout. CI runs on
+  PHP 8.3/8.4 and Node 24, matching the toolchain requirements.
+- First full eslint/stylelint/psalm pass over the codebase: style-only
+  fixes throughout, two redundant casts, a dead null-coalesce, explicit
+  float casts in the report averages, and the IMAP socket is nulled before
+  closing.
+
 ## [0.7.0] - 2026-08-17
 
 ### Added

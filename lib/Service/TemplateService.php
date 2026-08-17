@@ -71,7 +71,7 @@ class TemplateService {
 	 */
 	public function resolve(string $type, ?string $templateId): array {
 		if ($templateId === null || $templateId === '' || str_starts_with($templateId, 'builtin:')) {
-			if ($templateId !== null && str_starts_with((string)$templateId, 'builtin:')) {
+			if ($templateId !== null && str_starts_with($templateId, 'builtin:')) {
 				$builtinType = substr($templateId, strlen('builtin:'));
 				$builtin = $this->builtins()[$builtinType] ?? null;
 				if ($builtin !== null) {

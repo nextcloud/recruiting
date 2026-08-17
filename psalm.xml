@@ -20,16 +20,17 @@
 		<directory name="vendor-bin/nextcloud-ocp" />
 	</extraFiles>
 	<issueHandlers>
-		<!-- Provided by the server at runtime, not by this app's autoloader. -->
+		<!-- Server-internal class used as a documented escape hatch: OCP can
+		     only create calendar objects, cancelling needs the DAV backend
+		     (spec §10.5). Provided by the server at runtime. -->
 		<UndefinedClass>
 			<errorLevel type="suppress">
-				<referencedClass name="Sabre\VObject\Component\VCalendar" />
+				<referencedClass name="OCA\DAV\CalDAV\CalDavBackend" />
 			</errorLevel>
 		</UndefinedClass>
 		<UndefinedDocblockClass>
 			<errorLevel type="suppress">
-				<referencedClass name="Doctrine\DBAL\Schema\Schema" />
-				<referencedClass name="Doctrine\DBAL\Schema\Table" />
+				<referencedClass name="OCA\DAV\CalDAV\CalDavBackend" />
 			</errorLevel>
 		</UndefinedDocblockClass>
 	</issueHandlers>

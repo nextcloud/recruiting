@@ -44,7 +44,7 @@ class AiTaskListener implements IEventListener {
 		} elseif ($event instanceof TaskFailedEvent) {
 			$task = $event->getTask();
 			if ($task->getAppId() === Application::APP_ID) {
-				$this->logger->info('Recruiting AI task failed: ' . ($event->getErrorMessage() ?? 'unknown error'));
+				$this->logger->info('Recruiting AI task failed: ' . $event->getErrorMessage());
 			}
 		}
 	}

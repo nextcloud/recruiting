@@ -9,6 +9,7 @@
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
+
 import './public-interview.css'
 
 const root = document.getElementById('recruiting-public')
@@ -25,7 +26,13 @@ const formatter = new Intl.DateTimeFormat(undefined, {
 })
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-const el = (tag, attrs = {}, children = []) => {
+/**
+ *
+ * @param tag
+ * @param attrs
+ * @param children
+ */
+function el(tag, attrs = {}, children = []) {
 	const node = document.createElement(tag)
 	Object.entries(attrs).forEach(([key, value]) => {
 		if (key === 'text') {
@@ -40,6 +47,10 @@ const el = (tag, attrs = {}, children = []) => {
 	return node
 }
 
+/**
+ *
+ * @param errorText
+ */
 function render(errorText = '') {
 	root.textContent = ''
 	if (data === null) {
@@ -103,6 +114,10 @@ function render(errorText = '') {
 	root.appendChild(card)
 }
 
+/**
+ *
+ * @param event
+ */
 async function confirm(event) {
 	const selected = root.querySelector('input[name="slot"]:checked')
 	if (!selected) {

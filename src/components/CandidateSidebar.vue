@@ -4,17 +4,17 @@
 -->
 <template>
 	<NcAppSidebar
-		:name="candidate?.displayName ?? t('recruiting', 'Loading …')"
+		:name="candidate?.displayName ?? t('recruiting', 'Loading …')"
 		:subname="subname"
 		@close="sidebar.close()">
 		<template v-if="candidate" #description>
 			<div class="candidate-sidebar__badges">
-			<span class="candidate-sidebar__stage" :class="'candidate-sidebar__stage--' + candidate.stage">
-				{{ stageLabel(candidate.stage) }}
-			</span>
-			<span v-if="candidate.rejectionReason" class="candidate-sidebar__reason">
-				{{ reasonLabel(candidate.rejectionReason) }}
-			</span>
+				<span class="candidate-sidebar__stage" :class="'candidate-sidebar__stage--' + candidate.stage">
+					{{ stageLabel(candidate.stage) }}
+				</span>
+				<span v-if="candidate.rejectionReason" class="candidate-sidebar__reason">
+					{{ reasonLabel(candidate.rejectionReason) }}
+				</span>
 			</div>
 		</template>
 
@@ -60,7 +60,7 @@
 			</template>
 		</template>
 
-		<NcEmptyContent v-if="sidebar.loading && !candidate" :name="t('recruiting', 'Loading …')">
+		<NcEmptyContent v-if="sidebar.loading && !candidate" :name="t('recruiting', 'Loading …')">
 			<template #icon>
 				<NcLoadingIcon />
 			</template>
@@ -125,7 +125,6 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
-import DownloadOutline from 'vue-material-design-icons/DownloadOutline.vue'
 import NcAppSidebar from '@nextcloud/vue/components/NcAppSidebar'
 import NcAppSidebarTab from '@nextcloud/vue/components/NcAppSidebarTab'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -134,14 +133,11 @@ import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
 import ArrowRightThin from 'vue-material-design-icons/ArrowRightThin.vue'
 import CalendarClock from 'vue-material-design-icons/CalendarClock.vue'
 import CalendarPlus from 'vue-material-design-icons/CalendarPlus.vue'
+import DownloadOutline from 'vue-material-design-icons/DownloadOutline.vue'
 import HandshakeOutline from 'vue-material-design-icons/HandshakeOutline.vue'
 import LightningBoltOutline from 'vue-material-design-icons/LightningBoltOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import VoteOutline from 'vue-material-design-icons/VoteOutline.vue'
-import api, { errorMessage } from '../api.js'
-import { confirmDestructive } from '../utils/confirm.js'
-import { useSessionStore, useSidebarStore } from '../store.js'
-import { reasonLabel, stageLabel } from '../utils/format.js'
 import RejectModal from './RejectModal.vue'
 import ScheduleInterviewModal from './ScheduleInterviewModal.vue'
 import ActivityTab from './sidebar/ActivityTab.vue'
@@ -149,6 +145,10 @@ import InterviewsTab from './sidebar/InterviewsTab.vue'
 import OfferTab from './sidebar/OfferTab.vue'
 import ProfileTab from './sidebar/ProfileTab.vue'
 import ScreeningTab from './sidebar/ScreeningTab.vue'
+import api, { errorMessage } from '../api.js'
+import { useSessionStore, useSidebarStore } from '../store.js'
+import { confirmDestructive } from '../utils/confirm.js'
+import { reasonLabel, stageLabel } from '../utils/format.js'
 
 export default {
 	name: 'CandidateSidebar',
@@ -177,31 +177,38 @@ export default {
 		TrashCanOutline,
 		VoteOutline,
 	},
+
 	setup() {
 		return {
 			sidebar: useSidebarStore(),
 			session: useSessionStore(),
 		}
 	},
+
 	data() {
 		return {
 			showSchedule: false,
 			showReject: false,
 		}
 	},
+
 	computed: {
 		candidate() {
 			return this.sidebar.candidate
 		},
+
 		exportHref() {
 			return this.candidate ? api.exportUrl(this.candidate.id) : '#'
 		},
+
 		subname() {
 			return this.candidate?.openingTitle ?? this.t('recruiting', 'Triage inbox')
 		},
+
 		isTerminal() {
 			return this.session.isTerminalStage(this.candidate?.stage)
 		},
+
 		stageTargets() {
 			if (!this.candidate || this.candidate.openingId === null) {
 				return []
@@ -211,6 +218,7 @@ export default {
 				.filter((stage) => stage !== this.candidate.stage)
 		},
 	},
+
 	methods: {
 		reasonLabel,
 		stageLabel,
@@ -222,6 +230,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not move the candidate')))
 			}
 		},
+
 		async deleteCandidate() {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Delete {name} permanently?', { name: this.candidate.displayName }),
@@ -239,6 +248,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not delete the candidate')))
 			}
 		},
+
 		onMutated() {
 			this.showSchedule = false
 			this.showReject = false

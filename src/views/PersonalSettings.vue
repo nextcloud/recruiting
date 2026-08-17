@@ -32,6 +32,7 @@ export default {
 			mode: null,
 		}
 	},
+
 	computed: {
 		options() {
 			return [
@@ -41,6 +42,7 @@ export default {
 			]
 		},
 	},
+
 	async created() {
 		try {
 			const { data } = await api.getPersonal()
@@ -49,6 +51,7 @@ export default {
 			this.mode = this.options[0]
 		}
 	},
+
 	methods: {
 		async save(option) {
 			if (!option) {

@@ -69,7 +69,9 @@
 								{{ t('recruiting', 'hidden') }}
 							</span>
 						</div>
-						<p v-if="vote.comment" class="screening-tab__vote-comment">{{ vote.comment }}</p>
+						<p v-if="vote.comment" class="screening-tab__vote-comment">
+							{{ vote.comment }}
+						</p>
 					</div>
 				</li>
 			</ul>
@@ -96,6 +98,8 @@
 				</li>
 			</ul>
 			<div class="screening-tab__assign">
+				<!-- TODO: migrate to NcSelectUsers -->
+				<!-- eslint-disable @nextcloud/no-deprecated-library-props -->
 				<NcSelect
 					v-model="newScreeners"
 					class="screening-tab__assign-select"
@@ -103,7 +107,8 @@
 					label="displayName"
 					:userSelect="true"
 					:multiple="true"
-					:placeholder="t('recruiting', 'Add screeners from the hiring team …')" />
+					:placeholder="t('recruiting', 'Add screeners from the hiring team …')" />
+				<!-- eslint-enable @nextcloud/no-deprecated-library-props -->
 				<NcButton :disabled="newScreeners.length === 0" @click="assign">
 					{{ t('recruiting', 'Assign') }}
 				</NcButton>
@@ -122,10 +127,10 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import Close from 'vue-material-design-icons/Close.vue'
 import VoteOutline from 'vue-material-design-icons/VoteOutline.vue'
+import AiAssist from '../AiAssist.vue'
 import api, { errorMessage } from '../../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
 import { voteMeta } from '../../utils/format.js'
-import AiAssist from '../AiAssist.vue'
 
 export default {
 	name: 'ScreeningTab',
@@ -140,9 +145,11 @@ export default {
 		NcTextArea,
 		VoteOutline,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	setup() {
 		return {
 			session: useSessionStore(),
@@ -150,6 +157,7 @@ export default {
 			openings: useOpeningsStore(),
 		}
 	},
+
 	data() {
 		return {
 			voteValue: null,
@@ -159,16 +167,20 @@ export default {
 			aiHint: '',
 		}
 	},
+
 	computed: {
 		myVote() {
 			return this.candidate.votes.find((vote) => vote.uid === this.session.uid) ?? null
 		},
+
 		votesHidden() {
 			return this.candidate.votes.some((vote) => vote.vote === null)
 		},
+
 		voteOptions() {
 			return ['yes', 'maybe', 'no'].map((value) => ({ id: value, ...voteMeta(value) }))
 		},
+
 		screenerOptions() {
 			const opening = this.openings.byId(this.candidate.openingId)
 			const assigned = new Set(this.candidate.screeners.map((screener) => screener.uid))
@@ -177,6 +189,7 @@ export default {
 				.map((member) => ({ id: member.uid, user: member.uid, displayName: member.displayName }))
 		},
 	},
+
 	watch: {
 		myVote: {
 			immediate: true,
@@ -188,6 +201,7 @@ export default {
 			},
 		},
 	},
+
 	methods: {
 		voteMeta,
 		async submitVote() {
@@ -203,6 +217,7 @@ export default {
 				this.saving = false
 			}
 		},
+
 		async assign() {
 			try {
 				await api.assignScreeners(this.candidate.id, this.newScreeners.map((screener) => screener.id))
@@ -213,6 +228,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not assign the screeners')))
 			}
 		},
+
 		async unassign(uid) {
 			try {
 				await api.unassignScreener(this.candidate.id, uid)

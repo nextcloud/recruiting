@@ -65,10 +65,10 @@ import NcModal from '@nextcloud/vue/components/NcModal'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import AiAssist from './AiAssist.vue'
 import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
 import { reasonLabel } from '../utils/format.js'
-import AiAssist from './AiAssist.vue'
 
 export default {
 	name: 'RejectModal',
@@ -82,9 +82,11 @@ export default {
 		NcTextArea,
 		NcTextField,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	emits: ['close', 'rejected'],
 	setup() {
 		return {
@@ -92,6 +94,7 @@ export default {
 			sidebar: useSidebarStore(),
 		}
 	},
+
 	data() {
 		return {
 			reason: null,
@@ -103,11 +106,13 @@ export default {
 			working: false,
 		}
 	},
+
 	computed: {
 		reasonOptions() {
 			return this.session.rejectionReasons.map((reason) => ({ id: reason, label: reasonLabel(reason) }))
 		},
 	},
+
 	async created() {
 		this.reason = this.reasonOptions[0] ?? null
 		if (this.candidate.email) {
@@ -124,6 +129,7 @@ export default {
 			}
 		}
 	},
+
 	methods: {
 		async reject() {
 			this.working = true

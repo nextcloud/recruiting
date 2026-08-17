@@ -20,7 +20,7 @@
 		<AiAssist
 			v-if="candidate.permissions.manage"
 			:candidateId="candidate.id"
-			:action="'summary'"
+			action="summary"
 			:label="candidate.aiSummary ? t('recruiting', 'Regenerate AI summary') : t('recruiting', 'Generate AI summary')"
 			@result="sidebar.reload()" />
 
@@ -77,7 +77,7 @@
 				v-model="assignTarget"
 				:options="openingOptions"
 				label="label"
-				:placeholder="t('recruiting', 'Pick an opening …')" />
+				:placeholder="t('recruiting', 'Pick an opening …')" />
 			<NcButton variant="primary" :disabled="!assignTarget" @click="assign">
 				{{ t('recruiting', 'Assign') }}
 			</NcButton>
@@ -91,7 +91,7 @@
 				<template #icon>
 					<CloseCircleOutline :size="20" />
 				</template>
-				{{ t('recruiting', 'Reject …') }}
+				{{ t('recruiting', 'Reject …') }}
 			</NcButton>
 		</div>
 	</div>
@@ -105,11 +105,11 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
+import AiAssist from '../AiAssist.vue'
+import DocumentsSection from './DocumentsSection.vue'
 import api, { errorMessage } from '../../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
 import { formatDateTime, sourceLabel } from '../../utils/format.js'
-import AiAssist from '../AiAssist.vue'
-import DocumentsSection from './DocumentsSection.vue'
 
 export default {
 	name: 'ProfileTab',
@@ -117,6 +117,7 @@ export default {
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	emits: ['reject'],
 	setup() {
 		return {
@@ -125,6 +126,7 @@ export default {
 			openings: useOpeningsStore(),
 		}
 	},
+
 	data() {
 		return {
 			editing: false,
@@ -133,16 +135,19 @@ export default {
 			assignTarget: null,
 		}
 	},
+
 	computed: {
 		canReject() {
 			return this.candidate.permissions.manage
 				&& this.candidate.stage !== 'rejected'
 				&& !this.session.isTerminalStage(this.candidate.stage)
 		},
+
 		openingOptions() {
 			return this.openings.open.map((opening) => ({ id: opening.id, label: opening.title }))
 		},
 	},
+
 	methods: {
 		formatDateTime,
 		sourceLabel,
@@ -154,6 +159,7 @@ export default {
 			}
 			this.editing = true
 		},
+
 		async save() {
 			this.saving = true
 			try {
@@ -167,6 +173,7 @@ export default {
 				this.saving = false
 			}
 		},
+
 		async assign() {
 			try {
 				await api.assignOpening(this.candidate.id, this.assignTarget.id)

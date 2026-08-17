@@ -129,8 +129,9 @@ class ImapClient {
 		} catch (ImapException) {
 			// closing anyway
 		}
-		fclose($this->socket);
+		$socket = $this->socket;
 		$this->socket = null;
+		fclose($socket);
 	}
 
 	public function __destruct() {

@@ -91,7 +91,7 @@ class ReportService {
 		if ($durations === []) {
 			return null;
 		}
-		return round(array_sum($durations) / count($durations) / 86400, 1);
+		return round((float)array_sum($durations) / (float)(count($durations) * 86400), 1);
 	}
 
 	/**
@@ -133,7 +133,7 @@ class ReportService {
 		$averages = [];
 		foreach (Candidate::ACTIVE_STAGES as $stage) {
 			if (($counts[$stage] ?? 0) > 0) {
-				$averages[$stage] = round($sums[$stage] / $counts[$stage] / 86400, 1);
+				$averages[$stage] = round((float)$sums[$stage] / (float)($counts[$stage] * 86400), 1);
 			}
 		}
 		return $averages;

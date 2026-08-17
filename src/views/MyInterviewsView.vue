@@ -75,20 +75,24 @@ export default {
 	setup() {
 		return { sidebar: useSidebarStore() }
 	},
+
 	data() {
 		return {
 			interviews: [],
 			loading: true,
 		}
 	},
+
 	watch: {
-		'sidebar.version'() {
+		'sidebar.version': function() {
 			this.load(true)
 		},
 	},
+
 	created() {
 		this.load()
 	},
+
 	methods: {
 		formatDate,
 		formatTime,

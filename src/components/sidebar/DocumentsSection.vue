@@ -66,8 +66,8 @@ import FilePdfBox from 'vue-material-design-icons/FilePdfBox.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import Upload from 'vue-material-design-icons/Upload.vue'
 import api, { errorMessage } from '../../api.js'
-import { confirmDestructive } from '../../utils/confirm.js'
 import { useSidebarStore } from '../../store.js'
+import { confirmDestructive } from '../../utils/confirm.js'
 import { formatSize } from '../../utils/format.js'
 
 export default {
@@ -81,15 +81,19 @@ export default {
 		TrashCanOutline,
 		Upload,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	setup() {
 		return { sidebar: useSidebarStore(), api }
 	},
+
 	data() {
 		return { uploading: false }
 	},
+
 	methods: {
 		formatSize,
 		async upload(event) {
@@ -109,6 +113,7 @@ export default {
 				this.uploading = false
 			}
 		},
+
 		async remove(document) {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Delete "{name}"?', { name: document.name }),

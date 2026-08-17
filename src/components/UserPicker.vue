@@ -3,12 +3,14 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
+	<!-- TODO: migrate to NcSelectUsers; NcSelect still supports these props in v9 -->
+	<!-- eslint-disable @nextcloud/no-deprecated-library-props -->
 	<NcSelect
 		:modelValue="modelValue"
 		:options="options"
 		:multiple="multiple"
 		:loading="loading"
-		:placeholder="placeholder || t('recruiting', 'Search for people …')"
+		:placeholder="placeholder || t('recruiting', 'Search for people …')"
 		:userSelect="true"
 		label="displayName"
 		:filterable="false"
@@ -35,6 +37,7 @@ export default {
 		multiple: { type: Boolean, default: false },
 		placeholder: { type: String, default: '' },
 	},
+
 	emits: ['update:modelValue'],
 	data() {
 		return {
@@ -42,6 +45,7 @@ export default {
 			loading: false,
 		}
 	},
+
 	methods: {
 		onSearch(query) {
 			clearTimeout(searchTimer)

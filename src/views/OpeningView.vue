@@ -22,7 +22,7 @@
 						:label="t('recruiting', 'Filter by name or email')"
 						:showTrailingButton="filterQuery !== ''"
 						trailingButtonIcon="close"
-						@trailing-button-click="filterQuery = ''" />
+						@trailingButtonClick="filterQuery = ''" />
 					<NcButton
 						v-if="attentionCount > 0"
 						:variant="attentionOnly ? 'primary' : 'secondary'"
@@ -170,7 +170,7 @@
 										<template #icon>
 											<CloseCircleOutline :size="20" />
 										</template>
-										{{ t('recruiting', 'Reject …') }}
+										{{ t('recruiting', 'Reject …') }}
 									</NcActionButton>
 								</NcActions>
 							</template>
@@ -196,7 +196,7 @@
 			<div v-else class="table-wrap">
 				<div v-if="selection.size > 0" class="bulk-bar">
 					<span class="bulk-bar__count">{{ n('recruiting', '%n selected', '%n selected', selection.size) }}</span>
-					<NcActions :menuName="t('recruiting', 'Move to …')">
+					<NcActions :menuName="t('recruiting', 'Move to …')">
 						<NcActionButton
 							v-for="stage in allStages"
 							:key="stage"
@@ -209,7 +209,7 @@
 						</NcActionButton>
 					</NcActions>
 					<NcButton variant="error" @click="startBulkReject">
-						{{ t('recruiting', 'Reject …') }}
+						{{ t('recruiting', 'Reject …') }}
 					</NcButton>
 					<NcButton variant="tertiary" @click="selection = new Set()">
 						{{ t('recruiting', 'Clear selection') }}
@@ -254,7 +254,9 @@
 									<NcAvatar :displayName="candidate.displayName" :disableMenu="true" :size="28" />
 									<div>
 										<div>{{ candidate.displayName }}</div>
-										<div class="candidate-table__email">{{ candidate.email }}</div>
+										<div class="candidate-table__email">
+											{{ candidate.email }}
+										</div>
 									</div>
 								</div>
 							</td>
@@ -332,8 +334,8 @@
 <script>
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -350,13 +352,13 @@ import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import PlayCircleOutline from 'vue-material-design-icons/PlayCircleOutline.vue'
 import TableLarge from 'vue-material-design-icons/TableLarge.vue'
 import ViewColumnOutline from 'vue-material-design-icons/ViewColumnOutline.vue'
-import api, { errorMessage } from '../api.js'
-import { confirmDestructive } from '../utils/confirm.js'
 import CandidateCard from '../components/CandidateCard.vue'
 import CandidateModal from '../components/CandidateModal.vue'
 import OpeningModal from '../components/OpeningModal.vue'
 import RejectModal from '../components/RejectModal.vue'
+import api, { errorMessage } from '../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../store.js'
+import { confirmDestructive } from '../utils/confirm.js'
 import { formatDate, fromNow, roleLabel, stageLabel } from '../utils/format.js'
 
 export default {
@@ -386,9 +388,11 @@ export default {
 		TableLarge,
 		ViewColumnOutline,
 	},
+
 	props: {
 		id: { type: String, required: true },
 	},
+
 	setup() {
 		return {
 			session: useSessionStore(),
@@ -396,6 +400,7 @@ export default {
 			sidebar: useSidebarStore(),
 		}
 	},
+
 	data() {
 		return {
 			candidates: [],
@@ -416,16 +421,17 @@ export default {
 			rejectTarget: null,
 		}
 	},
+
 	computed: {
 		opening() {
 			return this.openingsStore.byId(this.id)
 		},
+
 		filteredCandidates() {
 			const query = this.filterQuery.trim().toLowerCase()
 			let result = this.candidates
 			if (query !== '') {
-				result = result.filter((candidate) =>
-					candidate.displayName.toLowerCase().includes(query)
+				result = result.filter((candidate) => candidate.displayName.toLowerCase().includes(query)
 					|| (candidate.email ?? '').toLowerCase().includes(query))
 			}
 			if (this.attentionOnly) {
@@ -433,12 +439,15 @@ export default {
 			}
 			return result
 		},
+
 		attentionCount() {
 			return this.candidates.filter((candidate) => (candidate.attention ?? []).length > 0).length
 		},
+
 		allStages() {
 			return this.session.stages.concat(['hired', 'withdrawn'])
 		},
+
 		tableColumns() {
 			return [
 				{ key: 'name', label: this.t('recruiting', 'Candidate') },
@@ -448,6 +457,7 @@ export default {
 				{ key: 'inStage', label: this.t('recruiting', 'In stage since') },
 			]
 		},
+
 		sortedCandidates() {
 			if (this.sortKey === null) {
 				return this.filteredCandidates
@@ -467,19 +477,23 @@ export default {
 				return (va < vb ? -1 : va > vb ? 1 : 0) * sign
 			})
 		},
+
 		allVisibleSelected() {
 			return this.sortedCandidates.length > 0
 				&& this.sortedCandidates.every((candidate) => this.selection.has(candidate.id))
 		},
+
 		stagesWithMore() {
 			return this.session.stages
 				.concat(['hired', 'rejected', 'withdrawn'])
 				.filter((stage) => this.hasMore(stage))
 		},
+
 		canManage() {
 			return ['recruiter', 'manager'].includes(this.opening?.myRole)
 		},
 	},
+
 	watch: {
 		id: {
 			immediate: true,
@@ -487,11 +501,13 @@ export default {
 				this.load()
 			},
 		},
+
 		// Sidebar mutations (votes, stage moves, mails …) refresh the list
-		'sidebar.version'() {
+		'sidebar.version': function() {
 			this.load(true)
 		},
 	},
+
 	methods: {
 		formatDate,
 		fromNow,
@@ -514,6 +530,7 @@ export default {
 				this.loading = false
 			}
 		},
+
 		async refreshOpening() {
 			try {
 				const { data } = await api.getOpening(this.id)
@@ -522,9 +539,11 @@ export default {
 				// list data stays
 			}
 		},
+
 		byStage(stage) {
 			return this.filteredCandidates.filter((candidate) => candidate.stage === stage)
 		},
+
 		sortBy(key) {
 			if (this.sortKey === key) {
 				if (this.sortAsc) {
@@ -539,6 +558,7 @@ export default {
 			this.sortKey = key
 			this.sortAsc = true
 		},
+
 		toggleSelect(id) {
 			const next = new Set(this.selection)
 			if (next.has(id)) {
@@ -548,11 +568,13 @@ export default {
 			}
 			this.selection = next
 		},
+
 		toggleSelectAll() {
 			this.selection = this.allVisibleSelected
 				? new Set()
 				: new Set(this.sortedCandidates.map((candidate) => candidate.id))
 		},
+
 		async bulkMove(stage) {
 			const ids = [...this.selection]
 			let failed = 0
@@ -571,6 +593,7 @@ export default {
 				showSuccess(this.t('recruiting', 'Moved to "{stage}"', { stage: this.stageLabel(stage) }))
 			}
 		},
+
 		// Bulk reject: one shared decision, but the mail preview stays per
 		// candidate (spec §4.5 — nothing goes out unreviewed). The modal
 		// walks through the queue one candidate at a time.
@@ -580,21 +603,26 @@ export default {
 			this.selection = new Set()
 			this.rejectTarget = this.rejectQueue.shift() ?? null
 		},
+
 		abortReject() {
 			this.rejectQueue = []
 			this.rejectTarget = null
 		},
+
 		loadedInStage(stage) {
 			return this.candidates.filter((candidate) => candidate.stage === stage).length
 		},
+
 		stageTotal(stage) {
 			return this.opening?.stageCounts?.[stage] ?? this.loadedInStage(stage)
 		},
+
 		hasMore(stage) {
 			// While filtering, pagination hints would be misleading: the filter
 			// only searches what is loaded
 			return this.filterQuery === '' && this.stageTotal(stage) > this.loadedInStage(stage)
 		},
+
 		async loadMore(stage) {
 			this.loadingMore = true
 			try {
@@ -607,28 +635,34 @@ export default {
 				this.loadingMore = false
 			}
 		},
+
 		async loadMoreAll() {
 			for (const stage of this.stagesWithMore) {
 				await this.loadMore(stage)
 			}
 		},
+
 		stageTargets(candidate) {
 			return this.session.stages.filter((stage) => stage !== candidate.stage)
 		},
+
 		openCandidate(candidate) {
 			this.sidebar.open(candidate.id)
 		},
+
 		onDragStart(candidate, event) {
 			this.dragged = candidate
 			event.dataTransfer.effectAllowed = 'move'
 			event.dataTransfer.setData('text/plain', String(candidate.id))
 		},
+
 		onDragOver(stage, event) {
 			if (this.dragged !== null && this.dragged.stage !== stage) {
 				this.dropStage = stage
 				event.dataTransfer.dropEffect = 'move'
 			}
 		},
+
 		async onDrop(stage) {
 			const candidate = this.dragged
 			this.dragged = null
@@ -637,6 +671,7 @@ export default {
 				await this.moveTo(candidate, stage)
 			}
 		},
+
 		async moveTo(candidate, stage) {
 			const previous = candidate.stage
 			candidate.stage = stage // optimistic
@@ -648,6 +683,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not move the candidate')))
 			}
 		},
+
 		async createTalkRoom() {
 			try {
 				const { data } = await api.createTalkRoom(this.opening.id)
@@ -657,6 +693,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not create the team chat')))
 			}
 		},
+
 		async removeTalkRoom() {
 			if (!await confirmDestructive(
 				this.t('recruiting', 'Delete the team chat?'),
@@ -672,6 +709,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not delete the team chat')))
 			}
 		},
+
 		async setStatus(status) {
 			try {
 				const { data } = await api.setOpeningStatus(this.opening.id, status)
@@ -680,6 +718,7 @@ export default {
 				showError(errorMessage(error, this.t('recruiting', 'Could not change the status')))
 			}
 		},
+
 		async closeOpening() {
 			const active = this.candidates.filter((c) => this.session.isActiveStage(c.stage))
 			if (active.length > 0
@@ -698,14 +737,17 @@ export default {
 			await this.setStatus('closed')
 			showSuccess(this.t('recruiting', 'Opening closed'))
 		},
+
 		onCandidateSaved() {
 			this.showCandidateModal = false
 			this.load(true)
 		},
+
 		onOpeningSaved(opening) {
 			this.showEditModal = false
 			this.openingsStore.upsert(opening)
 		},
+
 		onRejected() {
 			// Bulk reject walks a queue: on to the next candidate, if any
 			this.rejectTarget = this.rejectQueue.shift() ?? null
@@ -716,7 +758,7 @@ export default {
 </script>
 
 <style scoped lang="scss">
-@use '../css/stages' as stages;
+@use '../css/stages.scss' as stages;
 
 .opening-view {
 	display: flex;
@@ -834,7 +876,6 @@ export default {
 
 .board {
 	@include stages.vars;
-
 	display: grid;
 	grid-template-columns: repeat(4, minmax(220px, 1fr));
 	gap: calc(var(--default-grid-baseline) * 3);
@@ -985,7 +1026,6 @@ export default {
 
 .candidate-table {
 	@include stages.vars;
-
 	width: 100%;
 	border-collapse: collapse;
 
@@ -1057,7 +1097,6 @@ export default {
 
 		&--hired {
 			--recruiting-stage-accent: var(--recruiting-stage-hired);
-
 			background-color: var(--color-success-hover, var(--color-background-hover));
 		}
 

@@ -38,16 +38,20 @@ export default {
 		action: { type: String, required: true },
 		label: { type: String, required: true },
 	},
+
 	emits: ['result'],
 	setup() {
 		return { session: useSessionStore() }
 	},
+
 	data() {
 		return { working: false }
 	},
+
 	beforeUnmount() {
 		this.working = false
 	},
+
 	methods: {
 		async run() {
 			this.working = true

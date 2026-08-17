@@ -80,7 +80,11 @@
 				</span>
 				<span v-if="screeners.length > 4" class="candidate-card__screener-more">+{{ screeners.length - 4 }}</span>
 			</span>
-			<span v-if="!dense" class="candidate-card__age" :class="ageClass" :title="ageTitle">
+			<span
+				v-if="!dense"
+				class="candidate-card__age"
+				:class="ageClass"
+				:title="ageTitle">
 				{{ age }}
 			</span>
 		</div>
@@ -101,6 +105,7 @@ export default {
 		// the header line, which saves the card a row. Board columns are not.
 		dense: { type: Boolean, default: false },
 	},
+
 	emits: ['open', 'dragstart'],
 	computed: {
 		hasMeta() {
@@ -110,9 +115,11 @@ export default {
 				|| this.candidate.voteCount > 0
 				|| this.attention.length > 0
 		},
+
 		attention() {
 			return this.candidate.attention ?? []
 		},
+
 		attentionTitle() {
 			const labels = {
 				waiting: this.t('recruiting', 'Waiting in "New" for a week'),
@@ -124,12 +131,15 @@ export default {
 			}
 			return this.attention.map((reason) => labels[reason] ?? reason).join('\n')
 		},
+
 		screeners() {
 			return this.candidate.screeners ?? []
 		},
+
 		daysInStage() {
 			return daysSince(this.candidate.stageChangedAt || this.candidate.createdAt)
 		},
+
 		ageClass() {
 			// Terminal candidates are done — their age is history, not urgency
 			if (['hired', 'rejected', 'withdrawn'].includes(this.candidate.stage)) {
@@ -143,11 +153,13 @@ export default {
 			}
 			return ''
 		},
+
 		ageTitle() {
 			return this.candidate.openingId === null
 				? this.t('recruiting', 'Waiting in the triage inbox')
 				: this.t('recruiting', 'Time in this stage')
 		},
+
 		age() {
 			const days = daysSince(this.candidate.stageChangedAt || this.candidate.createdAt)
 			if (days === 0) {
@@ -155,9 +167,11 @@ export default {
 			}
 			return this.n('recruiting', '%n day', '%n days', days)
 		},
+
 		nextInterview() {
 			return fromNow(this.candidate.nextInterviewAt)
 		},
+
 		voteTitle() {
 			if (this.candidate.voteTally) {
 				return this.t('recruiting', 'Screening votes: {yes}× yes, {maybe}× maybe, {no}× no', {

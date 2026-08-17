@@ -7,7 +7,11 @@
 		<NcLoadingIcon v-if="loading" :size="24" />
 
 		<ul v-else class="activity-tab__stream">
-			<li v-for="entry in stream" :key="entry.key" class="entry" :class="{ 'entry--comment': entry.kind === 'comment' }">
+			<li
+				v-for="entry in stream"
+				:key="entry.key"
+				class="entry"
+				:class="{ 'entry--comment': entry.kind === 'comment' }">
 				<template v-if="entry.kind === 'comment'">
 					<NcAvatar :user="entry.authorUid" :displayName="entry.authorDisplayName" :size="32" />
 					<div class="entry__body">
@@ -15,7 +19,9 @@
 							<strong>{{ entry.authorDisplayName }}</strong>
 							<span class="entry__time">{{ fromNow(entry.createdAt) }}</span>
 						</div>
-						<p class="entry__message">{{ entry.message }}</p>
+						<p class="entry__message">
+							{{ entry.message }}
+						</p>
 					</div>
 				</template>
 				<template v-else>
@@ -68,6 +74,7 @@ export default {
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	data() {
 		return {
 			comments: [],
@@ -76,6 +83,7 @@ export default {
 			sending: false,
 		}
 	},
+
 	computed: {
 		stream() {
 			const events = this.candidate.timeline.map((event, index) => ({
@@ -93,6 +101,7 @@ export default {
 				.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
 		},
 	},
+
 	watch: {
 		'candidate.id': {
 			immediate: true,
@@ -101,6 +110,7 @@ export default {
 			},
 		},
 	},
+
 	methods: {
 		fromNow,
 		renderEvent(event) {
@@ -166,10 +176,10 @@ export default {
 						text: data.reason
 							? this.t('recruiting', '{actor} rejected the candidate ({reason})', { actor, reason: reasonLabel(data.reason) })
 							: this.t('recruiting', '{actor} moved the candidate from "{from}" to "{to}"', {
-								actor,
-								from: stageLabel(data.from),
-								to: stageLabel(data.to),
-							}),
+									actor,
+									from: stageLabel(data.from),
+									to: stageLabel(data.to),
+								}),
 					}
 				case 'opening_assigned':
 					return { icon: '📌', text: this.t('recruiting', '{actor} assigned the candidate to "{title}"', { actor, title: data.openingTitle ?? '' }) }
@@ -197,6 +207,7 @@ export default {
 					return { icon: '•', text: event.type }
 			}
 		},
+
 		async loadComments() {
 			this.loading = true
 			try {
@@ -208,6 +219,7 @@ export default {
 				this.loading = false
 			}
 		},
+
 		async submitComment() {
 			if (!this.newComment.trim()) {
 				return

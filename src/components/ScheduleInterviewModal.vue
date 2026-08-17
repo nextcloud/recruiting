@@ -12,6 +12,8 @@
 				<NcTextField v-model="title" :label="t('recruiting', 'Interview title')" :placeholder="t('recruiting', 'e.g. Technical interview')" />
 
 				<div class="schedule-modal__row">
+					<!-- TODO: migrate to NcSelectUsers -->
+					<!-- eslint-disable @nextcloud/no-deprecated-library-props -->
 					<NcSelect
 						v-model="attendees"
 						class="schedule-modal__attendees"
@@ -20,6 +22,7 @@
 						label="displayName"
 						:userSelect="true"
 						:multiple="true" />
+					<!-- eslint-enable @nextcloud/no-deprecated-library-props -->
 					<NcSelect
 						v-model="duration"
 						class="schedule-modal__duration"
@@ -126,7 +129,11 @@
 					<NcButton variant="tertiary" @click="finish">
 						{{ t('recruiting', 'Send later') }}
 					</NcButton>
-					<NcButton v-if="candidate.email" variant="primary" :disabled="sending" @click="sendInvite">
+					<NcButton
+						v-if="candidate.email"
+						variant="primary"
+						:disabled="sending"
+						@click="sendInvite">
 						<template #icon>
 							<SendOutline :size="20" />
 						</template>
@@ -153,11 +160,11 @@ import CalendarSearch from 'vue-material-design-icons/CalendarSearch.vue'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import SendOutline from 'vue-material-design-icons/SendOutline.vue'
+import AiAssist from './AiAssist.vue'
 import api, { errorMessage } from '../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../store.js'
 import { copyToClipboard } from '../utils/clipboard.js'
 import { formatDateTime } from '../utils/format.js'
-import AiAssist from './AiAssist.vue'
 
 export default {
 	name: 'ScheduleInterviewModal',
@@ -177,9 +184,11 @@ export default {
 		Plus,
 		SendOutline,
 	},
+
 	props: {
 		candidate: { type: Object, required: true },
 	},
+
 	emits: ['close', 'saved'],
 	setup() {
 		return {
@@ -188,6 +197,7 @@ export default {
 			sidebar: useSidebarStore(),
 		}
 	},
+
 	data() {
 		return {
 			step: 1,
@@ -207,6 +217,7 @@ export default {
 			sending: false,
 		}
 	},
+
 	computed: {
 		teamOptions() {
 			const opening = this.openings.byId(this.candidate.openingId)
@@ -218,23 +229,28 @@ export default {
 			}
 			return options
 		},
+
 		durationOptions() {
 			return [30, 45, 60, 90, 120].map((minutes) => ({
 				id: minutes,
 				label: this.t('recruiting', '{minutes} minutes', { minutes }),
 			}))
 		},
+
 		selectedSlots() {
 			return this.slots.filter((slot) => slot.selected)
 		},
+
 		canCreate() {
 			return this.attendees.length > 0 && this.selectedSlots.length > 0
 		},
 	},
+
 	created() {
 		this.duration = this.durationOptions[2]
 		this.isVideo = this.session.talkAvailable
 	},
+
 	methods: {
 		formatDateTime,
 		async propose() {
@@ -257,6 +273,7 @@ export default {
 				this.proposing = false
 			}
 		},
+
 		addManualSlot() {
 			if (!this.manualSlot) {
 				return
@@ -270,13 +287,17 @@ export default {
 			this.slots = this.sortByInstant(this.slots)
 			this.manualSlot = null
 		},
+
 		/**
 		 * Proposals come back as ATOM with the server's offset, manual slots
 		 * as UTC "Z" — comparing those as strings sorts by text, not by time.
+		 *
+		 * @param slots
 		 */
 		sortByInstant(slots) {
 			return [...slots].sort((a, b) => new Date(a.start) - new Date(b.start))
 		},
+
 		async create() {
 			this.creating = true
 			try {
@@ -298,6 +319,7 @@ export default {
 				this.creating = false
 			}
 		},
+
 		async sendInvite() {
 			this.sending = true
 			try {
@@ -310,14 +332,17 @@ export default {
 				this.sending = false
 			}
 		},
+
 		onAiDraft(text) {
 			// Keep the scheduling link — the backend re-appends it if lost,
 			// but the preview should already show the final mail.
 			this.mailBody = text.trim() + '\n\n' + this.interview.publicUrl
 		},
+
 		copyLink() {
 			copyToClipboard(this.interview.publicUrl)
 		},
+
 		finish() {
 			this.sidebar.touch()
 			this.$emit('saved')

@@ -119,27 +119,33 @@ export default {
 	setup() {
 		return { session: useSessionStore() }
 	},
+
 	data() {
 		return {
 			report: null,
 			loading: true,
 		}
 	},
+
 	computed: {
 		funnelStages() {
 			return this.session.funnelStages
 		},
+
 		maxWeek() {
 			return Math.max(1, ...(this.report?.applicationsPerWeek ?? []).map((w) => w.count))
 		},
+
 		thisWeek() {
 			const weeks = this.report?.applicationsPerWeek ?? []
 			return weeks.length > 0 ? weeks[weeks.length - 1].count : 0
 		},
 	},
+
 	created() {
 		this.load()
 	},
+
 	methods: {
 		reasonLabel,
 		stageLabel,
@@ -154,9 +160,11 @@ export default {
 				this.loading = false
 			}
 		},
+
 		barHeight(count) {
 			return count === 0 ? '2px' : Math.max(6, Math.round((count / this.maxWeek) * 96)) + 'px'
 		},
+
 		funnelWidth(opening, stage) {
 			const max = Math.max(1, ...this.funnelStages.map((s) => opening.stageCounts[s] ?? 0))
 			const count = opening.stageCounts[stage] ?? 0
@@ -167,7 +175,7 @@ export default {
 </script>
 
 <style scoped lang="scss">
-@use '../css/stages' as stages;
+@use '../css/stages.scss' as stages;
 
 .reports-view {
 	padding: calc(var(--default-grid-baseline) * 4);
@@ -322,7 +330,6 @@ export default {
 
 .funnel {
 	@include stages.vars;
-
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--default-grid-baseline) * 1.5);

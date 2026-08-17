@@ -41,7 +41,7 @@ your own server.
 * 🔒 Interviewers only see candidates assigned to them; documents are never exposed via Files
 * 🗑️ Candidates can be deleted completely on request (GDPR)
 	]]></description>
-	<version>0.7.0</version>
+	<version>0.7.1</version>
 	<licence>agpl</licence>
 	<author mail="frank@nextcloud.com">Frank Karlitschek</author>
 	<namespace>Recruiting</namespace>
