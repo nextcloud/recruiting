@@ -261,6 +261,61 @@ class CandidateMapper extends QBMapper {
 		return $rows[0] ?? null;
 	}
 
+	public function findByPortalToken(string $token): ?Candidate {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('portal_token', $qb->createNamedParameter($token)));
+		$rows = $this->findEntities($qb);
+		return $rows[0] ?? null;
+	}
+
+	/**
+	 * Candidates an employee referred, newest first.
+	 *
+	 * @return Candidate[]
+	 */
+	public function findByReferrer(string $uid, int $limit = 200): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('referred_by', $qb->createNamedParameter($uid)))
+			->andWhere($qb->expr()->isNull('anonymized_at'))
+			->orderBy('created_at', 'DESC')
+			->addOrderBy('id', 'DESC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Talent-pool members matching a search: name or email contains the
+	 * term, or the candidate is one of the given ids (document-text hits).
+	 *
+	 * @param int[] $textMatchIds
+	 * @return Candidate[]
+	 */
+	public function searchPoolMembers(string $term, array $textMatchIds, int $limit, int $offset = 0): array {
+		$qb = $this->db->getQueryBuilder();
+		$like = '%' . $this->db->escapeLikeParameter(mb_strtolower($term)) . '%';
+		$matches = $qb->expr()->orX(
+			$qb->expr()->iLike('display_name', $qb->createNamedParameter($like)),
+			$qb->expr()->iLike('email', $qb->createNamedParameter($like)),
+		);
+		if ($textMatchIds !== []) {
+			$matches->add($qb->expr()->in('id', $qb->createNamedParameter(array_slice($textMatchIds, 0, 1000), IQueryBuilder::PARAM_INT_ARRAY)));
+		}
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('pool_member', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('anonymized_at'))
+			->andWhere($matches)
+			->orderBy('pool_consent_at', 'DESC')
+			->addOrderBy('id', 'DESC')
+			->setMaxResults($limit)
+			->setFirstResult(max(0, $offset));
+		return $this->findEntities($qb);
+	}
+
 	/**
 	 * Pool members whose membership expired (consent older than cutoff).
 	 *

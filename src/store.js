@@ -19,6 +19,7 @@ export const useSessionStore = defineStore('session', {
 			stages: ['new', 'screening', 'interview', 'offer'],
 			terminalStages: ['hired', 'rejected', 'withdrawn'],
 			rejectionReasons: [],
+			referralsEnabled: false,
 		}),
 	}),
 	getters: {

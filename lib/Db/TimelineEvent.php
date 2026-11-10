@@ -58,6 +58,11 @@ class TimelineEvent extends Entity implements \JsonSerializable {
 	 */
 	public const MERGED_FROM = 'mergedFrom';
 
+	public const TYPE_DELETION_REQUESTED = 'deletion_requested';
+	public const TYPE_INTERVIEW_SLOTS_DECLINED = 'interview_slots_declined';
+	public const TYPE_INTERVIEW_RESCHEDULE_REQUESTED = 'interview_reschedule_requested';
+	public const TYPE_REFERRAL_NOTE = 'referral_note';
+
 	protected int $candidateId = 0;
 	protected string $type = '';
 	protected ?string $actorUid = null;

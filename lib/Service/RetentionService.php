@@ -48,6 +48,9 @@ class RetentionService {
 		TimelineEvent::TYPE_MAIL_RECEIVED,
 		TimelineEvent::TYPE_WEB_APPLICATION,
 		TimelineEvent::TYPE_DOCUMENT_ADDED,
+		TimelineEvent::TYPE_REFERRAL_NOTE,
+		TimelineEvent::TYPE_INTERVIEW_SLOTS_DECLINED,
+		TimelineEvent::TYPE_INTERVIEW_RESCHEDULE_REQUESTED,
 	];
 
 	public function __construct(
@@ -253,6 +256,7 @@ class RetentionService {
 		$candidate->setPoolMember(false);
 		$candidate->setPoolConsentToken(null);
 		$candidate->setReplyToken(null);
+		$candidate->setPortalToken(null);
 		$candidate->setAnonymizedAt($this->timeFactory->getDateTime());
 		$this->candidateMapper->update($candidate);
 

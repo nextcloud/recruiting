@@ -66,6 +66,15 @@
 					</template>
 				</NcAppNavigationItem>
 
+				<NcAppNavigationItem
+					v-if="session.referralsEnabled"
+					:name="t('recruiting', 'Refer someone')"
+					:to="{ name: 'referrals' }">
+					<template #icon>
+						<AccountPlusOutline :size="20" />
+					</template>
+				</NcAppNavigationItem>
+
 				<NcAppNavigationCaption v-if="openings.open.length > 0" :name="t('recruiting', 'Openings')" />
 				<NcAppNavigationItem
 					v-for="opening in openings.open"
@@ -138,6 +147,7 @@ import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import AccountHeartOutline from 'vue-material-design-icons/AccountHeartOutline.vue'
+import AccountPlusOutline from 'vue-material-design-icons/AccountPlusOutline.vue'
 import ArchiveOutline from 'vue-material-design-icons/ArchiveOutline.vue'
 import BookOpenOutline from 'vue-material-design-icons/BookOpenOutline.vue'
 import BriefcaseOffOutline from 'vue-material-design-icons/BriefcaseOffOutline.vue'
@@ -157,6 +167,7 @@ export default {
 	name: 'App',
 	components: {
 		AccountHeartOutline,
+		AccountPlusOutline,
 		ArchiveOutline,
 		BookOpenOutline,
 		BriefcaseOffOutline,
@@ -232,7 +243,8 @@ export default {
 	.my-interviews > h2,
 	.templates-view > h2,
 	.reports-view > h2,
-	.pool-view > h2 {
+	.pool-view > h2,
+	.referrals-view > h2 {
 		padding-inline-start: calc(var(--default-clickable-area, 44px) + var(--app-navigation-padding, 4px) * 2);
 	}
 }

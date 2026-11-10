@@ -15,6 +15,10 @@ import './public-interview.css'
 const root = document.getElementById('recruiting-public')
 const token = loadState('recruiting', 'publicToken', '')
 let data = loadState('recruiting', 'publicInterview', null)
+// The candidate's "none of these times" / "reschedule" request: which form
+// is open, and whether it has been sent
+let requestOpen = false
+let requestSent = false
 
 const formatter = new Intl.DateTimeFormat(undefined, {
 	weekday: 'long',
@@ -84,10 +88,12 @@ function render(errorText = '') {
 			href: generateUrl('/apps/recruiting/i/{token}/event.ics', { token }),
 			text: t('recruiting', '📅 Add to my calendar'),
 		}))
+		card.appendChild(requestSection('reschedule', errorText))
 	} else if (data.status === 'cancelled') {
 		card.appendChild(el('p', { text: t('recruiting', 'This interview was cancelled. Please contact the recruiting team if you have questions.') }))
 	} else if (data.slots.length === 0) {
 		card.appendChild(el('p', { text: t('recruiting', 'All proposed times have passed. Please contact the recruiting team for new options.') }))
+		card.appendChild(requestSection('decline', errorText))
 	} else {
 		card.appendChild(el('p', { text: t('recruiting', 'Please pick the time that suits you best:') }))
 		const list = el('ul', { class: 'rp-slots' })
@@ -110,8 +116,86 @@ function render(errorText = '') {
 			text: t('recruiting', 'Confirm this time'),
 			onclick: confirm,
 		}))
+		card.appendChild(requestSection('decline', ''))
 	}
 	root.appendChild(card)
+}
+
+/**
+ * "None of these times work for me" (decline) or "I need to reschedule":
+ * a collapsed link that opens an optional message and a send button.
+ *
+ * @param {string} kind 'decline' or 'reschedule'
+ * @param {string} errorText error from the last attempt
+ */
+function requestSection(kind, errorText) {
+	const section = el('div', { class: 'rp-request' })
+	if (requestSent) {
+		section.appendChild(el('p', {
+			class: 'rp-meta',
+			text: kind === 'decline'
+				? t('recruiting', 'Thank you — we have let the team know. They will get back to you with new options.')
+				: t('recruiting', 'Thank you — we have let the team know. They will get back to you about a new time.'),
+		}))
+		return section
+	}
+	if (!requestOpen) {
+		section.appendChild(el('button', {
+			class: 'rp-request-toggle',
+			text: kind === 'decline'
+				? t('recruiting', 'None of these times work for me')
+				: t('recruiting', 'I need to reschedule'),
+			onclick: () => {
+				requestOpen = true
+				render()
+			},
+		}))
+		return section
+	}
+	const textarea = el('textarea', {
+		class: 'rp-request-message',
+		rows: '3',
+		maxlength: '2000',
+		placeholder: kind === 'decline'
+			? t('recruiting', 'Optional: when would suit you better?')
+			: t('recruiting', 'Optional: what would work for you instead?'),
+	})
+	section.appendChild(el('label', { class: 'rp-meta', text: t('recruiting', 'Message to the team') }, [textarea]))
+	if (errorText) {
+		section.appendChild(el('p', { class: 'rp-error', text: errorText }))
+	}
+	section.appendChild(el('button', {
+		class: 'rp-request-send',
+		text: t('recruiting', 'Send'),
+		onclick: (event) => sendRequest(event, kind, textarea.value),
+	}))
+	return section
+}
+
+/**
+ *
+ * @param {Event} event click event
+ * @param {string} kind 'decline' or 'reschedule'
+ * @param {string} message optional message
+ */
+async function sendRequest(event, kind, message) {
+	event.target.disabled = true
+	try {
+		const response = await fetch(generateUrl('/apps/recruiting/i/{token}/' + kind, { token }), {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message }),
+		})
+		const body = await response.json()
+		if (!response.ok) {
+			render(body.message || t('recruiting', 'Something went wrong — please try again.'))
+			return
+		}
+		requestSent = true
+		render()
+	} catch {
+		render(t('recruiting', 'Something went wrong — please try again.'))
+	}
 }
 
 /**

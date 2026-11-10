@@ -181,6 +181,9 @@ export default {
 				case 'anonymized':
 					return { icon: '🕶️', text: this.t('recruiting', 'Personal data was anonymized (retention period ended)') }
 				case 'stage_changed':
+					if (data.byCandidate) {
+						return { icon: '👋', text: this.t('recruiting', 'The candidate withdrew via the self-service page') }
+					}
 					return {
 						icon: '🔀',
 						text: data.reason
@@ -200,6 +203,9 @@ export default {
 				case 'vote_cast':
 					return { icon: '🗳️', text: this.t('recruiting', '{actor} cast a vote', { actor }) }
 				case 'document_added':
+					if (data.byCandidate) {
+						return { icon: '📎', text: this.t('recruiting', 'The candidate uploaded "{name}"', { name: data.name ?? '' }) }
+					}
 					return { icon: '📎', text: this.t('recruiting', '{actor} added "{name}"', { actor, name: data.name ?? '' }) }
 				case 'interview_proposed':
 					return { icon: '📅', text: this.t('recruiting', '{actor} proposed the interview "{title}"', { actor, title: data.title ?? '' }) }
@@ -213,6 +219,29 @@ export default {
 					}
 				case 'interview_cancelled':
 					return { icon: '🚫', text: this.t('recruiting', 'The interview "{title}" was cancelled', { title: data.title ?? '' }) }
+				case 'interview_slots_declined':
+					return {
+						icon: '🙅',
+						text: this.t('recruiting', 'The candidate cannot make any of the proposed times for "{title}"', { title: data.title ?? '' }),
+						details: data.message || null,
+						detailsLabel: this.t('recruiting', 'Show message'),
+					}
+				case 'interview_reschedule_requested':
+					return {
+						icon: '🔁',
+						text: this.t('recruiting', 'The candidate asked to reschedule "{title}"', { title: data.title ?? '' }),
+						details: data.message || null,
+						detailsLabel: this.t('recruiting', 'Show message'),
+					}
+				case 'deletion_requested':
+					return { icon: '🗑️', text: this.t('recruiting', 'The candidate asked for their data to be deleted') }
+				case 'referral_note':
+					return {
+						icon: '🙋',
+						text: this.t('recruiting', '{actor} referred the candidate', { actor }),
+						details: data.note,
+						detailsLabel: this.t('recruiting', 'Show note'),
+					}
 				default:
 					return { icon: '•', text: event.type }
 			}

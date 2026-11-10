@@ -62,6 +62,12 @@
 				<p class="admin-recruiting__hint">
 					{{ t('recruiting', 'How long a talent-pool consent stays valid. Expired members are anonymized automatically.') }}
 				</p>
+				<NcCheckboxRadioSwitch v-model="settings.referralsEnabled" type="switch">
+					{{ t('recruiting', 'Employee referrals') }}
+				</NcCheckboxRadioSwitch>
+				<p class="admin-recruiting__hint">
+					{{ t('recruiting', 'Every user can refer someone for an open position via “Refer someone” in the app. Referrers only see the coarse status of their own referrals, never the candidate’s details.') }}
+				</p>
 			</div>
 		</NcSettingsSection>
 
@@ -138,6 +144,7 @@ export default {
 				senderName: '',
 				senderEmail: '',
 				autoAckDailyCap: 100,
+				referralsEnabled: true,
 				imapEnabled: false,
 				imapHost: '',
 				imapPort: 993,

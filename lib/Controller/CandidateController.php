@@ -102,8 +102,8 @@ class CandidateController extends Controller {
 	 * Talent pool (recruiters only).
 	 */
 	#[NoAdminRequired]
-	public function pool(): DataResponse {
-		return $this->handle(fn () => $this->pool->listMembers($this->uid()));
+	public function pool(int $offset = 0, string $q = ''): DataResponse {
+		return $this->handle(fn () => $this->pool->listMembers($this->uid(), $offset, $q));
 	}
 
 	#[NoAdminRequired]

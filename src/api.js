@@ -80,7 +80,7 @@ export default {
 	aiTask: (taskId) => axios.get(url(`/api/ai-tasks/${taskId}`)),
 
 	// Talent pool
-	getPool: () => axios.get(url('/api/pool')),
+	getPool: (params = {}) => axios.get(url('/api/pool'), { params }),
 	addPoolToOpening: (id, openingId) => axios.post(url(`/api/pool/${id}/add-to-opening`), { openingId }),
 
 	// Talk room per opening
@@ -101,6 +101,11 @@ export default {
 	createTemplate: (data) => axios.post(url('/api/templates'), data),
 	updateTemplate: (id, data) => axios.put(url(`/api/templates/${id}`), data),
 	deleteTemplate: (id) => axios.delete(url(`/api/templates/${id}`)),
+
+	// Employee referrals
+	getReferralOpenings: () => axios.get(url('/api/referrals/openings')),
+	getReferrals: () => axios.get(url('/api/referrals')),
+	createReferral: (form) => axios.post(url('/api/referrals'), form),
 
 	// People picker
 	searchUsers: (query) => axios.get(url('/api/users/search'), { params: { query } }),

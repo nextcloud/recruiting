@@ -103,6 +103,51 @@ class PublicController extends Controller {
 	}
 
 	/**
+	 * "None of these times work for me" — with an optional message to the
+	 * team, who then propose new times.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'recruitingPublicInterview')]
+	#[AnonRateLimit(limit: 5, period: 60)]
+	public function declineSlots(string $token, string $message = ''): DataResponse {
+		return $this->candidateRequest($token, fn (\OCA\Recruiting\Db\Interview $interview) => $this->interviews->declineSlots($interview, $message));
+	}
+
+	/**
+	 * "I need to reschedule" on a confirmed interview. The booking stays
+	 * until the team reacts.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'recruitingPublicInterview')]
+	#[AnonRateLimit(limit: 5, period: 60)]
+	public function requestReschedule(string $token, string $message = ''): DataResponse {
+		return $this->candidateRequest($token, fn (\OCA\Recruiting\Db\Interview $interview) => $this->interviews->requestReschedule($interview, $message));
+	}
+
+	/**
+	 * @param \Closure(\OCA\Recruiting\Db\Interview): void $action
+	 */
+	private function candidateRequest(string $token, \Closure $action): DataResponse {
+		$interview = $this->lookup($token);
+		if ($interview === null) {
+			$response = new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
+			$response->throttle(['action' => 'recruitingPublicInterview']);
+			return $response;
+		}
+		try {
+			$action($interview);
+			return new DataResponse(['sent' => true]);
+		} catch (ValidationException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Exception $e) {
+			$this->logger->error('Recruiting: interview request from the candidate failed: ' . $e->getMessage(), ['exception' => $e]);
+			return new DataResponse(['message' => 'An unexpected error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
 	 * Calendar file for a confirmed interview, so the candidate's own
 	 * calendar knows about the appointment too — the interviewers get a
 	 * calendar event, this is the candidate's counterpart.

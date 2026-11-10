@@ -394,7 +394,7 @@ class ReportService {
 			Candidate::SOURCE_WEB => $this->l10n->t('Web form'),
 			Candidate::SOURCE_MANUAL => $this->l10n->t('Added manually'),
 			Candidate::SOURCE_POOL => $this->l10n->t('Talent pool'),
-			'referral' => $this->l10n->t('Referral'),
+			'referral' => $this->l10n->t('Employee referral'),
 			default => $source,
 		};
 	}

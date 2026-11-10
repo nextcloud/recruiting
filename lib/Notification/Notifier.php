@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Notification;
 
 use OCA\Recruiting\AppInfo\Application;
 use OCA\Recruiting\Service\CandidateNameResolver;
+use OCA\Recruiting\Service\CandidateStatus;
 use OCA\Recruiting\Service\NotificationService;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
@@ -140,6 +141,39 @@ class Notifier implements INotifier {
 			case NotificationService::SUBJECT_CANDIDATE_REPLIED:
 				$subject = $l->t('{candidate} replied by email');
 				break;
+			case NotificationService::SUBJECT_CANDIDATE_WITHDREW:
+				$subject = $l->t('{candidate} withdrew their application');
+				break;
+			case NotificationService::SUBJECT_DELETION_REQUESTED:
+				$subject = $l->t('{candidate} asked for their data to be deleted');
+				break;
+			case NotificationService::SUBJECT_CANDIDATE_UPLOADED:
+				$subject = $l->t('{candidate} uploaded a document');
+				break;
+			case NotificationService::SUBJECT_INTERVIEW_SLOTS_DECLINED:
+				$subject = $l->t('{candidate} cannot make any of the proposed times for "{interview}"');
+				$richParameters['interview'] = [
+					'type' => 'highlight',
+					'id' => 'interview',
+					'name' => $interviewTitle,
+				];
+				break;
+			case NotificationService::SUBJECT_INTERVIEW_RESCHEDULE_REQUESTED:
+				$subject = $l->t('{candidate} asks to reschedule the interview "{interview}"');
+				$richParameters['interview'] = [
+					'type' => 'highlight',
+					'id' => 'interview',
+					'name' => $interviewTitle,
+				];
+				break;
+			case NotificationService::SUBJECT_REFERRAL_STATUS:
+				$subject = $l->t('Your referral {candidate}: {status}');
+				$richParameters['status'] = [
+					'type' => 'highlight',
+					'id' => 'status',
+					'name' => CandidateStatus::label((string)($parameters['status'] ?? ''), $l),
+				];
+				break;
 			case NotificationService::SUBJECT_NEW_APPLICATION:
 				$subject = $openingTitle !== ''
 					? $l->t('New application from {candidate} for {opening}')
@@ -155,9 +189,10 @@ class Notifier implements INotifier {
 		}
 
 		$notification->setRichSubject($subject, $richParameters);
+		// A referrer has no access to the candidate, only to their referrals list
 		$notification->setLink(
 			$this->urlGenerator->linkToRouteAbsolute('recruiting.page.index')
-			. '#/candidate/' . $candidateId,
+			. ($notification->getSubject() === NotificationService::SUBJECT_REFERRAL_STATUS ? '#/referrals' : '#/candidate/' . $candidateId),
 		);
 		$notification->setIcon($this->urlGenerator->getAbsoluteURL(
 			$this->urlGenerator->imagePath(Application::APP_ID, 'app-dark.svg'),

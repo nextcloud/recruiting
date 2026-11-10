@@ -305,7 +305,7 @@ class ReportServiceTest extends TestCase {
 
 	public function testSourceLabelsKnownAndRawUnknown(): void {
 		$this->assertSame('Web form', $this->service->sourceLabel('web'));
-		$this->assertSame('Referral', $this->service->sourceLabel('referral'));
+		$this->assertSame('Employee referral', $this->service->sourceLabel('referral'));
 		$this->assertSame('jobboard-x', $this->service->sourceLabel('jobboard-x'));
 	}
 
@@ -331,7 +331,7 @@ class ReportServiceTest extends TestCase {
 		$this->assertCount(2, $lines);
 		$header = str_getcsv($lines[0], ',', '"', '');
 		$this->assertSame('Opening', $header[0]);
-		$this->assertContains('Source: Referral', $header);
+		$this->assertContains('Source: Employee referral', $header);
 		$this->assertContains('Source: Web form', $header);
 		$row = str_getcsv($lines[1], ',', '"', '');
 		$this->assertSame('\'=HYPERLINK("http://evil","x")', $row[0]);

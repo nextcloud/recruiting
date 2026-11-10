@@ -754,6 +754,54 @@ A review pass acting on an external audit of the app:
   assignments keep the target's on a per-user conflict; the duplicate's
   reply token is carried over when the target has none.
 
+### 10.14 Candidate experience (Unreleased)
+
+Beyond the §9 non-goals, which did not exclude these:
+
+- **Less personal data to the AI provider (§4.7).** The material no longer
+  carries email or phone; the name only for the intake task while it is still
+  the `Unknown applicant` placeholder. The draft prompts (rejection, invite,
+  offer) still pass the name, because the salutation needs it.
+- **CV text.** `TextExtractionService` extracts plain text/Markdown, DOCX
+  (`word/document.xml`) and ODT (`content.xml`) with `ZipArchive` (16 MB
+  uncompressed cap, checked against the header and the actual stream) and DOM
+  without DTDs (`<!DOCTYPE` refused, `LIBXML_NONET`, no entity substitution);
+  PDF via `pdftotext` (argument vector, 20 s timeout) or a built-in
+  FlateDecode/Tj/TJ reader whose result is dropped when a letters/whitespace
+  heuristic says it is not text. Stored in `recruiting_documents.text_content`
+  (≤ 100 000 chars), filled on upload; `occ recruiting:documents:extract-text`
+  back-fills. The AI material includes the most recent extracted document,
+  splitting `MATERIAL_LIMIT` between cover letter and CV. The talent pool
+  searches it (`DocumentMapper::findCandidateIdsByText`); the unified search
+  provider does not (yet). The text goes with the document on deletion and
+  anonymization; the GDPR export ships the documents themselves.
+- **Self-service page** `/portal/{token}` (`portal_token`, 48 alnum, unique,
+  set on insert and lazily for older candidates by `{{portal_link}}`; cleared
+  on anonymization). Coarse status from `CandidateStatus` (stage-only:
+  new → received, screening → in review, interview → interview scheduled,
+  offer → offer, terminal → closed). Withdraw goes through `StageService`;
+  deletion requests set `deletion_requested_at` and notify the HR group;
+  uploads use the document allow-list, max 10 per candidate. Actions on the
+  page notify the opening's managers, or the HR group when there are none.
+  Open interviews are not cancelled on withdrawal — the team does that.
+- **Interview page requests:** "none of these times work" (proposed) and
+  "I need to reschedule" (confirmed), with an optional message (≤ 2000
+  chars); timeline event + notification to organizer and attendees, no
+  automatic cancellation. Candidate messages and referral notes are stripped
+  on anonymization like other PII events.
+- **Interview reminder:** hourly `InterviewReminderJob` mails confirmed
+  interviews starting in 23–25 h once (`reminder_sent_at`, claimed atomically,
+  released on a send failure). Template type `interview_reminder`; times are
+  formatted in the organizer's timezone with the zone named, since the
+  candidate's own is unknown server-side.
+- **Employee referrals:** admin switch `referrals_enabled` (default on);
+  `GET /api/referrals/openings` (open openings, id + title),
+  `POST /api/referrals` (consent required, optional CV validated before the
+  candidate is created), `GET /api/referrals` (own referrals, coarse status).
+  Candidates get source `referral` and `referred_by`; `StageService` notifies
+  the referrer when the coarse status changes. `PermissionService` is
+  unchanged — referrers get no candidate access.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |
@@ -768,11 +816,13 @@ A review pass acting on an external audit of the app:
 | Public slot picking | `/apps/recruiting/i/{token}` | tokenized, no account, rate-limited |
 | Interview calendar file (.ics) | `/apps/recruiting/i/{token}/event.ics` | tokenized, confirmed interviews only |
 | Public pool consent | `/apps/recruiting/pool/{token}` | tokenized, no account, rate-limited |
+| Candidate self-service | `/apps/recruiting/portal/{token}` | tokenized, no account, rate-limited |
+| Refer someone | `#/referrals` | every logged-in user (if enabled) |
 | User handbook (PDF) | `/apps/recruiting/handbook` | logged-in users |
 | Ingestion status | `GET /api/ingestion-status` | recruiters |
 | Admin settings | Administration → Recruiting | admins |
 | Digest setting | Personal settings → Groupware | everyone |
 
 Background jobs: mail fetch (5 min), offer expiry (daily), retention (daily),
-digest (hourly). occ: `recruiting:fetch-mail`,
-`recruiting:retention:run [--dry-run]`.
+digest (hourly), interview reminders (hourly). occ: `recruiting:fetch-mail`,
+`recruiting:retention:run [--dry-run]`, `recruiting:documents:extract-text`.

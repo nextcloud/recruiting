@@ -85,7 +85,8 @@ grants no candidate access at all.
 | **My interviews** | everyone | Your interview panel appointments, incl. "pending" ones the candidate hasn't confirmed yet |
 | **Mail templates** | recruiters | Manage the invitation/rejection/offer/confirmation mail templates |
 | **Reports** | team members & recruiters | Funnel, time-to-hire, rejection reasons — scoped to what you may see |
-| **Talent pool** | recruiters | Candidates who consented to be kept for future openings |
+| **Talent pool** | recruiters | Candidates who consented to be kept for future openings, searchable by name, email and CV text |
+| **Refer someone** | everyone (if enabled) | Put a person forward for an open position and follow the coarse status of your referrals |
 | **Openings** | team members & recruiters | One entry per opening with the count of active candidates; closed openings collapse at the bottom |
 | **Handbook (PDF)** | everyone | The illustrated user handbook, at the bottom of the navigation |
 
@@ -242,6 +243,39 @@ show the candidate's current name.
    moves the card to "Interview", and notifies the panel. The confirmation
    page offers the appointment as an .ics download for the candidate's own
    calendar.
+5. If none of the proposed times work, the candidate can say so on the same
+   page (with an optional message); after confirming, they can ask to
+   reschedule. Both land on the timeline and notify the organizer and the
+   interviewers — nothing is cancelled automatically.
+6. About 24 hours before a confirmed interview the candidate gets a reminder
+   mail (template *Interview reminder*) with the time, the location or video
+   link, and their interview and self-service links.
+
+### The candidate's self-service page
+
+Every candidate has a personal link (`/apps/recruiting/portal/…`, in the
+built-in confirmation-of-receipt mail via the `{{portal_link}}` placeholder)
+where they see a deliberately coarse status — received, in review,
+interview scheduled, offer, closed — and their upcoming interviews. No stage
+names, votes, comments or rejection reasons are shown. From there they can
+**withdraw** (the opening's hiring managers are notified), **ask for their data
+to be deleted** (the HR group is notified and the candidate sidebar shows a
+banner with the request date and a *Delete now* shortcut — the deletion itself
+stays a recruiter's decision), and **add documents** (same types and size limit
+as everywhere, at most 10 documents per candidate). The page works without an
+account, is rate limited, and stops working when the candidate is anonymized
+or deleted.
+
+### Employee referrals
+
+Any logged-in user can open **Refer someone**, pick an open position, and enter
+the person's name, email, optional phone, a note why they recommend them and an
+optional CV — after confirming that the person agreed to be referred. The
+candidate lands in the opening's "New" column with source *Employee referral*;
+the hiring managers are notified as for any application, the note is on the
+timeline and the candidate sidebar shows *Referred by*. The referrer sees their
+own referrals with the coarse status only and gets a notification when it
+changes; they gain no access to the candidate. Admins can turn referrals off.
 
 | Picking a slot — no account required | After confirming: details + calendar file |
 |---|---|
@@ -317,7 +351,9 @@ the top; "My interviews" also shows rounds the candidate has not confirmed yet.
 ### Talent pool
 
 Only candidates who clicked the consent link from their rejection mail appear
-here — consent is never assumed. **Add to opening** creates a fresh copy
+here — consent is never assumed. The search box matches names, email
+addresses and the text of uploaded documents (e.g. "Kubernetes" finds every
+pool member whose CV mentions it). **Add to opening** creates a fresh copy
 (documents included) in the target opening's "New" column; the pool entry
 stays for further openings. Membership expires automatically after the
 configured period, after which the candidate is anonymized like everyone
@@ -343,7 +379,7 @@ ten minutes and refreshed as soon as a candidate of the opening changes.
 ### Mail templates
 
 Per mail type (confirmation of receipt, interview invitation, rejection,
-offer) the built-in template is always available; **Customize** copies it into
+offer, interview reminder) the built-in template is always available; **Customize** copies it into
 an editable one and **Make default** activates it. The editor offers each
 type's placeholders as chips — click to insert — and validates them when you
 save, so typos can't reach a candidate. Every send shows a
@@ -360,7 +396,8 @@ automatic confirmations per opening (0 means no limit), the GDPR retention
 period (rejected and withdrawn candidates, and candidates left in openings
 closed that long ago, are anonymized; 0 disables the automation), the triage
 inbox retention (unassigned mail is deleted after this many days, default 90,
-0 disables it) and the talent-pool membership duration.
+0 disables it), the talent-pool membership duration and whether employee
+referrals are enabled (on by default).
 
 **Personal settings → Groupware** (everyone): the **email digest** — off,
 daily or weekly. It bundles new applications in your openings, your pending
@@ -390,12 +427,21 @@ integrations light up automatically when available: **Talk** (video interview
 rooms, team chats) and **Nextcloud Assistant** with an AI provider (summaries,
 hints, drafts). Without them, the corresponding buttons simply don't appear.
 
+The AI features read the application mail or form text plus the text of the
+most recent PDF, Word (DOCX), OpenDocument or text document — usually the CV.
+Email addresses and phone numbers on file are never sent to the AI provider;
+the name only for the intake extraction while it is still unknown (drafts
+still use it in the salutation). PDF text comes from `pdftotext`
+(poppler-utils) when it is installed, otherwise from a built-in reader that
+handles common PDFs and discards anything that does not look like text.
+
 ## occ commands
 
 | Command | Purpose |
 |---|---|
 | `recruiting:fetch-mail` | Fetch the applications mailbox now |
 | `recruiting:retention:run [--dry-run]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason |
+| `recruiting:documents:extract-text [--limit=N]` | Extract the text of documents stored before text extraction existed |
 
 ## Development
 

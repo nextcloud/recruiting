@@ -15,6 +15,7 @@ export default createRouter({
 		{ path: '/templates', name: 'templates', component: () => import('./views/TemplatesView.vue') },
 		{ path: '/reports', name: 'reports', component: () => import('./views/ReportsView.vue') },
 		{ path: '/pool', name: 'pool', component: () => import('./views/TalentPoolView.vue') },
+		{ path: '/referrals', name: 'referrals', component: () => import('./views/ReferralsView.vue') },
 		// Deep links from notifications/search: resolves the candidate, then
 		// redirects to its opening (or triage) and opens the sidebar.
 		{ path: '/candidate/:id(\\d+)', name: 'candidate', component: () => import('./views/CandidateRedirect.vue'), props: true },

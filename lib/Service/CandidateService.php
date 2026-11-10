@@ -70,6 +70,7 @@ class CandidateService {
 		private IUserManager $userManager,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private PortalService $portal,
 	) {
 	}
 
@@ -210,6 +211,7 @@ class CandidateService {
 
 		$canSeeOffers = $this->permissions->canSeeOffers($uid, $candidate);
 		$data['openingTitle'] = $this->openingMapper->findTitle($candidate->getOpeningId());
+		$data['referredByDisplayName'] = $candidate->getReferredBy() !== null ? $this->displayName($candidate->getReferredBy()) : null;
 		$data['permissions'] = [
 			'manage' => $canManage,
 			'vote' => $this->permissions->canVote($uid, $candidate),
@@ -302,10 +304,11 @@ class CandidateService {
 	}
 
 	/**
-	 * Shared insertion path for manual entry and mail ingestion: handles
-	 * duplicate detection, the timeline, activity and manager notifications.
+	 * Shared insertion path for manual entry, mail ingestion, the public form
+	 * and referrals: handles duplicate detection, the portal token, the
+	 * timeline, activity and manager notifications.
 	 */
-	public function insertCandidate(?int $openingId, string $name, string $email, string $phone, string $source, ?string $createdBy): Candidate {
+	public function insertCandidate(?int $openingId, string $name, string $email, string $phone, string $source, ?string $createdBy, ?string $referredBy = null): Candidate {
 		$now = $this->timeFactory->getDateTime();
 
 		// Mail headers are attacker/typo territory: clamp to the column sizes,
@@ -326,6 +329,8 @@ class CandidateService {
 		$candidate->setStageChangedAt($now);
 		$candidate->setCreatedBy($createdBy);
 		$candidate->setCreatedAt($now);
+		$candidate->setPortalToken($this->portal->newToken());
+		$candidate->setReferredBy($referredBy);
 
 		$duplicate = $this->candidateMapper->findRecentByEmail(
 			$email,

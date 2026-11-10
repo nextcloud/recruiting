@@ -71,6 +71,9 @@ class SettingsController extends Controller {
 			if (array_key_exists('autoAckDailyCap', $params)) {
 				$this->config->setAutoAckDailyCap((int)$params['autoAckDailyCap']);
 			}
+			if (array_key_exists('referralsEnabled', $params)) {
+				$this->config->setReferralsEnabled((bool)$params['referralsEnabled']);
+			}
 			if (array_key_exists('imapEnabled', $params)) {
 				$this->config->setImapEnabled((bool)$params['imapEnabled']);
 			}
@@ -130,6 +133,7 @@ class SettingsController extends Controller {
 			'triageRetentionDays' => $this->config->getTriageRetentionDays(),
 			'poolRetentionMonths' => $this->config->getPoolRetentionMonths(),
 			'autoAckDailyCap' => $this->config->getAutoAckDailyCap(),
+			'referralsEnabled' => $this->config->isReferralsEnabled(),
 			'imapEnabled' => $this->config->isImapEnabled(),
 			'imapHost' => $imap['host'],
 			'imapPort' => $imap['port'],

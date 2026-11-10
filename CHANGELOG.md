@@ -59,6 +59,22 @@ All notable changes to this app are documented here. The format follows
   only). Documents, log, comments, screener assignments, votes, interviews
   and offers move over; the duplicate is deleted
   (`POST /api/candidates/{id}/merge`).
+- The CV is read: text is extracted from PDF (via `pdftotext` when installed,
+  otherwise a built-in reader that discards unreadable output), DOCX, ODT and
+  text documents on upload, used as AI material next to the application text,
+  and searchable in the talent pool. `occ recruiting:documents:extract-text`
+  fills in documents stored earlier.
+- A self-service page for candidates (`{{portal_link}}`, included in the
+  built-in confirmation of receipt): coarse status, upcoming interviews,
+  withdraw, request deletion (HR is notified; the candidate sidebar shows the
+  request with a "Delete now" shortcut) and upload further documents.
+- On the interview page, candidates can say that none of the proposed times
+  work or ask to reschedule a confirmed interview; the team is notified.
+- A reminder mail to the candidate about 24 hours before a confirmed
+  interview (new mail template type "Interview reminder").
+- Employee referrals: "Refer someone" for every logged-in user, with consent
+  confirmation, optional CV, status updates for the referrer (coarse status
+  only) and "Referred by" in the candidate view. Admins can turn it off.
 
 ### Changed
 
@@ -94,6 +110,8 @@ All notable changes to this app are documented here. The format follows
   messages, so their copies used to stay.
 - Duplicate detection compares email addresses case-insensitively on every
   database (PostgreSQL and SQLite compared them case-sensitively).
+- The talent pool view read the paged API response as a plain list and so
+  rendered no real members; it now shows them and loads more on demand.
 
 ### Security
 
@@ -122,6 +140,8 @@ All notable changes to this app are documented here. The format follows
   interviews, seven days after the interview ended, and once the candidate
   is rejected, withdrawn or anonymized. Anonymization also replaces every
   interview link token.
+- AI requests no longer send the candidate's email address or phone number,
+  and the name only for intake extraction while it is still unknown.
 
 ## [0.7.1] - 2026-08-17
 

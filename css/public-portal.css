@@ -1,0 +1,109 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Hand-written (not build output) — served via style('recruiting', 'public-portal').
+ */
+.recruiting-portal {
+	max-width: 560px;
+	margin: 24px auto;
+	padding: 0 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.recruiting-portal__card {
+	color: var(--color-main-text);
+	background-color: var(--color-main-background);
+	border-radius: var(--border-radius-container, 16px);
+	padding: 24px 28px;
+	box-shadow: 0 2px 12px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
+}
+
+.recruiting-portal__card h2,
+.recruiting-portal__card h3 {
+	margin: 0 0 8px;
+}
+
+.recruiting-portal__meta,
+.recruiting-portal__hint {
+	color: var(--color-text-maxcontrast);
+	margin: 0 0 12px;
+}
+
+.recruiting-portal__status {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	border-inline-start: 4px solid var(--color-primary-element);
+	padding: 8px 12px;
+	margin: 12px 0;
+	background-color: var(--color-background-hover);
+	border-radius: var(--border-radius, 8px);
+}
+
+.recruiting-portal__status--closed {
+	border-inline-start-color: var(--color-border-dark, #999);
+}
+
+.recruiting-portal__status-label {
+	font-size: 0.85em;
+	color: var(--color-text-maxcontrast);
+}
+
+.recruiting-portal__notice {
+	background-color: var(--color-success, #46ba61);
+	color: var(--color-primary-element-text, #fff);
+	border-radius: var(--border-radius, 8px);
+	padding: 10px 14px;
+}
+
+.recruiting-portal__errors {
+	background-color: var(--color-error, #e9322d);
+	color: var(--color-primary-element-text, #fff);
+	border-radius: var(--border-radius, 8px);
+	padding: 10px 14px;
+	margin-bottom: 12px;
+}
+
+.recruiting-portal__errors p {
+	margin: 2px 0;
+}
+
+.recruiting-portal__interviews {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.recruiting-portal__interviews li {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.recruiting-portal__interviews a {
+	color: var(--color-primary-element);
+	text-decoration: underline;
+}
+
+.recruiting-portal__form {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.recruiting-portal__confirm {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.recruiting-portal__confirm input {
+	margin-top: 3px;
+}

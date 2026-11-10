@@ -48,6 +48,7 @@ class DocumentService {
 		private ISecureRandom $random,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private TextExtractionService $textExtraction,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -67,10 +68,13 @@ class DocumentService {
 	}
 
 	/**
+	 * Check a file against the size limit and the type allow-list without
+	 * storing it, so callers can validate before creating anything else.
+	 *
+	 * @return string the normalised mime type
 	 * @throws ValidationException
 	 */
-	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy): Document {
-		$name = $this->sanitizeName($name);
+	public function validate(string $mime, string $content): string {
 		if (strlen($content) === 0) {
 			throw new ValidationException($this->l10n->t('The file is empty'));
 		}
@@ -91,6 +95,15 @@ class DocumentService {
 		if (!in_array($mime, ConfigService::ALLOWED_MIMES, true)) {
 			throw new ValidationException($this->l10n->t('This file type is not allowed'));
 		}
+		return $mime;
+	}
+
+	/**
+	 * @throws ValidationException
+	 */
+	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy): Document {
+		$name = $this->sanitizeName($name);
+		$mime = $this->validate($mime, $content);
 
 		$threat = $this->virusScan->findThreat($content);
 		if ($threat !== null) {
@@ -117,7 +130,52 @@ class DocumentService {
 		$document->setFileKey($fileKey);
 		$document->setUploadedBy($uploadedBy);
 		$document->setCreatedAt($this->timeFactory->getDateTime());
+		$document->setTextContent($this->extractText($mime, $content));
 		return $this->documentMapper->insert($document);
+	}
+
+	/**
+	 * Fill text_content for documents stored before text extraction existed
+	 * (or whose extraction failed). Works through the table by id.
+	 *
+	 * @return array{checked: int, extracted: int, lastId: int}
+	 */
+	public function backfillText(int $afterId, int $limit): array {
+		$checked = 0;
+		$extracted = 0;
+		$lastId = $afterId;
+		foreach ($this->documentMapper->findWithoutText(TextExtractionService::EXTRACTABLE_MIMES, $afterId, $limit) as $document) {
+			$checked++;
+			$lastId = $document->getId();
+			try {
+				$content = $this->getFile($document)->getContent();
+			} catch (\Exception) {
+				continue;
+			}
+			$text = $this->extractText($document->getMime(), $content);
+			if ($text !== null) {
+				$document->setTextContent($text);
+				$this->documentMapper->update($document);
+				$extracted++;
+			}
+		}
+		return ['checked' => $checked, 'extracted' => $extracted, 'lastId' => $lastId];
+	}
+
+	/**
+	 * Extraction is a convenience: a failure is logged and leaves the
+	 * document without text, it never blocks storing the file.
+	 */
+	private function extractText(string $mime, string $content): ?string {
+		if (!$this->textExtraction->supports($mime)) {
+			return null;
+		}
+		try {
+			return $this->textExtraction->extract($mime, $content);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Recruiting: text extraction failed: ' . $e->getMessage(), ['exception' => $e]);
+			return null;
+		}
 	}
 
 	public function getFile(Document $document): ISimpleFile {

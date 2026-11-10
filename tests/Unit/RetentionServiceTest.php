@@ -165,6 +165,28 @@ class RetentionServiceTest extends TestCase {
 		$this->assertNotNull($stageEvent->getData());
 	}
 
+	public function testAnonymizeClearsThePortalTokenAndCandidateMessages(): void {
+		$candidate = new Candidate();
+		$candidate->setId(5);
+		$candidate->setPortalToken(str_repeat('p', 48));
+		$events = [];
+		foreach ([TimelineEvent::TYPE_REFERRAL_NOTE, TimelineEvent::TYPE_INTERVIEW_SLOTS_DECLINED, TimelineEvent::TYPE_INTERVIEW_RESCHEDULE_REQUESTED] as $i => $type) {
+			$event = new TimelineEvent();
+			$event->setId(20 + $i);
+			$event->setType($type);
+			$event->setData(json_encode(['note' => 'free text about Jane', 'message' => 'Jane here']));
+			$events[] = $event;
+		}
+		$this->eventMapper->method('findForCandidate')->willReturn($events);
+
+		$this->service->anonymize($candidate);
+
+		$this->assertNull($candidate->getPortalToken());
+		foreach ($events as $event) {
+			$this->assertNull($event->getData(), $event->getType());
+		}
+	}
+
 	public function testOfferNotesAreScrubbedButTermsStay(): void {
 		$candidate = $this->candidate(5);
 		$offer = new \OCA\Recruiting\Db\Offer();

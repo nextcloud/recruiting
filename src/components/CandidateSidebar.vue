@@ -71,7 +71,7 @@
 				<template #icon>
 					<AccountOutline :size="20" />
 				</template>
-				<ProfileTab :candidate="candidate" @reject="showReject = true" />
+				<ProfileTab :candidate="candidate" @reject="showReject = true" @delete="deleteCandidate" />
 			</NcAppSidebarTab>
 
 			<NcAppSidebarTab id="screening" :name="t('recruiting', 'Votes')" :order="2">

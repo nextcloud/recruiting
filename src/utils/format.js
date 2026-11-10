@@ -64,8 +64,23 @@ export function sourceLabel(source) {
 		web: t('recruiting', 'Web form'),
 		manual: t('recruiting', 'Added manually'),
 		pool: t('recruiting', 'Talent pool'),
-		referral: t('recruiting', 'Referral'),
+		referral: t('recruiting', 'Employee referral'),
 	}[source] ?? source
+}
+
+/**
+ * The coarse status shown to referrers (the server's CandidateStatus)
+ *
+ * @param status
+ */
+export function coarseStatusLabel(status) {
+	return {
+		received: t('recruiting', 'Received'),
+		in_review: t('recruiting', 'In review'),
+		interview: t('recruiting', 'Interview scheduled'),
+		offer: t('recruiting', 'Offer'),
+		closed: t('recruiting', 'Closed'),
+	}[status] ?? status
 }
 
 /**

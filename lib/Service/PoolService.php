@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Exception\NotPermittedException;
@@ -31,6 +32,7 @@ class PoolService {
 		private IURLGenerator $urlGenerator,
 		private ISecureRandom $random,
 		private ITimeFactory $timeFactory,
+		private DocumentMapper $documentMapper,
 	) {
 	}
 
@@ -82,9 +84,24 @@ class PoolService {
 	/** One page of pool members; more via ?offset=. */
 	public const PAGE_SIZE = 100;
 
-	public function listMembers(string $uid, int $offset = 0): array {
+	/** Document-text hits considered per search */
+	private const TEXT_MATCH_LIMIT = 500;
+
+	/**
+	 * With a query, only members whose name, email or document text (the
+	 * extracted CV) contains it — a skill search like "Kubernetes".
+	 */
+	public function listMembers(string $uid, int $offset = 0, string $query = ''): array {
 		$this->permissions->assertRecruiter($uid);
-		$rows = $this->candidateMapper->findPoolMembers(self::PAGE_SIZE + 1, max(0, $offset));
+		$query = trim($query);
+		$rows = $query === ''
+			? $this->candidateMapper->findPoolMembers(self::PAGE_SIZE + 1, max(0, $offset))
+			: $this->candidateMapper->searchPoolMembers(
+				$query,
+				$this->documentMapper->findCandidateIdsByText($query, self::TEXT_MATCH_LIMIT),
+				self::PAGE_SIZE + 1,
+				max(0, $offset),
+			);
 		$hasMore = count($rows) > self::PAGE_SIZE;
 		$rows = array_slice($rows, 0, self::PAGE_SIZE);
 		$result = [];

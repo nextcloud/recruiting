@@ -36,6 +36,9 @@ class InterviewService {
 	/** Days after its end during which an interview's public link still works */
 	public const PUBLIC_LINK_GRACE_DAYS = 7;
 
+	/** Length cap for a message the candidate sends from the public page */
+	public const CANDIDATE_MESSAGE_LIMIT = 2000;
+
 	public function __construct(
 		private InterviewMapper $interviewMapper,
 		private InterviewSlotMapper $slotMapper,
@@ -281,6 +284,58 @@ class InterviewService {
 	}
 
 	/**
+	 * The candidate says none of the proposed times work. Nothing changes
+	 * automatically: the request lands on the timeline and with the
+	 * organizer and interviewers, who propose new times.
+	 *
+	 * @throws ValidationException
+	 */
+	public function declineSlots(Interview $interview, string $message): void {
+		if ($interview->getStatus() !== Interview::STATUS_PROPOSED) {
+			throw new ValidationException($this->l10n->t('This interview is no longer awaiting confirmation'));
+		}
+		$this->recordCandidateRequest($interview, $message, TimelineEvent::TYPE_INTERVIEW_SLOTS_DECLINED, NotificationService::SUBJECT_INTERVIEW_SLOTS_DECLINED);
+	}
+
+	/**
+	 * The candidate asks to move a confirmed interview. The booking stays
+	 * until the team acts on the request.
+	 *
+	 * @throws ValidationException
+	 */
+	public function requestReschedule(Interview $interview, string $message): void {
+		if ($interview->getStatus() !== Interview::STATUS_CONFIRMED) {
+			throw new ValidationException($this->l10n->t('Only a confirmed interview can be rescheduled'));
+		}
+		$this->recordCandidateRequest($interview, $message, TimelineEvent::TYPE_INTERVIEW_RESCHEDULE_REQUESTED, NotificationService::SUBJECT_INTERVIEW_RESCHEDULE_REQUESTED);
+	}
+
+	/**
+	 * @throws ValidationException
+	 */
+	private function recordCandidateRequest(Interview $interview, string $message, string $type, string $subject): void {
+		$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		if ($candidate->getAnonymizedAt() !== null || $candidate->isTerminal()) {
+			throw new ValidationException($this->l10n->t('This application is already closed.'));
+		}
+		$this->timeline->record($candidate->getId(), $type, null, [
+			'title' => $interview->getTitle(),
+			'message' => mb_substr(trim($message), 0, self::CANDIDATE_MESSAGE_LIMIT),
+		]);
+		$attendeeUids = array_map(
+			static fn (InterviewAttendee $a) => $a->getUid(),
+			$this->attendeeMapper->findForInterview($interview->getId()),
+		);
+		$this->notifications->notify(
+			array_unique(array_merge($attendeeUids, [$interview->getCreatedBy()])),
+			$subject,
+			$candidate,
+			null,
+			['interviewTitle' => $interview->getTitle()],
+		);
+	}
+
+	/**
 	 * @throws NotPermittedException
 	 */
 	public function cancel(string $uid, int $interviewId): array {
@@ -498,7 +553,7 @@ class InterviewService {
 		);
 	}
 
-	private function publicUrl(Interview $interview): string {
+	public function publicUrl(Interview $interview): string {
 		return $this->urlGenerator->linkToRouteAbsolute('recruiting.public.showInterview', [
 			'token' => $interview->getPublicToken(),
 		]);

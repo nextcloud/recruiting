@@ -23,6 +23,7 @@ class StageService {
 		private TimelineService $timeline,
 		private ActivityPublisher $activity,
 		private ITimeFactory $timeFactory,
+		private NotificationService $notifications,
 	) {
 	}
 
@@ -63,6 +64,23 @@ class StageService {
 			'to' => $stage,
 		], $timelineData));
 		$this->activity->publish($candidate, 'stage_changed', $actorUid, ['fromStage' => $from, 'toStage' => $stage]);
+		$this->notifyReferrer($candidate, $from);
 		return true;
+	}
+
+	/**
+	 * The employee who referred the candidate hears about changes of the
+	 * coarse status only — never stage names, actors or reasons.
+	 */
+	private function notifyReferrer(Candidate $candidate, string $fromStage): void {
+		$referrer = $candidate->getReferredBy();
+		if ($referrer === null || $referrer === '' || $candidate->getAnonymizedAt() !== null) {
+			return;
+		}
+		$status = CandidateStatus::of($candidate);
+		if ($status === CandidateStatus::forStage($fromStage)) {
+			return;
+		}
+		$this->notifications->notify([$referrer], NotificationService::SUBJECT_REFERRAL_STATUS, $candidate, null, ['status' => $status]);
 	}
 }

@@ -30,6 +30,10 @@ class TemplateService {
 		'offer_job_title',
 		'offer_start_date',
 		'offer_valid_until',
+		'portal_link',
+		'interview_date',
+		'interview_time',
+		'interview_location',
 	];
 
 	public function __construct(
@@ -176,7 +180,7 @@ class TemplateService {
 				'type' => MailTemplate::TYPE_RECEIPT,
 				'name' => $this->l10n->t('Confirmation of receipt (built-in)'),
 				'subject' => $this->l10n->t('We received your application for {{opening_title}}'),
-				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nThank you for applying for the {{opening_title}} position at {{company}}. We have received your application and will get back to you as soon as we have reviewed it.\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nThank you for applying for the {{opening_title}} position at {{company}}. We have received your application and will get back to you as soon as we have reviewed it.\n\nYou can check the status of your application, add documents or withdraw it at any time here:\n{{portal_link}}\n\nKind regards\n{{sender_name}}\n{{company}}"),
 				'isDefault' => false,
 				'builtin' => true,
 			],
@@ -204,6 +208,15 @@ class TemplateService {
 				'name' => $this->l10n->t('Interview invitation (built-in)'),
 				'subject' => $this->l10n->t('Interview invitation — {{opening_title}} at {{company}}'),
 				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nThank you for your application for the {{opening_title}} position. We would like to invite you to an interview ({{interview_title}}).\n\nPlease pick the time that suits you best:\n{{interview_link}}\n\nWe are looking forward to meeting you!\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'isDefault' => false,
+				'builtin' => true,
+			],
+			MailTemplate::TYPE_INTERVIEW_REMINDER => [
+				'id' => 'builtin:' . MailTemplate::TYPE_INTERVIEW_REMINDER,
+				'type' => MailTemplate::TYPE_INTERVIEW_REMINDER,
+				'name' => $this->l10n->t('Interview reminder (built-in)'),
+				'subject' => $this->l10n->t('Reminder: your interview on {{interview_date}}'),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nThis is a friendly reminder of your interview ({{interview_title}}) for the {{opening_title}} position on {{interview_date}} at {{interview_time}}.\n\nWhere: {{interview_location}}\n\nAll details are on your interview page, where you can also let us know if you need to reschedule:\n{{interview_link}}\n\nYour application overview: {{portal_link}}\n\nWe are looking forward to meeting you!\n\nKind regards\n{{sender_name}}\n{{company}}"),
 				'isDefault' => false,
 				'builtin' => true,
 			],

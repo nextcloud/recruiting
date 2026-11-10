@@ -67,6 +67,7 @@ your own server.
 		<job>OCA\Recruiting\BackgroundJob\OfferExpiryJob</job>
 		<job>OCA\Recruiting\BackgroundJob\RetentionJob</job>
 		<job>OCA\Recruiting\BackgroundJob\DigestJob</job>
+		<job>OCA\Recruiting\BackgroundJob\InterviewReminderJob</job>
 	</background-jobs>
 	<repair-steps>
 		<post-migration>
@@ -76,6 +77,7 @@ your own server.
 	<commands>
 		<command>OCA\Recruiting\Command\FetchMail</command>
 		<command>OCA\Recruiting\Command\RetentionRun</command>
+		<command>OCA\Recruiting\Command\ExtractDocumentText</command>
 	</commands>
 	<settings>
 		<admin>OCA\Recruiting\Settings\Admin</admin>

@@ -38,6 +38,7 @@ class MailService {
 		private Defaults $defaults,
 		private IL10N $l10n,
 		private LoggerInterface $logger,
+		private PortalService $portal,
 	) {
 	}
 
@@ -101,6 +102,7 @@ class MailService {
 			'sender_name' => $senderName,
 			'interview_title' => '',
 			'interview_link' => '',
+			'portal_link' => $this->portal->portalUrl($candidate),
 		], $extra);
 	}
 

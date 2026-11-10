@@ -51,6 +51,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedBy(?string $createdBy)
  * @method \DateTime getCreatedAt()
  * @method void setCreatedAt(\DateTime $createdAt)
+ * @method ?string getPortalToken()
+ * @method void setPortalToken(?string $portalToken)
+ * @method ?\DateTime getDeletionRequestedAt()
+ * @method void setDeletionRequestedAt(?\DateTime $deletionRequestedAt)
+ * @method ?string getReferredBy()
+ * @method void setReferredBy(?string $referredBy)
  */
 class Candidate extends Entity implements \JsonSerializable {
 	public const STAGE_NEW = 'new';
@@ -79,6 +85,7 @@ class Candidate extends Entity implements \JsonSerializable {
 	public const SOURCE_MANUAL = 'manual';
 	public const SOURCE_POOL = 'pool';
 	public const SOURCE_WEB = 'web';
+	public const SOURCE_REFERRAL = 'referral';
 
 	public const REJECTION_REASONS = [
 		'not_qualified',
@@ -108,6 +115,9 @@ class Candidate extends Entity implements \JsonSerializable {
 	protected ?int $duplicateOf = null;
 	protected ?string $createdBy = null;
 	protected ?\DateTime $createdAt = null;
+	protected ?string $portalToken = null;
+	protected ?\DateTime $deletionRequestedAt = null;
+	protected ?string $referredBy = null;
 
 	public function __construct() {
 		$this->addType('openingId', 'integer');
@@ -120,6 +130,7 @@ class Candidate extends Entity implements \JsonSerializable {
 		$this->addType('poolConsentAt', 'datetime');
 		$this->addType('anonymizedAt', 'datetime');
 		$this->addType('createdAt', 'datetime');
+		$this->addType('deletionRequestedAt', 'datetime');
 	}
 
 	public function isTerminal(): bool {
@@ -148,6 +159,8 @@ class Candidate extends Entity implements \JsonSerializable {
 			'anonymizedAt' => $this->anonymizedAt?->format(\DateTimeInterface::ATOM),
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt?->format(\DateTimeInterface::ATOM),
+			'deletionRequestedAt' => $this->deletionRequestedAt?->format(\DateTimeInterface::ATOM),
+			'referredBy' => $this->referredBy,
 		];
 	}
 }

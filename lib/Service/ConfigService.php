@@ -103,6 +103,17 @@ class ConfigService {
 	}
 
 	/**
+	 * Whether every logged-in user may refer candidates (on by default).
+	 */
+	public function isReferralsEnabled(): bool {
+		return $this->appConfig->getValueBool(Application::APP_ID, 'referrals_enabled', true);
+	}
+
+	public function setReferralsEnabled(bool $enabled): void {
+		$this->appConfig->setValueBool(Application::APP_ID, 'referrals_enabled', $enabled);
+	}
+
+	/**
 	 * Automatic acknowledgements per opening and day; 0 means unlimited.
 	 * Stops the public form and the mailbox from being used as a mail relay.
 	 */

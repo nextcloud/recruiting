@@ -12,11 +12,17 @@
 			<template #icon>
 				<BriefcaseOutline />
 			</template>
+			<template v-if="!session.isRecruiter && session.referralsEnabled" #action>
+				<NcButton :to="{ name: 'referrals' }">
+					{{ t('recruiting', 'Refer someone') }}
+				</NcButton>
+			</template>
 		</NcEmptyContent>
 	</div>
 </template>
 
 <script>
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import BriefcaseOutline from 'vue-material-design-icons/BriefcaseOutline.vue'
@@ -24,7 +30,7 @@ import { useOpeningsStore, useSessionStore } from '../store.js'
 
 export default {
 	name: 'HomeView',
-	components: { BriefcaseOutline, NcEmptyContent, NcLoadingIcon },
+	components: { BriefcaseOutline, NcButton, NcEmptyContent, NcLoadingIcon },
 	setup() {
 		return {
 			openings: useOpeningsStore(),
