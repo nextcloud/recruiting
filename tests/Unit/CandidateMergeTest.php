@@ -23,6 +23,7 @@ use OCA\Recruiting\Db\VoteMapper;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\ActivityPublisher;
+use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\InterviewService;
@@ -99,6 +100,7 @@ class CandidateMergeTest extends TestCase {
 			$this->eventMapper,
 			$this->notifications,
 			$this->createMock(ActivityPublisher::class),
+			$this->createMock(ActivityPurgeService::class),
 			$this->commentsManager,
 			$this->createMock(IUserManager::class),
 			$timeFactory,

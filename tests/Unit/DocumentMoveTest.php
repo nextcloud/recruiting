@@ -12,6 +12,7 @@ use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\VirusScanService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IAppData;
 use OCP\Files\NotFoundException;
@@ -20,6 +21,7 @@ use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IL10N;
 use OCP\Security\ISecureRandom;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 class DocumentMoveTest extends TestCase {
 	private function document(int $id, string $key): Document {
@@ -59,9 +61,11 @@ class DocumentMoveTest extends TestCase {
 		$service = new DocumentService(
 			$mapper,
 			$appData,
+			$this->createMock(VirusScanService::class),
 			$this->createMock(ISecureRandom::class),
 			$this->createMock(ITimeFactory::class),
 			$this->createMock(IL10N::class),
+			$this->createMock(LoggerInterface::class),
 		);
 		$target = new Candidate();
 		$target->setId(1);
