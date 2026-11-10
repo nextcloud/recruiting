@@ -21,6 +21,20 @@ All notable changes to this app are documented here. The format follows
   without notifying anyone.
 - Mails that fail three times are moved to the IMAP folder `Recruiting-Failed`;
   the triage inbox shows how many wait there.
+- Bulk rejection with one mail template: `POST /api/candidates/bulk-reject`
+  renders the template per candidate, checks permission per candidate and
+  reports `{rejected, failed}` without one failure stopping the rest. The
+  table's bulk bar opens a single dialog (reason, mail on/off with a preview
+  for the first candidate, talent-pool ask) instead of one dialog per
+  candidate; large selections go out in requests of at most 50 with a
+  progress bar.
+- Closing an opening that still has active candidates offers to reject them
+  all with the rejection mail (reason "Position was filled") or to close
+  without changing them, and shows the result.
+- Recruiters can delete an opening that has no candidates at all
+  (`DELETE /api/openings/{id}`); its hiring team and Talk room go with it.
+- The board polls `GET /api/openings/{id}/revision` every 30 s while visible
+  and reloads in place when someone else changed the opening.
 
 ### Changed
 
@@ -30,6 +44,12 @@ All notable changes to this app are documented here. The format follows
   run; the next run retries it. Other failures are retried twice before the
   mail is quarantined. `recruiting:fetch-mail` reports skipped and quarantined
   mails and fails when a temporary error stopped the run.
+- The board's first response carries only the active stages; Hired, Rejected
+  and Withdrawn come as counts and their cards load when the stage is
+  expanded (board column or table), with paging.
+- Stage moves from the board, the bulk bar and the sidebar send the stage
+  the user saw; if someone else moved the candidate in the meantime the
+  server answers 409, nothing changes, and the user is told who went where.
 
 ### Security
 

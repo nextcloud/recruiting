@@ -14,6 +14,7 @@ use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\PermissionService;
+use OCA\Recruiting\Service\TemplateService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -32,6 +33,7 @@ class MailController extends Controller {
 		private PermissionService $permissions,
 		private OpeningMapper $openingMapper,
 		private OfferMapper $offerMapper,
+		private TemplateService $templates,
 		private \OCP\IL10N $l10n,
 		private IUserSession $userSession,
 	) {
@@ -39,11 +41,14 @@ class MailController extends Controller {
 	}
 
 	/**
-	 * Rendered preview for the compose dialog.
+	 * Rendered preview for the compose dialog, plus the unrendered template
+	 * text (`template`) for dialogs that send one text to many candidates.
+	 * With $subject and $body, that text is rendered for this candidate
+	 * instead of the stored template.
 	 */
 	#[NoAdminRequired]
-	public function preview(int $candidateId, string $type, ?string $templateId = null): DataResponse {
-		return $this->handle(function () use ($candidateId, $type, $templateId) {
+	public function preview(int $candidateId, string $type, ?string $templateId = null, ?string $subject = null, ?string $body = null): DataResponse {
+		return $this->handle(function () use ($candidateId, $type, $templateId, $subject, $body) {
 			$uid = $this->uid();
 			$candidate = $this->candidates->find($candidateId);
 			$this->permissions->assertCanManageCandidate($uid, $candidate);
@@ -69,7 +74,17 @@ class MailController extends Controller {
 					];
 				}
 			}
-			return $this->mail->preview($candidate, $openingTitle, $type, $templateId, $uid, $extra);
+			if ($subject !== null && $body !== null) {
+				$context = $this->mail->contextFor($candidate, $openingTitle, $uid, $extra);
+				return [
+					'subject' => $this->mail->render($subject, $context),
+					'body' => $this->mail->render($body, $context),
+					'to' => $candidate->getEmail(),
+				];
+			}
+			$preview = $this->mail->preview($candidate, $openingTitle, $type, $templateId, $uid, $extra);
+			$preview['template'] = $this->templates->resolve($type, $templateId);
+			return $preview;
 		});
 	}
 }

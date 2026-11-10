@@ -100,13 +100,21 @@ has voted) and the time-in-stage turns amber, then red, as a candidate ages.
 Drag a card to move a candidate (or use the card's ⋮ menu — fully
 keyboard-accessible); every move is logged on the candidate's timeline and in
 the Activity stream. **Hired / Rejected / Withdrawn** are shown as summary
-chips below; click one to switch to the table view where all candidates,
-including finished ones, are listed.
+chips below with their counts; their cards are only loaded when you click a
+chip, which adds the stage as an extra column (and to the table view) — so an
+old opening with hundreds of rejections still opens fast.
 
-The same candidates as a sortable table (click a column header) — including
-everyone who is already hired, rejected or withdrawn. Managers can select
-several candidates and move or reject them in bulk; the rejection mail preview
-still appears per candidate, so nothing goes out unreviewed:
+The board keeps itself current: while it is visible it checks every 30 seconds
+whether someone else changed the opening and reloads in place (scroll position,
+selection and the open sidebar stay). A move carries the stage you saw — if a
+colleague moved the candidate in the meantime, nothing is changed and you get
+"<name> was moved to <stage> by someone else".
+
+The same candidates as a sortable table (click a column header). Managers can
+select several candidates and move or reject them in bulk. The bulk rejection
+takes one reason and one mail text whose placeholders are filled in per
+candidate (with a preview for the first one), optionally asks them to join the
+talent pool, and ends with a summary of who was rejected and who could not be:
 
 ![Table view of all candidates](screenshots/02-candidate-table.png)
 
@@ -121,9 +129,13 @@ Header actions (managers and recruiters):
 * **⋮ → Edit opening & team** — title, description, requirements (these feed
   the AI features), the auto-confirmation toggle, the **public application
   page** toggle (see below), and the hiring team with roles.
-* **⋮ → Put on hold / Reopen / Close** — closing warns you if candidates are
-  still active; they keep their stage and can still be rejected (with mail)
-  afterwards.
+* **⋮ → Put on hold / Reopen / Close** — if candidates are still active when
+  you close, you can reject them all in one go with the rejection mail
+  (reason preset to "Position was filled", talent-pool ask optional) or close
+  without changing them.
+* **⋮ → Delete opening** (recruiters) — only for an opening that never had a
+  candidate, e.g. a typo. It removes the opening, its hiring team and its team
+  chat. Openings with candidates can only be closed.
 
 **Public application page.** Turn on *"Publish a public application page"* in
 the opening editor and the app exposes a self-contained, login-free form at
@@ -229,7 +241,9 @@ rejection mail prefilled from your template for review — nothing ever goes
 out unreviewed — and optionally adds the **talent-pool consent link**. If
 sending fails, the candidate is *not* marked rejected; nobody ends up
 silently rejected-but-uninformed. Rejecting without an email is possible for
-candidates without an address.
+candidates without an address. The same rules hold for the bulk rejection in
+the table view and when closing an opening: a candidate whose mail fails stays
+where they are and is listed in the summary.
 
 ![Rejecting with a reviewed email](screenshots/10-reject-dialog.png)
 
