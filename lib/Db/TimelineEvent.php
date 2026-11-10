@@ -50,6 +50,13 @@ class TimelineEvent extends Entity implements \JsonSerializable {
 	public const TYPE_POOL_INVITED = 'pool_invited';
 	public const TYPE_POOL_JOINED = 'pool_joined';
 	public const TYPE_POOL_COPIED = 'pool_copied';
+	public const TYPE_MERGED = 'merged';
+
+	/**
+	 * Data key on events carried over from a merged duplicate: the id of
+	 * the application they were recorded for.
+	 */
+	public const MERGED_FROM = 'mergedFrom';
 
 	protected int $candidateId = 0;
 	protected string $type = '';

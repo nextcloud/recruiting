@@ -145,6 +145,32 @@ class DocumentService {
 		}
 	}
 
+	/**
+	 * Move every document of one candidate to another (merging duplicates):
+	 * the stored file is copied into the target's folder, then the row is
+	 * re-pointed and the original file removed, so a failure part-way
+	 * leaves each document intact on one of the two.
+	 *
+	 * @return int the number of documents moved
+	 */
+	public function moveAll(int $fromCandidateId, Candidate $target): int {
+		$moved = 0;
+		foreach ($this->documentMapper->findForCandidate($fromCandidateId) as $document) {
+			try {
+				$source = $this->getFile($document);
+			} catch (NotFoundException) {
+				// file already gone — the row goes with the source candidate
+				continue;
+			}
+			$this->folderFor($target->getId(), create: true)->newFile($document->getFileKey(), $source->getContent());
+			$document->setCandidateId($target->getId());
+			$this->documentMapper->update($document);
+			$source->delete();
+			$moved++;
+		}
+		return $moved;
+	}
+
 	private function folderFor(int $candidateId, bool $create): ISimpleFolder {
 		$name = 'candidate-' . $candidateId;
 		try {

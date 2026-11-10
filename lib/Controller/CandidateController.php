@@ -137,4 +137,13 @@ class CandidateController extends Controller {
 			return ['deleted' => true];
 		});
 	}
+
+	/**
+	 * Merge candidate $id (the duplicate, deleted afterwards) into
+	 * $targetId; answers with the target's detail.
+	 */
+	#[NoAdminRequired]
+	public function merge(int $id, int $targetId): DataResponse {
+		return $this->handle(fn () => $this->candidates->merge($this->uid(), $id, $targetId));
+	}
 }

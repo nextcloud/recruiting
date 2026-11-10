@@ -156,4 +156,15 @@ class OfferMapper extends QBMapper {
 			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
+
+	/**
+	 * Move the offers of one candidate to another (merging duplicates).
+	 */
+	public function moveToCandidate(int $fromId, int $toId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('candidate_id', $qb->createNamedParameter($toId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($fromId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
 }

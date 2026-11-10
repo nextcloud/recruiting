@@ -176,6 +176,8 @@ export default {
 					return { icon: '🤗', text: this.t('recruiting', 'The candidate consented to staying in the talent pool') }
 				case 'pool_copied':
 					return { icon: '📋', text: this.t('recruiting', '{actor} added the candidate to "{title}"', { actor, title: data.openingTitle ?? '' }) }
+				case 'merged':
+					return { icon: '🔗', text: this.t('recruiting', '{actor} merged a duplicate application into this one', { actor }) }
 				case 'anonymized':
 					return { icon: '🕶️', text: this.t('recruiting', 'Personal data was anonymized (retention period ended)') }
 				case 'stage_changed':

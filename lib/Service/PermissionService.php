@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\Db\AssignmentMapper;
 use OCA\Recruiting\Db\Candidate;
+use OCA\Recruiting\Db\CandidateScope;
 use OCA\Recruiting\Db\InterviewAttendeeMapper;
 use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TeamMember;
@@ -80,6 +81,27 @@ class PermissionService {
 	 */
 	public function clearRoleCache(): void {
 		$this->roleCache = [];
+	}
+
+	/**
+	 * The user's candidate visibility as a query scope (unified search).
+	 * Mirrors canViewCandidate; callers still run canViewCandidate on what
+	 * they hand out.
+	 */
+	public function candidateScope(string $uid): CandidateScope {
+		if ($this->isRecruiter($uid)) {
+			return new CandidateScope($uid, true);
+		}
+		$full = [];
+		$assigned = [];
+		foreach ($this->teamMapper->findForUser($uid) as $membership) {
+			if ($membership->getRole() === TeamMember::ROLE_INTERVIEWER) {
+				$assigned[] = $membership->getOpeningId();
+			} else {
+				$full[] = $membership->getOpeningId();
+			}
+		}
+		return new CandidateScope($uid, false, $full, $assigned);
 	}
 
 	public function canViewOpening(string $uid, int $openingId): bool {

@@ -49,6 +49,11 @@ if ($thirdParty !== false) {
 	require_once $thirdParty;
 }
 
+// Outside a server tree, stand in for the DBAL constants OCP refers to
+if (!class_exists(\Doctrine\DBAL\ParameterType::class)) {
+	require_once __DIR__ . '/stubs/doctrine-dbal.php';
+}
+
 spl_autoload_register(static function (string $class) use ($appRoot, $serverPublic): void {
 	$prefixes = [
 		'OCA\\Recruiting\\Tests\\' => $appRoot . '/tests/',

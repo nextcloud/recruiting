@@ -716,6 +716,44 @@ A review pass acting on an external audit of the app:
   translated validation error, scanner errors → stored and logged. Office
   formats are served as `attachment`, PDF/images/text `inline`.
 
+### 10.13 Reports, search and duplicates (fix wave 2026-11-10)
+
+- **Reports from SQL, cached per opening (§4.11).** `ReportMapper` groups
+  stage, source and rejection-reason counts in SQL and reads only
+  `id, stage, created_at, hired_at` of the applications and the stage-change
+  events for timings — no candidate entities. Per-opening blocks live in the
+  distributed cache (`recruiting-reports`, local fallback) for 10 minutes;
+  `CandidateMapper` bumps the opening's generation on every insert, update
+  and delete of a candidate (moving a candidate between openings bumps a
+  global one), so every path — stage change, merge, anonymization, deletion
+  — invalidates without callers having to remember. Overviews are composed
+  from the blocks of the openings the user may see, so the cache is not per
+  user. Interviewers still get no reports.
+- **Date range = application cohort.** All figures (stage counts, funnel,
+  timings, sources) describe applications whose `created_at` falls in the
+  chosen UTC days; "open offers" stays a live number. Ranges over 26 weeks
+  chart per month.
+- **Stage conversion** counts, per pipeline stage, the applications whose
+  current stage or any `from`/`to` of their history reached at least that
+  stage. Events carried over by a merge (`data.mergedFrom`) are ignored by
+  the timings and the funnel, as they describe the other application.
+- **CSV export** `GET /api/reports/export.csv?from&to`, scoped like the
+  overview; text cells starting with `= + - @`, tab or CR get a leading `'`.
+- **Unified search (§4.12)** builds the role scope into the query
+  (`PermissionService::candidateScope` → `CandidateMapper::search`), the SQL
+  twin of `canViewCandidate`, which still runs on the returned page.
+  Openings come first on the first page; candidates page by offset cursor.
+- **Duplicates.** Emails are compared as `LOWER(email)` against the
+  lowercased address rather than normalized on write: stored addresses stay
+  as entered (the AI name-placeholder check compares the name with the
+  stored address, and other features write emails too), and no data
+  migration is needed; the cost is a scan of the candidates table on these
+  lookups. Cross-opening applications are a hint in the detail payload
+  (`otherApplications`), not `duplicate_of`, which stays same-opening.
+  **Merge** is restricted to the same opening; votes and screener
+  assignments keep the target's on a per-user conflict; the duplicate's
+  reply token is carried over when the target has none.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

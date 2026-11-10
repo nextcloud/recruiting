@@ -35,6 +35,7 @@ export default {
 	rejectCandidate: (id, data) => axios.post(url(`/api/candidates/${id}/reject`), data),
 	bulkReject: (data) => axios.post(url('/api/candidates/bulk-reject'), data),
 	deleteCandidate: (id) => axios.delete(url(`/api/candidates/${id}`)),
+	mergeCandidate: (id, targetId) => axios.post(url(`/api/candidates/${id}/merge`), { targetId }),
 
 	// Documents
 	uploadDocument: (candidateId, file) => {
@@ -71,7 +72,8 @@ export default {
 	withdrawOffer: (id) => axios.post(url(`/api/offers/${id}/withdraw`)),
 
 	// Reports
-	getReports: () => axios.get(url('/api/reports')),
+	getReports: (params = {}) => axios.get(url('/api/reports'), { params }),
+	reportCsvUrl: (params = {}) => url('/api/reports/export.csv') + '?' + new URLSearchParams(params).toString(),
 
 	// AI assistance
 	aiRequest: (candidateId, action) => axios.post(url(`/api/candidates/${candidateId}/ai`), { action }),

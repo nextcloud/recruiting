@@ -130,4 +130,16 @@ class InterviewMapper extends QBMapper {
 			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
+
+	/**
+	 * Move the interviews of one candidate to another (merging duplicates).
+	 * Slots and attendees hang off the interview and move with it.
+	 */
+	public function moveToCandidate(int $fromId, int $toId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('candidate_id', $qb->createNamedParameter($toId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($fromId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
 }

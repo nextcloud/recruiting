@@ -170,7 +170,9 @@ Click any card and the sidebar opens with five tabs:
 
 * **Profile** — contact details (editable by managers), source, an optional
   AI summary (labeled, regenerable), duplicate warning with a link to the
-  earlier application, and — in triage — the "Assign to opening" control.
+  earlier application and a **Merge** action (same opening only), "Also
+  applied for …" links to the person's other applications, and — in triage —
+  the "Assign to opening" control.
   At the bottom, **Documents**: CVs and attachments. PDFs, images and text
   open in the browser; Word and ODT files are downloaded. Stored in app
   storage: never visible in Files, never accessible to people without access
@@ -325,11 +327,16 @@ else.
 
 ### Reports
 
-Headline tiles (candidates, hired, average days to hire, open offers), an
-applications-per-week chart, and per opening: the funnel with average
-time-in-stage, open offers, and the rejection-reason breakdown. All numbers
-are reconstructed from each candidate's actual history and survive
-anonymization. You only see openings you have access to.
+For the applications received in a period you pick (default: the last 12
+months): headline tiles (candidates, hired, average days to hire, open
+offers), applications per week (per month for periods over half a year),
+stage conversion (how many applications reached at least each stage), the
+source of applications, and per opening: the funnel with average
+time-in-stage, open offers, rejection reasons and sources. **Export CSV**
+downloads the per-opening table. All numbers are reconstructed from each
+candidate's actual history and survive anonymization. You only see openings
+you manage or observe (or all, as a recruiter); figures are cached for up to
+ten minutes and refreshed as soon as a candidate of the opening changes.
 
 ![Reports](screenshots/14-reports.png)
 
@@ -367,7 +374,8 @@ only sent when there is something to report.
 Bell notifications for everything that concerns you (assignments, interview
 confirmations, candidate replies, offer approvals, @-mentions, expiring
 offers), Activity stream entries per candidate, unified search over candidates
-and openings (permission-scoped), and deep links from every notification
+and openings (permission-scoped in the database query, anonymized candidates
+excluded, paged), and deep links from every notification
 straight to the right candidate. The interface ships in English and German.
 
 ## Setup

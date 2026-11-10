@@ -43,6 +43,7 @@ return [
 		['name' => 'candidate#reject', 'url' => '/api/candidates/{id}/reject', 'verb' => 'POST'],
 		['name' => 'candidate#export', 'url' => '/api/candidates/{id}/export', 'verb' => 'GET'],
 		['name' => 'candidate#destroy', 'url' => '/api/candidates/{id}', 'verb' => 'DELETE'],
+		['name' => 'candidate#merge', 'url' => '/api/candidates/{id}/merge', 'verb' => 'POST'],
 
 		// Talent pool (Phase 3)
 		['name' => 'candidate#pool', 'url' => '/api/pool', 'verb' => 'GET'],
@@ -64,6 +65,7 @@ return [
 
 		// Reports (Phase 2)
 		['name' => 'report#overview', 'url' => '/api/reports', 'verb' => 'GET'],
+		['name' => 'report#export', 'url' => '/api/reports/export.csv', 'verb' => 'GET'],
 
 		// Documents
 		['name' => 'document#upload', 'url' => '/api/candidates/{candidateId}/documents', 'verb' => 'POST'],

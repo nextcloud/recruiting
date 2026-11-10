@@ -234,7 +234,36 @@ class CandidateService {
 			$this->interviewMapper->findForCandidate($id),
 		);
 		$data['timeline'] = $this->serializeTimeline($this->timeline->eventsFor($id), $canSeeOffers);
+		$data['otherApplications'] = $this->otherApplications($uid, $candidate);
 		return $data;
+	}
+
+	/**
+	 * Other applications by the same email address, in any opening — only
+	 * those the user may view.
+	 *
+	 * @return list<array{id: int, openingId: ?int, openingTitle: ?string, stage: string, createdAt: string}>
+	 */
+	private function otherApplications(string $uid, Candidate $candidate): array {
+		$result = [];
+		$titles = [];
+		foreach ($this->candidateMapper->findOtherApplications($candidate->getEmail(), $candidate->getId()) as $other) {
+			if (!$this->permissions->canViewCandidate($uid, $other)) {
+				continue;
+			}
+			$openingId = $other->getOpeningId();
+			if ($openingId !== null && !array_key_exists($openingId, $titles)) {
+				$titles[$openingId] = $this->openingMapper->findTitle($openingId);
+			}
+			$result[] = [
+				'id' => $other->getId(),
+				'openingId' => $openingId,
+				'openingTitle' => $openingId !== null ? $titles[$openingId] : null,
+				'stage' => $other->getStage(),
+				'createdAt' => $other->getCreatedAt()->format(\DateTimeInterface::ATOM),
+			];
+		}
+		return $result;
 	}
 
 	/**
@@ -496,6 +525,66 @@ class CandidateService {
 	public function destroy(string $uid, int $id): void {
 		$this->permissions->assertRecruiter($uid);
 		$this->purge($this->candidateMapper->find($id));
+	}
+
+	/**
+	 * Merge a duplicate into another application for the same opening: its
+	 * documents, timeline, comments, screener assignments, votes,
+	 * interviews and offers move to the target (where both have a vote or
+	 * an assignment by the same person, the target's is kept), then the
+	 * duplicate is deleted. Applications for different openings are
+	 * separate applications and are never merged.
+	 *
+	 * @throws NotPermittedException|ValidationException
+	 */
+	public function merge(string $uid, int $sourceId, int $targetId): array {
+		$source = $this->candidateMapper->find($sourceId);
+		$target = $this->candidateMapper->find($targetId);
+		$this->permissions->assertCanManageCandidate($uid, $source);
+		$this->permissions->assertCanManageCandidate($uid, $target);
+		if ($sourceId === $targetId) {
+			throw new ValidationException($this->l10n->t('A candidate cannot be merged into itself'));
+		}
+		if ($source->getOpeningId() === null || $source->getOpeningId() !== $target->getOpeningId()) {
+			throw new ValidationException($this->l10n->t('Only applications for the same opening can be merged — applications for different openings are separate applications'));
+		}
+		if ($source->getAnonymizedAt() !== null || $target->getAnonymizedAt() !== null) {
+			throw new ValidationException($this->l10n->t('Anonymized candidates cannot be merged'));
+		}
+
+		$documents = $this->documents->moveAll($sourceId, $target);
+		foreach ($this->eventMapper->findForCandidate($sourceId) as $event) {
+			$data = $event->getDecodedData();
+			$data[TimelineEvent::MERGED_FROM] = $sourceId;
+			$event->setData(json_encode($data, JSON_THROW_ON_ERROR));
+			$event->setCandidateId($targetId);
+			$this->eventMapper->update($event);
+		}
+		foreach ($this->commentsManager->getForObject(CommentService::OBJECT_TYPE, (string)$sourceId) as $comment) {
+			$comment->setObject(CommentService::OBJECT_TYPE, (string)$targetId);
+			$this->commentsManager->save($comment);
+		}
+		$this->assignmentMapper->moveToCandidate($sourceId, $targetId);
+		$this->voteMapper->moveToCandidate($sourceId, $targetId);
+		$this->interviewMapper->moveToCandidate($sourceId, $targetId);
+		$this->offerMapper->moveToCandidate($sourceId, $targetId);
+		$this->candidateMapper->repointDuplicates($sourceId, $targetId);
+
+		if ($target->getDuplicateOf() === $sourceId) {
+			$target->setDuplicateOf(null);
+		}
+		// Replies to mail sent from the duplicate must still find the person
+		if (($target->getReplyToken() ?? '') === '' && ($source->getReplyToken() ?? '') !== '') {
+			$target->setReplyToken($source->getReplyToken());
+		}
+		$this->candidateMapper->update($target);
+
+		$this->timeline->record($targetId, TimelineEvent::TYPE_MERGED, $uid, [
+			'mergedId' => $sourceId,
+			'documents' => $documents,
+		]);
+		$this->purge($source);
+		return $this->get($uid, $targetId);
 	}
 
 	/**

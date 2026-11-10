@@ -61,8 +61,10 @@ export function reasonLabel(reason) {
 export function sourceLabel(source) {
 	return {
 		email: t('recruiting', 'Email application'),
+		web: t('recruiting', 'Web form'),
 		manual: t('recruiting', 'Added manually'),
 		pool: t('recruiting', 'Talent pool'),
+		referral: t('recruiting', 'Referral'),
 	}[source] ?? source
 }
 

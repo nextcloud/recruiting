@@ -4,10 +4,7 @@
 -->
 <template>
 	<div class="profile-tab">
-		<NcNoteCard v-if="candidate.duplicateOf" type="warning">
-			{{ t('recruiting', 'This person applied before — there is an earlier application on file.') }}
-			<a href="#" @click.prevent="sidebar.open(candidate.duplicateOf)">{{ t('recruiting', 'Show it') }}</a>
-		</NcNoteCard>
+		<DuplicateHints :candidate="candidate" />
 
 		<NcNoteCard v-if="candidate.poolMember" type="success">
 			{{ t('recruiting', 'Talent pool member since {date} — consented to being considered for future openings.', { date: formatDateTime(candidate.poolConsentAt) }) }}
@@ -107,13 +104,14 @@ import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import AiAssist from '../AiAssist.vue'
 import DocumentsSection from './DocumentsSection.vue'
+import DuplicateHints from './DuplicateHints.vue'
 import api, { errorMessage } from '../../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
 import { formatDateTime, sourceLabel } from '../../utils/format.js'
 
 export default {
 	name: 'ProfileTab',
-	components: { AiAssist, CloseCircleOutline, DocumentsSection, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline },
+	components: { AiAssist, CloseCircleOutline, DocumentsSection, DuplicateHints, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline },
 	props: {
 		candidate: { type: Object, required: true },
 	},

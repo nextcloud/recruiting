@@ -45,6 +45,20 @@ All notable changes to this app are documented here. The format follows
   stored, when that app is enabled. Infected files are rejected with an
   error (mail attachments are skipped); if the scanner cannot be reached,
   the file is stored and a warning is logged.
+- Reports: a date-range filter (applications received from/to, default the
+  last 12 months), source of applications (email, web form, manual, talent
+  pool, referral; unknown values shown as stored), stage conversion (how
+  many applications reached at least each stage, from their history) and a
+  CSV export of the per-opening table. Longer ranges chart applications per
+  month instead of per week.
+- Candidate sidebar: "Also applied for …" lists the person's other
+  applications (same email address, any opening) that you may see, with
+  links.
+- Merge duplicates: the duplicate warning in the sidebar offers "Merge into
+  the earlier application" (opening managers and recruiters, same opening
+  only). Documents, log, comments, screener assignments, votes, interviews
+  and offers move over; the duplicate is deleted
+  (`POST /api/candidates/{id}/merge`).
 
 ### Changed
 
@@ -62,12 +76,24 @@ All notable changes to this app are documented here. The format follows
   server answers 409, nothing changes, and the user is told who went where.
 - Word and ODT documents are downloaded instead of opened in the browser;
   PDFs, images and text still open in a tab.
+- Reports no longer load every candidate: counts, sources and rejection
+  reasons are grouped in SQL, timings read only the columns they need, and
+  each opening's figures are cached for ten minutes and dropped whenever a
+  candidate of that opening is created, changed, merged, anonymized or
+  deleted.
+- Unified search applies the role scope in SQL (managers and observers: their
+  openings; interviewers: their assigned or attended candidates; offer
+  approvers: their offers), so matches are no longer lost behind invisible
+  ones; anonymized candidates are never found, openings are matched by
+  title in SQL, and results page with "load more".
 
 ### Fixed
 
 - Cancelling an interview now also removes the event from the interviewers'
   calendars. The CalDAV backend writes the app uses do not send iTIP
   messages, so their copies used to stay.
+- Duplicate detection compares email addresses case-insensitively on every
+  database (PostgreSQL and SQLite compared them case-sensitively).
 
 ### Security
 
