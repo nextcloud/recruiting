@@ -14,6 +14,12 @@ All notable changes to this app are documented here. The format follows
 
 ### Added
 
+- A switch in the opening editor for the public application form ("Accept
+  applications through a public form on the web"), with the form's address
+  below it. Until now the form could only be enabled through the API.
+- The handbook covers 0.8.0: the application form, referrals, the candidate's
+  own page, duplicates and merging, bulk rejection and closing openings, the
+  new reports, interview reminders and the extended retention.
 - A daily limit for automatic receipt confirmations per opening (Administration
   → Recruiting, default 100, 0 = unlimited). Further confirmations that day are
   skipped and the HR group gets one notification per opening and day.
@@ -107,6 +113,8 @@ All notable changes to this app are documented here. The format follows
   characters also find candidates whose CV or other documents contain them.
 
 ### Fixed
+
+- The buttons of the close-opening dialog wrap instead of being cut off.
 
 - Cancelling an interview now also removes the event from the interviewers'
   calendars. The CalDAV backend writes the app uses do not send iTIP

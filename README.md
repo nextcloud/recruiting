@@ -140,10 +140,11 @@ Header actions (managers and recruiters):
   candidate, e.g. a typo. It removes the opening, its hiring team and its team
   chat. Openings with candidates can only be closed.
 
-**Public application page.** Turn on *"Publish a public application page"* in
-the opening editor and the app exposes a self-contained, login-free form at
-`…/apps/recruiting/apply/<opening-slug>` — the copyable link appears right in
-the editor. Applicants see the opening and submit their name, email, an optional
+**Public application page.** Turn on *"Accept applications through a public
+form on the web"* in the opening editor (⋮ → Edit opening & team) and the app
+exposes a self-contained, login-free form at
+`…/apps/recruiting/apply/<opening-slug>` — the link appears right below the
+switch. Applicants see the opening and submit their name, email, an optional
 cover letter and CV, and a consent checkbox; the submission lands in *New* just
 like an emailed application, complete with auto-acknowledgement and the full
 GDPR lifecycle. The page is server-rendered and hardened (rate limits,
@@ -251,6 +252,10 @@ show the candidate's current name.
    mail (template *Interview reminder*) with the time, the location or video
    link, and their interview and self-service links.
 
+| Picking a slot — no account required | After confirming: details + calendar file |
+|---|---|
+| ![The public slot picker](screenshots/18-public-slot-picker.png) | ![The confirmation page with .ics download](screenshots/19-public-confirmed.png) |
+
 ### The candidate's self-service page
 
 Every candidate has a personal link (`/apps/recruiting/portal/…`, in the
@@ -266,6 +271,8 @@ as everywhere, at most 10 documents per candidate). The page works without an
 account, is rate limited, and stops working when the candidate is anonymized
 or deleted.
 
+![The candidate's self-service page](screenshots/21-candidate-portal.png)
+
 ### Employee referrals
 
 Any logged-in user can open **Refer someone**, pick an open position, and enter
@@ -277,9 +284,7 @@ timeline and the candidate sidebar shows *Referred by*. The referrer sees their
 own referrals with the coarse status only and gets a notification when it
 changes; they gain no access to the candidate. Admins can turn referrals off.
 
-| Picking a slot — no account required | After confirming: details + calendar file |
-|---|---|
-| ![The public slot picker](screenshots/18-public-slot-picker.png) | ![The confirmation page with .ics download](screenshots/19-public-confirmed.png) |
+![Refer someone](screenshots/20-referrals.png)
 
 ### Rejecting
 
@@ -293,6 +298,10 @@ the table view and when closing an opening: a candidate whose mail fails stays
 where they are and is listed in the summary.
 
 ![Rejecting with a reviewed email](screenshots/10-reject-dialog.png)
+
+| Rejecting several candidates at once | Closing an opening with active candidates |
+|---|---|
+| ![Bulk rejection](screenshots/22-bulk-reject.png) | ![Closing an opening](screenshots/23-close-opening.png) |
 
 ### The offer lifecycle
 
