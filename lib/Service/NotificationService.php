@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\AppInfo\Application;
 use OCA\Recruiting\Db\Candidate;
+use OCA\Recruiting\Db\Opening;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Notification\IManager as INotificationManager;
 
@@ -29,6 +30,7 @@ class NotificationService {
 	public const SUBJECT_OFFER_APPROVAL_DECLINED = 'offer_approval_declined';
 	public const SUBJECT_OFFER_EXPIRING = 'offer_expiring';
 	public const SUBJECT_OFFER_EXPIRED = 'offer_expired';
+	public const SUBJECT_AUTO_ACK_CAP_REACHED = 'auto_ack_cap_reached';
 
 	public function __construct(
 		private INotificationManager $notificationManager,
@@ -58,6 +60,32 @@ class NotificationService {
 				->setDateTime($this->timeFactory->getDateTime())
 				->setObject('candidate', (string)$candidate->getId())
 				->setSubject($subject, $parameters);
+			$this->notificationManager->notify($notification);
+		}
+	}
+
+	/**
+	 * Tell recruiters that an opening's automatic acknowledgements stopped
+	 * for today because the daily cap was reached.
+	 *
+	 * @param string[] $recipients user ids
+	 */
+	public function notifyAutoAckCapReached(array $recipients, Opening $opening, int $cap): void {
+		$parameters = [
+			'openingId' => (string)$opening->getId(),
+			'openingTitle' => $opening->getTitle(),
+			'cap' => (string)$cap,
+		];
+		foreach (array_unique($recipients) as $uid) {
+			if ($uid === '') {
+				continue;
+			}
+			$notification = $this->notificationManager->createNotification();
+			$notification->setApp(Application::APP_ID)
+				->setUser($uid)
+				->setDateTime($this->timeFactory->getDateTime())
+				->setObject('opening', (string)$opening->getId())
+				->setSubject(self::SUBJECT_AUTO_ACK_CAP_REACHED, $parameters);
 			$this->notificationManager->notify($notification);
 		}
 	}

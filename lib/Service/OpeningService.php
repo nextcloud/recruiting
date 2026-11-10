@@ -14,6 +14,7 @@ use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TeamMember;
 use OCA\Recruiting\Db\TeamMemberMapper;
+use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IL10N;
@@ -150,6 +151,40 @@ class OpeningService {
 		$opening->setClosedAt($status === Opening::STATUS_CLOSED ? $this->timeFactory->getDateTime() : null);
 		$this->openingMapper->update($opening);
 		return $this->get($uid, $id);
+	}
+
+	/**
+	 * Remove a mistyped opening. Only recruiters may, and only while it has
+	 * no candidates at all — an opening with applications is closed, never
+	 * deleted, so nothing that belongs to a candidate can go with it.
+	 *
+	 * @throws NotPermittedException|ValidationException
+	 */
+	public function destroy(string $uid, int $id): void {
+		$this->permissions->assertRecruiter($uid);
+		$opening = $this->openingMapper->find($id);
+		if ($this->candidateMapper->countForOpening($id) > 0) {
+			throw new ValidationException($this->l10n->t('This opening has candidates and cannot be deleted. Close it instead.'));
+		}
+
+		if (($opening->getTalkToken() ?? '') !== '') {
+			$this->talk->deleteRoom($opening->getTalkToken());
+		}
+		$this->teamMapper->deleteForOpening($id);
+		$this->openingMapper->delete($opening);
+		$this->permissions->clearRoleCache();
+	}
+
+	/**
+	 * Marker for "has the board changed?" polling: cheap enough to ask for
+	 * every few seconds by every open board.
+	 *
+	 * @return array{revision: string}
+	 * @throws NotPermittedException
+	 */
+	public function revision(string $uid, int $id): array {
+		$this->permissions->assertCanViewOpening($uid, $id);
+		return ['revision' => $this->candidateMapper->revisionForOpening($id)];
 	}
 
 	/**

@@ -40,14 +40,14 @@ $action = $urlGenerator->linkToRoute('recruiting.public.submitApplication', ['sl
 			<?php endif; ?>
 
 			<form method="post" action="<?php p($action); ?>" enctype="multipart/form-data" class="recruiting-apply__form">
-				<input type="hidden" name="t" value="<?php p((string)$_['now']); ?>">
+				<input type="hidden" name="t" value="<?php p($_['token']); ?>">
 				<!-- Honeypot: hidden from people, tempting to bots. -->
 				<div class="recruiting-apply__hp" aria-hidden="true">
 					<label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
 				</div>
 
 				<label class="recruiting-apply__label" for="ra-name"><?php p($l->t('Your name')); ?> *</label>
-				<input id="ra-name" type="text" name="name" required maxlength="250" value="<?php p($values['name'] ?? ''); ?>">
+				<input id="ra-name" type="text" name="name" required maxlength="120" value="<?php p($values['name'] ?? ''); ?>">
 
 				<label class="recruiting-apply__label" for="ra-email"><?php p($l->t('Email address')); ?> *</label>
 				<input id="ra-email" type="email" name="email" required maxlength="250" value="<?php p($values['email'] ?? ''); ?>">

@@ -24,6 +24,7 @@ use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Db\TimelineEventMapper;
 use OCA\Recruiting\Db\Vote;
 use OCA\Recruiting\Db\VoteMapper;
+use OCA\Recruiting\Exception\ConflictException;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -86,11 +87,14 @@ class CandidateService {
 	 * get the candidates assigned to them.
 	 *
 	 * Paged per stage (spec §10.6): the first response carries up to
-	 * PAGE_SIZE cards per stage; a follow-up call with $stage/$offset pages
-	 * within one stage. Interviewers get their full (small, assignment-
-	 * bounded) list in one response instead.
+	 * PAGE_SIZE cards per active stage and no cards for the terminal stages
+	 * (hired, rejected, withdrawn) — those are listed in `deferred`, their
+	 * counts are in the opening's stageCounts, and the client loads them on
+	 * demand. A follow-up call with $stage/$offset pages within one stage.
+	 * Interviewers get their full (small, assignment-bounded) list in one
+	 * response instead, flagged `complete`.
 	 *
-	 * @return array{cards: array, page: int}
+	 * @return array{cards: array, page: int, complete: bool, deferred: list<string>}
 	 * @throws NotPermittedException
 	 */
 	public function listForOpening(string $uid, int $openingId, ?string $stage = null, int $offset = 0): array {
@@ -107,22 +111,22 @@ class CandidateService {
 				static fn (Candidate $c) => $c->getOpeningId() === $openingId,
 			));
 			usort($candidates, static fn (Candidate $a, Candidate $b) => $a->getCreatedAt() <=> $b->getCreatedAt() ?: $a->getId() <=> $b->getId());
-			return ['cards' => $this->serializeCards($candidates, $uid), 'page' => self::PAGE_SIZE];
+			return ['cards' => $this->serializeCards($candidates, $uid), 'page' => self::PAGE_SIZE, 'complete' => true, 'deferred' => []];
 		}
 
 		if ($stage !== null) {
 			$candidates = $this->candidateMapper->findForOpening($openingId, $stage, self::PAGE_SIZE, max(0, $offset));
-		} else {
-			$candidates = [];
-			foreach (array_merge(Candidate::ACTIVE_STAGES, Candidate::TERMINAL_STAGES) as $boardStage) {
-				$candidates = array_merge(
-					$candidates,
-					$this->candidateMapper->findForOpening($openingId, $boardStage, self::PAGE_SIZE, 0),
-				);
-			}
+			return ['cards' => $this->serializeCards($candidates, $uid), 'page' => self::PAGE_SIZE, 'complete' => false, 'deferred' => []];
 		}
 
-		return ['cards' => $this->serializeCards($candidates, $uid), 'page' => self::PAGE_SIZE];
+		$candidates = [];
+		foreach (Candidate::ACTIVE_STAGES as $boardStage) {
+			$candidates = array_merge(
+				$candidates,
+				$this->candidateMapper->findForOpening($openingId, $boardStage, self::PAGE_SIZE, 0),
+			);
+		}
+		return ['cards' => $this->serializeCards($candidates, $uid), 'page' => self::PAGE_SIZE, 'complete' => false, 'deferred' => Candidate::TERMINAL_STAGES];
 	}
 
 	/**
@@ -344,9 +348,13 @@ class CandidateService {
 	 * Move a candidate on the board. Rejection has its own endpoint since
 	 * it carries a reason and usually a mail.
 	 *
-	 * @throws NotPermittedException|ValidationException
+	 * With $expectedStage the move only happens while the candidate is
+	 * still in that stage — two people working on the same board must not
+	 * silently override each other.
+	 *
+	 * @throws NotPermittedException|ValidationException|ConflictException
 	 */
-	public function setStage(string $uid, int $id, string $stage): array {
+	public function setStage(string $uid, int $id, string $stage, ?string $expectedStage = null): array {
 		$candidate = $this->candidateMapper->find($id);
 		$this->permissions->assertCanManageCandidate($uid, $candidate);
 
@@ -356,6 +364,12 @@ class CandidateService {
 		}
 		if ($candidate->getOpeningId() === null) {
 			throw new ValidationException($this->l10n->t('Assign the candidate to an opening first'));
+		}
+		if ($expectedStage !== null && $expectedStage !== '' && $candidate->getStage() !== $expectedStage) {
+			throw new ConflictException(
+				$this->l10n->t('%s was moved to another stage by someone else in the meantime', [$candidate->getDisplayName()]),
+				['stage' => $candidate->getStage(), 'displayName' => $candidate->getDisplayName()],
+			);
 		}
 		// A manual move is the one place where reopening a finished candidate
 		// is intended (e.g. a withdrawal that turned out to be a mistake).
@@ -403,7 +417,17 @@ class CandidateService {
 	 * @throws NotPermittedException|ValidationException
 	 */
 	public function reject(string $uid, int $id, string $reason, ?string $mailSubject, ?string $mailBody, bool $askPool = false): array {
-		$candidate = $this->candidateMapper->find($id);
+		$this->rejectCandidate($uid, $this->candidateMapper->find($id), $reason, $mailSubject, $mailBody, $askPool);
+		return $this->get($uid, $id);
+	}
+
+	/**
+	 * The rejection itself for an already loaded candidate — shared by the
+	 * single and the bulk reject, without the detail serialization.
+	 *
+	 * @throws NotPermittedException|ValidationException
+	 */
+	public function rejectCandidate(string $uid, Candidate $candidate, string $reason, ?string $mailSubject, ?string $mailBody, bool $askPool = false): void {
 		$this->permissions->assertCanManageCandidate($uid, $candidate);
 		if (!in_array($reason, Candidate::REJECTION_REASONS, true)) {
 			throw new ValidationException($this->l10n->t('Invalid rejection reason'));
@@ -424,7 +448,6 @@ class CandidateService {
 		$candidate->setRejectionReason($reason);
 		$this->stages->apply($candidate, Candidate::STAGE_REJECTED, $uid, ['reason' => $reason], allowFromTerminal: true);
 		$this->activity->publish($candidate, 'candidate_rejected', $uid);
-		return $this->get($uid, $id);
 	}
 
 	/**

@@ -16,6 +16,10 @@ class ParsedMail {
 	 * @param string[] $recipients all To/Cc/Delivered-To addresses, lowercased
 	 * @param array<int, array{name: string, mime: string, content: string}> $attachments
 	 * @param string $messageId the raw Message-ID header, '' when the mail has none
+	 * @param array<string, string> $headers top-level headers used to classify the mail
+	 *                                       (see {@see MimeParser::CLASSIFICATION_HEADERS}),
+	 *                                       lowercased names, first occurrence, unfolded
+	 * @param string $contentType the lowercased top-level mime type
 	 */
 	public function __construct(
 		public readonly string $subject,
@@ -25,6 +29,12 @@ class ParsedMail {
 		public readonly string $textBody,
 		public readonly array $attachments,
 		public readonly string $messageId = '',
+		public readonly array $headers = [],
+		public readonly string $contentType = 'text/plain',
 	) {
+	}
+
+	public function header(string $name): string {
+		return $this->headers[strtolower($name)] ?? '';
 	}
 }

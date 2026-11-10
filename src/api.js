@@ -17,6 +17,8 @@ export default {
 	createOpening: (data) => axios.post(url('/api/openings'), data),
 	updateOpening: (id, data) => axios.put(url(`/api/openings/${id}`), data),
 	setOpeningStatus: (id, status) => axios.post(url(`/api/openings/${id}/status`), { status }),
+	deleteOpening: (id) => axios.delete(url(`/api/openings/${id}`)),
+	getOpeningRevision: (id) => axios.get(url(`/api/openings/${id}/revision`)),
 
 	// Candidates
 	getCandidates: (openingId, params = {}) => axios.get(url(`/api/openings/${openingId}/candidates`), { params }),
@@ -27,9 +29,11 @@ export default {
 	getCandidate: (id) => axios.get(url(`/api/candidates/${id}`)),
 	createCandidate: (data) => axios.post(url('/api/candidates'), data),
 	updateCandidate: (id, data) => axios.put(url(`/api/candidates/${id}`), data),
-	setStage: (id, stage) => axios.post(url(`/api/candidates/${id}/stage`), { stage }),
+	// expectedStage: the stage the client saw; the server answers 409 if it changed since
+	setStage: (id, stage, expectedStage = null) => axios.post(url(`/api/candidates/${id}/stage`), expectedStage ? { stage, expectedStage } : { stage }),
 	assignOpening: (id, openingId) => axios.post(url(`/api/candidates/${id}/opening`), { openingId }),
 	rejectCandidate: (id, data) => axios.post(url(`/api/candidates/${id}/reject`), data),
+	bulkReject: (data) => axios.post(url('/api/candidates/bulk-reject'), data),
 	deleteCandidate: (id) => axios.delete(url(`/api/candidates/${id}`)),
 
 	// Documents
@@ -90,6 +94,7 @@ export default {
 
 	// Mail
 	previewMail: (candidateId, type, templateId = null) => axios.post(url(`/api/candidates/${candidateId}/mail-preview`), { type, templateId }),
+	previewMailText: (candidateId, type, subject, body) => axios.post(url(`/api/candidates/${candidateId}/mail-preview`), { type, subject, body }),
 	getTemplates: () => axios.get(url('/api/templates')),
 	createTemplate: (data) => axios.post(url('/api/templates'), data),
 	updateTemplate: (id, data) => axios.put(url(`/api/templates/${id}`), data),

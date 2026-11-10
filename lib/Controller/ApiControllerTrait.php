@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Controller;
 
+use OCA\Recruiting\Exception\ConflictException;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -60,6 +61,9 @@ trait ApiControllerTrait {
 		}
 		if ($e instanceof NotPermittedException) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		}
+		if ($e instanceof ConflictException) {
+			return new DataResponse(array_merge($e->getData(), ['message' => $e->getMessage()]), Http::STATUS_CONFLICT);
 		}
 		$l = \OCP\Server::get(\OCP\L10N\IFactory::class)->get('recruiting');
 		if ($e instanceof DoesNotExistException) {

@@ -27,6 +27,15 @@
 					{{ t('recruiting', 'All candidate mail (invitations, rejections, offers) is sent with this identity via the server’s email settings. Replies go to the application mailbox below, so answers land back in the app.') }}
 				</p>
 				<NcTextField
+					v-model.number="settings.autoAckDailyCap"
+					type="number"
+					min="0"
+					max="100000"
+					:label="t('recruiting', 'Automatic confirmations per opening and day')" />
+				<p class="admin-recruiting__hint">
+					{{ t('recruiting', 'Once an opening has sent this many automatic receipt confirmations in a day, further ones are skipped until the next day and the HR group is notified. This keeps the public form and the mailbox from being abused to send spam. 0 means no limit.') }}
+				</p>
+				<NcTextField
 					v-model.number="settings.retentionDays"
 					type="number"
 					min="0"
@@ -119,6 +128,7 @@ export default {
 				hrGroup: '',
 				senderName: '',
 				senderEmail: '',
+				autoAckDailyCap: 100,
 				imapEnabled: false,
 				imapHost: '',
 				imapPort: 993,

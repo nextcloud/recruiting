@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Controller;
 
+use OCA\Recruiting\Service\BulkRejectService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\ExportService;
 use OCA\Recruiting\Service\PermissionService;
@@ -30,6 +31,7 @@ class CandidateController extends Controller {
 		private ExportService $export,
 		private \OCA\Recruiting\Service\PoolService $pool,
 		private PermissionService $permissions,
+		private BulkRejectService $bulkReject,
 		private IUserSession $userSession,
 	) {
 		parent::__construct($appName, $request);
@@ -71,8 +73,8 @@ class CandidateController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function setStage(int $id, string $stage): DataResponse {
-		return $this->handle(fn () => $this->candidates->setStage($this->uid(), $id, $stage));
+	public function setStage(int $id, string $stage, ?string $expectedStage = null): DataResponse {
+		return $this->handle(fn () => $this->candidates->setStage($this->uid(), $id, $stage, $expectedStage));
 	}
 
 	#[NoAdminRequired]
@@ -83,6 +85,17 @@ class CandidateController extends Controller {
 	#[NoAdminRequired]
 	public function reject(int $id, string $reason, ?string $mailSubject = null, ?string $mailBody = null, bool $askPool = false): DataResponse {
 		return $this->handle(fn () => $this->candidates->reject($this->uid(), $id, $reason, $mailSubject, $mailBody, $askPool));
+	}
+
+	/**
+	 * Reject up to BulkRejectService::MAX_PER_REQUEST candidates with one
+	 * reason and one mail template, rendered per candidate.
+	 *
+	 * @param list<int|string> $ids
+	 */
+	#[NoAdminRequired]
+	public function bulkReject(array $ids, string $reason, bool $sendMail = false, string $subject = '', string $body = '', bool $askPool = false): DataResponse {
+		return $this->handle(fn () => $this->bulkReject->reject($this->uid(), $ids, $reason, $sendMail, $subject, $body, $askPool));
 	}
 
 	/**

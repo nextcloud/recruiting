@@ -120,6 +120,14 @@ export default {
 				case 'created':
 					return { icon: '✨', text: this.t('recruiting', 'Application created') }
 				case 'mail_received':
+					if (data.automatic) {
+						return {
+							icon: '🤖',
+							text: this.t('recruiting', 'Automatic reply received: {subject}', { subject: data.subject ?? '' }),
+							details: data.body,
+							detailsLabel: this.t('recruiting', 'Show message'),
+						}
+					}
 					if (data.reply) {
 						return {
 							icon: '📥',

@@ -19,6 +19,23 @@ class MimeParser {
 	public const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 	public const MAX_BODY_LENGTH = 100_000;
 
+	/**
+	 * Top-level headers handed to {@see MailClassifier}. The parser keeps the
+	 * first occurrence of each header, which for Authentication-Results is the
+	 * topmost one — the one our own receiving server added.
+	 */
+	public const CLASSIFICATION_HEADERS = [
+		'auto-submitted',
+		'precedence',
+		'list-id',
+		'x-autoreply',
+		'x-autorespond',
+		'x-auto-response-suppress',
+		'return-path',
+		'authentication-results',
+	];
+	private const MAX_HEADER_LENGTH = 2000;
+
 	private string $textBody = '';
 	private string $htmlBody = '';
 	/** @var array<int, array{name: string, mime: string, content: string}> */
@@ -47,6 +64,14 @@ class MimeParser {
 		// Message-IDs are attacker-controlled headers: clamp to the column size
 		$messageId = mb_substr(trim($headers['message-id'] ?? ''), 0, 250);
 
+		$classification = [];
+		foreach (self::CLASSIFICATION_HEADERS as $name) {
+			if (isset($headers[$name])) {
+				$classification[$name] = substr($headers[$name], 0, self::MAX_HEADER_LENGTH);
+			}
+		}
+		[$contentType] = $this->parseContentType($headers['content-type'] ?? 'text/plain');
+
 		return new ParsedMail(
 			$this->decodeHeader($headers['subject'] ?? ''),
 			$fromName,
@@ -55,6 +80,8 @@ class MimeParser {
 			$text,
 			$this->attachments,
 			$messageId,
+			$classification,
+			$contentType,
 		);
 	}
 

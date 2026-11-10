@@ -64,6 +64,24 @@ class Notifier implements INotifier {
 			];
 		}
 
+		if ($notification->getSubject() === NotificationService::SUBJECT_AUTO_ACK_CAP_REACHED) {
+			$notification->setRichSubject(
+				$l->t('Automatic confirmations for {opening} are paused until tomorrow: the daily limit of {cap} was reached'),
+				[
+					'opening' => ['type' => 'highlight', 'id' => (string)($parameters['openingId'] ?? '0'), 'name' => $openingTitle],
+					'cap' => ['type' => 'highlight', 'id' => 'cap', 'name' => (string)($parameters['cap'] ?? '')],
+				],
+			);
+			$notification->setLink(
+				$this->urlGenerator->linkToRouteAbsolute('recruiting.page.index')
+				. '#/openings/' . (int)($parameters['openingId'] ?? 0),
+			);
+			$notification->setIcon($this->urlGenerator->getAbsoluteURL(
+				$this->urlGenerator->imagePath(Application::APP_ID, 'app-dark.svg'),
+			));
+			return $notification;
+		}
+
 		switch ($notification->getSubject()) {
 			case NotificationService::SUBJECT_SCREENER_ASSIGNED:
 				$subject = $actorUid !== ''

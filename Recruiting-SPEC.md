@@ -606,6 +606,70 @@ A review pass acting on an external audit of the app:
   honours `NEXTCLOUD_ROOT` for symlinked dev checkouts.
 - **Public application form (§4.13):** the opt-in `/apply/{slug}` page.
 
+### 10.10 Mail intake and auto-ack hardening
+
+- **Auto-ack cap counter.** Counted per opening in a lazily loaded app-config
+  key (`auto_ack_count_<openingId>`: date, count, notified flag), not by
+  querying the timeline: `mail_sent` events do not record which template was
+  used, and counting would need a candidate join on every send. The cap is
+  soft — two simultaneous submissions may both pass the last slot.
+- **Names in mail.** `MailService::nameForMail()` sanitises `{{candidate_name}}`
+  and the To display name for every send path; a token is dropped as link-like
+  when it contains `://`, `@`, `www.` or a `x.yy` dot pattern, so a greeting may
+  lose a dotted token such as "J.Smith". The public form rejects only
+  `://`, `www.`, `host.tld/` and `@`.
+- **Automatic mail** is classified by `MailClassifier` from headers the parser
+  keeps (`ParsedMail::$headers`). Automatic replies to a candidate token
+  address are recorded on the timeline with `automatic: true`; their
+  attachments are not stored (bounces carry a copy of our own mail).
+- **Forged senders.** Only the topmost `Authentication-Results` header is read;
+  its authserv-id is not checked against a configured host.
+- **Failures.** The Message-ID ledger (`recruiting_mail_seen`) gained
+  `pending`, `attempts`, `last_error`, `quarantined_at`. Mails without a
+  Message-ID are tracked by `sha256:<hash of the raw mail>`. A transient
+  failure after the candidate row was written can create a duplicate on
+  retry (at-least-once, as before). The quarantine folder falls back to
+  `INBOX<delimiter>Recruiting-Failed` on servers that refuse top-level folders;
+  the triage count is the folder's `STATUS MESSAGES`, so it drops once HR
+  empties the folder.
+- **Form token.** 24 h maximum age (the review suggested about 2 h; a day keeps
+  slow applicants from losing their input). Secret: app config
+  `public_form_secret`, sensitive and lazy, generated on first use.
+
+### 10.11 Board: lazy terminal stages, close/delete, live updates (unreleased)
+
+- **Lazy terminal stages:** `GET …/candidates` without `?stage=` returns cards
+  for the active stages only plus `deferred: [hired, rejected, withdrawn]`;
+  their totals come from `stageCounts`. The client loads a terminal stage on
+  expand (summary chip → extra board column, also shown in the table) through
+  the existing `?stage=&offset=` paging. Interviewers keep one complete
+  response (`complete: true`, terminal cards included, no paging).
+- **Bulk reject (§4.5):** `POST /api/candidates/bulk-reject`
+  `{ids, reason, sendMail, subject, body, askPool}`, ≤ 50 ids per request
+  (`BulkRejectService`); subject/body are template text rendered per
+  candidate via `MailService::render/contextFor`, then the single-reject path
+  (`CandidateService::rejectCandidate`) runs, so "mail first, reject only if
+  sent" still holds. Deviation from §10.7: the mail is no longer reviewed per
+  candidate; the dialog previews the rendered mail for the first candidate
+  (`mail-preview` accepts `subject`/`body` overrides and returns the raw
+  `template`). Candidates without an address are rejected without mail and
+  flagged `mailed: false`; failures never reveal names the user may not see.
+- **Close opening (§4.1):** with active candidates, a dialog offers bulk
+  rejection (reason `position_filled`) or closing as is; the opening is closed
+  after the run, also when some rejections failed.
+- **Delete opening (§4.1):** recruiters only, only with zero candidates in any
+  stage (anonymized included); removes the team rows and the Talk room. No
+  other table references an opening.
+- **Live board:** `GET /api/openings/{id}/revision` = one aggregate query
+  (candidate count, max id, max `stage_changed_at`, max timeline event id via
+  a join on `recruiting_events`). Polled every 30 s while the page is visible;
+  a change triggers an in-place reload that refills every stage to what was
+  loaded before. Edits that leave no timeline entry (e.g. renaming a
+  candidate) do not change the marker. `notify_push` is not used.
+- **Stage conflicts:** `setStage` takes `expectedStage`; a mismatch throws
+  `ConflictException` → HTTP 409 `{message, stage, displayName}`, nothing
+  changes.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

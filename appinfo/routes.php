@@ -23,7 +23,9 @@ return [
 		['name' => 'opening#show', 'url' => '/api/openings/{id}', 'verb' => 'GET'],
 		['name' => 'opening#create', 'url' => '/api/openings', 'verb' => 'POST'],
 		['name' => 'opening#update', 'url' => '/api/openings/{id}', 'verb' => 'PUT'],
+		['name' => 'opening#destroy', 'url' => '/api/openings/{id}', 'verb' => 'DELETE'],
 		['name' => 'opening#setStatus', 'url' => '/api/openings/{id}/status', 'verb' => 'POST'],
+		['name' => 'opening#revision', 'url' => '/api/openings/{id}/revision', 'verb' => 'GET'],
 		['name' => 'opening#createTalkRoom', 'url' => '/api/openings/{id}/talk-room', 'verb' => 'POST'],
 		['name' => 'opening#removeTalkRoom', 'url' => '/api/openings/{id}/talk-room', 'verb' => 'DELETE'],
 
@@ -34,6 +36,7 @@ return [
 		['name' => 'candidate#myInterviews', 'url' => '/api/my-interviews', 'verb' => 'GET'],
 		['name' => 'candidate#show', 'url' => '/api/candidates/{id}', 'verb' => 'GET'],
 		['name' => 'candidate#create', 'url' => '/api/candidates', 'verb' => 'POST'],
+		['name' => 'candidate#bulkReject', 'url' => '/api/candidates/bulk-reject', 'verb' => 'POST'],
 		['name' => 'candidate#update', 'url' => '/api/candidates/{id}', 'verb' => 'PUT'],
 		['name' => 'candidate#setStage', 'url' => '/api/candidates/{id}/stage', 'verb' => 'POST'],
 		['name' => 'candidate#assignOpening', 'url' => '/api/candidates/{id}/opening', 'verb' => 'POST'],

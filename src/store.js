@@ -74,6 +74,9 @@ export const useOpeningsStore = defineStore('openings', {
 				this.openings.unshift(opening)
 			}
 		},
+		remove(id) {
+			this.openings = this.openings.filter((o) => o.id !== Number(id))
+		},
 	},
 })
 

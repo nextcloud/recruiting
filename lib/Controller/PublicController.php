@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Controller;
 
 use OCA\Recruiting\Db\InterviewMapper;
 use OCA\Recruiting\Exception\ValidationException;
+use OCA\Recruiting\Service\ApplicationFormToken;
 use OCA\Recruiting\Service\InterviewService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -34,6 +35,8 @@ use Psr\Log\LoggerInterface;
  * protected.
  */
 class PublicController extends Controller {
+	public const MAX_NAME_LENGTH = 120;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -42,6 +45,7 @@ class PublicController extends Controller {
 		private \OCA\Recruiting\Service\PoolService $pool,
 		private \OCA\Recruiting\Db\OpeningMapper $openingMapper,
 		private \OCA\Recruiting\Service\IngestionService $ingestion,
+		private ApplicationFormToken $formToken,
 		private IInitialState $initialState,
 		private Defaults $defaults,
 		private \OCP\IL10N $l10n,
@@ -211,8 +215,10 @@ class PublicController extends Controller {
 
 	/**
 	 * Receive a submission. Guarded by brute-force + rate limits (attributes), a
-	 * hidden honeypot field, and a minimum fill time — a bot that posts instantly
-	 * or fills the invisible field is dropped without creating anything. Consent
+	 * hidden honeypot field, and a signed fill-time token — a bot that posts
+	 * instantly, sends no or a forged token, or fills the invisible field is
+	 * dropped without creating anything. An expired token (form open for more
+	 * than a day) re-renders the form with a fresh token. Consent
 	 * is mandatory (GDPR). On success the applicant sees a thank-you page (POST /
 	 * redirect / GET would need a token; a rendered confirmation is simpler and
 	 * has no state to leak).
@@ -232,22 +238,32 @@ class PublicController extends Controller {
 			$this->logger->info('Recruiting: public application dropped (honeypot)');
 			return $this->applyThankYou($opening); // lie kindly: bots get a success page
 		}
-		// Minimum fill time: the form embeds a signed-ish timestamp; a submission
-		// faster than 3s is a script, not a person.
-		$startedAt = (int)$this->request->getParam('t', '0');
-		if ($startedAt > 0 && (time() - $startedAt) < 3) {
-			$this->logger->info('Recruiting: public application dropped (too fast)');
-			return $this->applyThankYou($opening);
-		}
-
 		$name = trim((string)$this->request->getParam('name', ''));
 		$email = trim((string)$this->request->getParam('email', ''));
 		$cover = (string)$this->request->getParam('cover', '');
 		$consent = $this->request->getParam('consent', '');
+		$values = ['name' => $name, 'email' => $email, 'cover' => $cover];
+
+		switch ($this->formToken->check((string)$this->request->getParam('t', ''), $opening->getMailSlug())) {
+			case ApplicationFormToken::INVALID:
+				$this->logger->info('Recruiting: public application dropped (missing or invalid form token)');
+				return $this->applyThankYou($opening);
+			case ApplicationFormToken::TOO_FAST:
+				$this->logger->info('Recruiting: public application dropped (too fast)');
+				return $this->applyThankYou($opening);
+			case ApplicationFormToken::EXPIRED:
+				$response = $this->applyForm($opening, [$this->l10n->t('The form has expired. Please submit it again.')], $values);
+				$response->setStatus(Http::STATUS_BAD_REQUEST);
+				return $response;
+		}
 
 		$errors = [];
 		if ($name === '') {
 			$errors[] = $this->l10n->t('Please enter your name.');
+		} elseif (mb_strlen($name) > self::MAX_NAME_LENGTH) {
+			$errors[] = $this->l10n->t('Your name is too long.');
+		} elseif (self::nameContainsLink($name)) {
+			$errors[] = $this->l10n->t('Please enter your name without links or email addresses.');
 		}
 		if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
 			$errors[] = $this->l10n->t('Please enter a valid email address.');
@@ -275,7 +291,7 @@ class PublicController extends Controller {
 		}
 
 		if ($errors !== []) {
-			$response = $this->applyForm($opening, $errors, ['name' => $name, 'email' => $email, 'cover' => $cover]);
+			$response = $this->applyForm($opening, $errors, $values);
 			$response->setStatus(Http::STATUS_BAD_REQUEST);
 			return $response;
 		}
@@ -284,12 +300,23 @@ class PublicController extends Controller {
 			$this->ingestion->ingestWebApplication($opening, $name, $email, $cover, $cv);
 		} catch (\Throwable $e) {
 			$this->logger->error('Recruiting: public application failed', ['exception' => $e]);
-			$response = $this->applyForm($opening, [$this->l10n->t('Something went wrong. Please try again.')], ['name' => $name, 'email' => $email, 'cover' => $cover]);
+			$response = $this->applyForm($opening, [$this->l10n->t('Something went wrong. Please try again.')], $values);
 			$response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
 			return $response;
 		}
 
 		return $this->applyThankYou($opening);
+	}
+
+	/**
+	 * Whether an applicant name carries a link or address: "://", "www.",
+	 * a host.tld/ path, or "@".
+	 */
+	public static function nameContainsLink(string $name): bool {
+		return str_contains($name, '://')
+			|| str_contains($name, '@')
+			|| stripos($name, 'www.') !== false
+			|| preg_match('/[\p{L}\p{N}-]\.\p{L}{2,}\//u', $name) === 1;
 	}
 
 	/** An opening that currently accepts public applications, or null. */
@@ -313,7 +340,7 @@ class PublicController extends Controller {
 			'opening' => $opening,
 			'errors' => $errors,
 			'values' => $values,
-			'now' => time(),
+			'token' => $this->formToken->issue($opening->getMailSlug()),
 			'instanceName' => $this->defaults->getName(),
 			'done' => false,
 		], TemplateResponse::RENDER_AS_GUEST);
@@ -325,7 +352,6 @@ class PublicController extends Controller {
 			'opening' => $opening,
 			'errors' => [],
 			'values' => [],
-			'now' => time(),
 			'instanceName' => $this->defaults->getName(),
 			'done' => true,
 		], TemplateResponse::RENDER_AS_GUEST);
