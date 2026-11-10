@@ -246,6 +246,44 @@ class CandidateMapper extends QBMapper {
 	}
 
 	/**
+	 * Candidates left behind by a closed opening: still in an active stage
+	 * when the opening was closed before the cutoff, not hired (hired is not
+	 * an active stage), not in the talent pool, not yet anonymized. Rejected
+	 * and withdrawn candidates follow their own clock
+	 * (findRetentionEligible).
+	 *
+	 * @return Candidate[]
+	 */
+	public function findLeftInClosedOpenings(\DateTimeInterface $cutoff): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('c.*')
+			->from($this->getTableName(), 'c')
+			->innerJoin('c', 'recruiting_openings', 'o', $qb->expr()->eq('o.id', 'c.opening_id'))
+			->where($qb->expr()->eq('o.status', $qb->createNamedParameter(Opening::STATUS_CLOSED)))
+			->andWhere($qb->expr()->lt('o.closed_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->andWhere($qb->expr()->in('c.stage', $qb->createNamedParameter(Candidate::ACTIVE_STAGES, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->eq('c.pool_member', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('c.anonymized_at'));
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Triage candidates (no opening) that arrived before the cutoff and
+	 * never moved on. Talent-pool members are kept on their own clock.
+	 *
+	 * @return Candidate[]
+	 */
+	public function findTriageCreatedBefore(\DateTimeInterface $cutoff): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->isNull('opening_id'))
+			->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->andWhere($qb->expr()->eq('pool_member', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Simple name/email search for the unified search provider.
 	 *
 	 * @return Candidate[]

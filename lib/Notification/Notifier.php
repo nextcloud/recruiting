@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace OCA\Recruiting\Notification;
 
 use OCA\Recruiting\AppInfo\Application;
+use OCA\Recruiting\Service\CandidateNameResolver;
 use OCA\Recruiting\Service\NotificationService;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
@@ -22,6 +23,7 @@ class Notifier implements INotifier {
 		private IFactory $l10nFactory,
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
+		private CandidateNameResolver $names,
 	) {
 	}
 
@@ -43,7 +45,6 @@ class Notifier implements INotifier {
 		$l = $this->l10nFactory->get(Application::APP_ID, $languageCode);
 		$parameters = $notification->getSubjectParameters();
 
-		$candidateName = (string)($parameters['candidateName'] ?? '');
 		$candidateId = (string)($parameters['candidateId'] ?? '0');
 		$actorUid = (string)($parameters['actor'] ?? '');
 		$interviewTitle = (string)($parameters['interviewTitle'] ?? '');
@@ -53,7 +54,9 @@ class Notifier implements INotifier {
 			'candidate' => [
 				'type' => 'highlight',
 				'id' => $candidateId,
-				'name' => $candidateName !== '' ? $candidateName : $l->t('a candidate'),
+				// Looked up live, never taken from the stored parameters: older
+				// notifications still carry the name the candidate had then.
+				'name' => $this->names->displayName((int)$candidateId, $l),
 			],
 		];
 		if ($actorUid !== '') {

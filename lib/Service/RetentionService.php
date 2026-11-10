@@ -19,12 +19,28 @@ use OCP\Comments\ICommentsManager;
 use Psr\Log\LoggerInterface;
 
 /**
- * GDPR retention automation (spec §4.8): candidates rejected or withdrawn
- * longer ago than the configured retention period are anonymized — the
- * person disappears, the statistics stay.
+ * GDPR retention automation (spec §4.8). Four groups, each on its own clock:
+ *
+ * - rejected or withdrawn longer ago than the retention period → anonymized
+ * - left in an opening that was closed longer ago than the retention period,
+ *   never hired → anonymized
+ * - talent-pool consent expired → anonymized
+ * - in the triage inbox longer than the triage period → deleted, because
+ *   triage holds spam and unassigned mail, and anonymized rows there would
+ *   only clutter the inbox
+ *
+ * Anonymizing means the person disappears and the statistics stay.
  */
 class RetentionService {
 	public const ANONYMIZED_NAME = 'Anonymized candidate';
+
+	public const GROUP_ENDED = 'ended';
+	public const GROUP_CLOSED_OPENING = 'closed_opening';
+	public const GROUP_POOL_EXPIRED = 'pool_expired';
+	public const GROUP_TRIAGE = 'triage';
+
+	public const ACTION_ANONYMIZE = 'anonymize';
+	public const ACTION_DELETE = 'delete';
 
 	/** Timeline event types whose payload can identify the candidate */
 	public const PII_EVENT_TYPES = [
@@ -41,6 +57,9 @@ class RetentionService {
 		private OfferMapper $offerMapper,
 		private DocumentService $documents,
 		private NotificationService $notifications,
+		private InterviewService $interviews,
+		private ActivityPurgeService $activityPurge,
+		private CandidateService $candidates,
 		private ConfigService $config,
 		private ICommentsManager $commentsManager,
 		private ITimeFactory $timeFactory,
@@ -49,16 +68,29 @@ class RetentionService {
 	}
 
 	/**
-	 * @return Candidate[] candidates whose retention period is over
+	 * @return Candidate[] rejected or withdrawn candidates whose retention
+	 *                     period is over
 	 */
 	public function findEligible(): array {
-		$days = $this->config->getRetentionDays();
-		if ($days <= 0) {
-			return [];
-		}
-		$cutoff = \DateTimeImmutable::createFromInterface($this->timeFactory->getDateTime())
-			->modify('-' . $days . ' days');
-		return $this->candidateMapper->findRetentionEligible($cutoff);
+		$cutoff = $this->daysAgo($this->config->getRetentionDays());
+		return $cutoff === null ? [] : $this->candidateMapper->findRetentionEligible($cutoff);
+	}
+
+	/**
+	 * @return Candidate[] candidates left in openings closed longer ago than
+	 *                     the retention period
+	 */
+	public function findLeftInClosedOpenings(): array {
+		$cutoff = $this->daysAgo($this->config->getRetentionDays());
+		return $cutoff === null ? [] : $this->candidateMapper->findLeftInClosedOpenings($cutoff);
+	}
+
+	/**
+	 * @return Candidate[] triage candidates older than the triage period
+	 */
+	public function findExpiredTriage(): array {
+		$cutoff = $this->daysAgo($this->config->getTriageRetentionDays());
+		return $cutoff === null ? [] : $this->candidateMapper->findTriageCreatedBefore($cutoff);
 	}
 
 	/**
@@ -74,22 +106,104 @@ class RetentionService {
 	}
 
 	/**
-	 * @return array{anonymized: int, names: string[]}
+	 * Who is due, grouped by rule. A candidate matching several rules is
+	 * listed once, in the first group (triage first: a rejected triage
+	 * candidate is deleted rather than anonymized).
+	 *
+	 * @return array<string, array{label: string, enabled: bool, action: string, reason: string, candidates: Candidate[]}>
+	 */
+	public function plan(): array {
+		$retentionDays = $this->config->getRetentionDays();
+		$triageDays = $this->config->getTriageRetentionDays();
+		$groups = [
+			self::GROUP_TRIAGE => [
+				'label' => 'Triage inbox',
+				'enabled' => $triageDays > 0,
+				'action' => self::ACTION_DELETE,
+				'reason' => sprintf('in the triage inbox for more than %d days', $triageDays),
+				'candidates' => $this->findExpiredTriage(),
+			],
+			self::GROUP_ENDED => [
+				'label' => 'Rejected or withdrawn',
+				'enabled' => $retentionDays > 0,
+				'action' => self::ACTION_ANONYMIZE,
+				'reason' => sprintf('rejected or withdrawn more than %d days ago', $retentionDays),
+				'candidates' => $this->findEligible(),
+			],
+			self::GROUP_CLOSED_OPENING => [
+				'label' => 'Left in closed openings',
+				'enabled' => $retentionDays > 0,
+				'action' => self::ACTION_ANONYMIZE,
+				'reason' => sprintf('opening closed more than %d days ago, not hired', $retentionDays),
+				'candidates' => $this->findLeftInClosedOpenings(),
+			],
+			self::GROUP_POOL_EXPIRED => [
+				'label' => 'Expired talent-pool consent',
+				'enabled' => true,
+				'action' => self::ACTION_ANONYMIZE,
+				'reason' => sprintf('talent-pool consent older than %d months', $this->config->getPoolRetentionMonths()),
+				'candidates' => $this->findExpiredPoolMembers(),
+			],
+		];
+
+		$seen = [];
+		foreach ($groups as $key => $group) {
+			$unique = [];
+			foreach ($group['candidates'] as $candidate) {
+				if (!isset($seen[$candidate->getId()])) {
+					$seen[$candidate->getId()] = true;
+					$unique[] = $candidate;
+				}
+			}
+			$groups[$key]['candidates'] = $unique;
+		}
+		return $groups;
+	}
+
+	/**
+	 * @return array{anonymized: int, deleted: int, groups: array<string, array{label: string, enabled: bool, action: string, reason: string, names: string[]}>}
 	 */
 	public function run(bool $dryRun = false): array {
-		$eligible = array_merge($this->findEligible(), $this->findExpiredPoolMembers());
-		$names = array_map(static fn (Candidate $c) => $c->getDisplayName(), $eligible);
-		if ($dryRun) {
-			return ['anonymized' => count($eligible), 'names' => $names];
-		}
-		foreach ($eligible as $candidate) {
-			try {
-				$this->anonymize($candidate);
-			} catch (\Exception $e) {
-				$this->logger->error('Anonymizing candidate ' . $candidate->getId() . ' failed: ' . $e->getMessage(), ['exception' => $e]);
+		$anonymized = 0;
+		$deleted = 0;
+		$report = [];
+		foreach ($this->plan() as $key => $group) {
+			$report[$key] = [
+				'label' => $group['label'],
+				'enabled' => $group['enabled'],
+				'action' => $group['action'],
+				'reason' => $group['reason'],
+				'names' => array_map(static fn (Candidate $c) => $c->getDisplayName(), $group['candidates']),
+			];
+			foreach ($group['candidates'] as $candidate) {
+				if ($group['action'] === self::ACTION_DELETE) {
+					$deleted++;
+				} else {
+					$anonymized++;
+				}
+				if ($dryRun) {
+					continue;
+				}
+				try {
+					if ($group['action'] === self::ACTION_DELETE) {
+						$this->candidates->purge($candidate);
+					} else {
+						$this->anonymize($candidate);
+					}
+				} catch (\Exception $e) {
+					$this->logger->error('Retention (' . $key . ') failed for candidate ' . $candidate->getId() . ': ' . $e->getMessage(), ['exception' => $e]);
+				}
 			}
 		}
-		return ['anonymized' => count($eligible), 'names' => $names];
+		return ['anonymized' => $anonymized, 'deleted' => $deleted, 'groups' => $report];
+	}
+
+	private function daysAgo(int $days): ?\DateTimeImmutable {
+		if ($days <= 0) {
+			return null;
+		}
+		return \DateTimeImmutable::createFromInterface($this->timeFactory->getDateTime())
+			->modify('-' . $days . ' days');
 	}
 
 	/**
@@ -107,6 +221,10 @@ class RetentionService {
 			// comments are best-effort
 		}
 		$this->notifications->purgeForCandidate($id);
+		$this->activityPurge->purgeForCandidate($id);
+		// Calendar events lose the name, upcoming ones are cancelled, and the
+		// public interview links stop working
+		$this->interviews->scrubForCandidate($candidate, revokeLinks: true);
 
 		// Mail bodies, subjects and document names ("Jane_Doe_CV.pdf" identifies
 		// the very person we are anonymizing) are stripped from the timeline;

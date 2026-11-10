@@ -365,10 +365,14 @@ class PublicController extends Controller {
 		return $response;
 	}
 
+	/**
+	 * Expired links (see InterviewService::findByPublicToken) are treated
+	 * exactly like unknown ones.
+	 */
 	private function lookup(string $token): ?\OCA\Recruiting\Db\Interview {
 		if (strlen($token) < 32 || !ctype_alnum($token)) {
 			return null;
 		}
-		return $this->interviewMapper->findByToken($token);
+		return $this->interviews->findByPublicToken($token);
 	}
 }

@@ -8,7 +8,6 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Command;
 
-use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\RetentionService;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,7 +17,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 class RetentionRun extends Command {
 	public function __construct(
 		private RetentionService $retention,
-		private ConfigService $config,
 	) {
 		parent::__construct();
 	}
@@ -26,24 +24,35 @@ class RetentionRun extends Command {
 	#[\Override]
 	protected function configure(): void {
 		$this->setName('recruiting:retention:run')
-			->setDescription('Anonymize candidates whose retention period is over')
-			->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only report who would be anonymized');
+			->setDescription('Anonymize or delete candidates whose retention period is over')
+			->addOption('dry-run', null, InputOption::VALUE_NONE, 'Only report who would be anonymized or deleted');
 	}
 
 	#[\Override]
 	protected function execute(InputInterface $input, OutputInterface $output): int {
-		$days = $this->config->getRetentionDays();
-		if ($days <= 0) {
-			$output->writeln('<comment>Retention automation is disabled (retention period is 0 days).</comment>');
-			return self::SUCCESS;
-		}
 		$dryRun = (bool)$input->getOption('dry-run');
 		$result = $this->retention->run($dryRun);
-		$verb = $dryRun ? 'Would anonymize' : 'Anonymized';
-		$output->writeln(sprintf('%s %d candidate(s) (retention period: %d days).', $verb, $result['anonymized'], $days));
-		foreach ($result['names'] as $name) {
-			$output->writeln('  - ' . $name);
+
+		foreach ($result['groups'] as $group) {
+			$delete = $group['action'] === RetentionService::ACTION_DELETE;
+			if (!$group['enabled']) {
+				$output->writeln(sprintf('<comment>%s: disabled (period is 0 days).</comment>', $group['label']));
+				continue;
+			}
+			$verb = $dryRun
+				? ($delete ? 'Would delete' : 'Would anonymize')
+				: ($delete ? 'Deleted' : 'Anonymized');
+			$output->writeln(sprintf('%s: %s %d candidate(s), %s.', $group['label'], strtolower($verb), count($group['names']), $group['reason']));
+			foreach ($group['names'] as $name) {
+				$output->writeln('  - ' . $name);
+			}
 		}
+		$output->writeln(sprintf(
+			'%s: %d anonymized, %d deleted.',
+			$dryRun ? 'Total (dry run)' : 'Total',
+			$result['anonymized'],
+			$result['deleted'],
+		));
 		return self::SUCCESS;
 	}
 }

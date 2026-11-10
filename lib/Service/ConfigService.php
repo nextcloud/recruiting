@@ -66,8 +66,9 @@ class ConfigService {
 	}
 
 	/**
-	 * Days after a rejection/withdrawal until candidate data is anonymized
-	 * automatically. 0 disables the automation (spec §4.8).
+	 * Days after a rejection/withdrawal, or after the opening was closed,
+	 * until candidate data is anonymized automatically. 0 disables the
+	 * automation (spec §4.8).
 	 */
 	public function getRetentionDays(): int {
 		return $this->appConfig->getValueInt(Application::APP_ID, 'retention_days', 180);
@@ -75,6 +76,18 @@ class ConfigService {
 
 	public function setRetentionDays(int $days): void {
 		$this->appConfig->setValueInt(Application::APP_ID, 'retention_days', max(0, min(3650, $days)));
+	}
+
+	/**
+	 * Days a candidate may sit in the triage inbox (no opening) before being
+	 * deleted automatically. 0 disables the automation.
+	 */
+	public function getTriageRetentionDays(): int {
+		return $this->appConfig->getValueInt(Application::APP_ID, 'triage_retention_days', 90);
+	}
+
+	public function setTriageRetentionDays(int $days): void {
+		$this->appConfig->setValueInt(Application::APP_ID, 'triage_retention_days', max(0, min(3650, $days)));
 	}
 
 	/**

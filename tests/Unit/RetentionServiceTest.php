@@ -14,8 +14,11 @@ use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Db\TimelineEventMapper;
 use OCA\Recruiting\Db\VoteMapper;
+use OCA\Recruiting\Service\ActivityPurgeService;
+use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\RetentionService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -31,6 +34,9 @@ class RetentionServiceTest extends TestCase {
 	private ConfigService $config;
 	private OfferMapper $offerMapper;
 	private ITimeFactory $timeFactory;
+	private InterviewService $interviews;
+	private ActivityPurgeService $activityPurge;
+	private CandidateService $candidates;
 	private RetentionService $service;
 
 	protected function setUp(): void {
@@ -44,13 +50,23 @@ class RetentionServiceTest extends TestCase {
 
 		$this->offerMapper = $this->createMock(OfferMapper::class);
 		$this->offerMapper->method('findForCandidate')->willReturn([]);
-		$this->service = new RetentionService(
+		$this->interviews = $this->createMock(InterviewService::class);
+		$this->activityPurge = $this->createMock(ActivityPurgeService::class);
+		$this->candidates = $this->createMock(CandidateService::class);
+		$this->service = $this->makeService($this->offerMapper);
+	}
+
+	private function makeService(OfferMapper $offerMapper): RetentionService {
+		return new RetentionService(
 			$this->candidateMapper,
 			$this->voteMapper,
 			$this->eventMapper,
-			$this->offerMapper,
+			$offerMapper,
 			$this->documents,
 			$this->createMock(NotificationService::class),
+			$this->interviews,
+			$this->activityPurge,
+			$this->candidates,
 			$this->config,
 			$this->createMock(ICommentsManager::class),
 			$this->timeFactory,
@@ -87,7 +103,7 @@ class RetentionServiceTest extends TestCase {
 
 		$result = $this->service->run(dryRun: true);
 		$this->assertSame(1, $result['anonymized']);
-		$this->assertSame(['Jane Doe'], $result['names']);
+		$this->assertSame(['Jane Doe'], $result['groups'][RetentionService::GROUP_ENDED]['names']);
 	}
 
 	public function testAnonymizeScrubsEverythingIdentifying(): void {
@@ -162,22 +178,137 @@ class RetentionServiceTest extends TestCase {
 		$offerMapper->expects($this->once())->method('update');
 		$this->eventMapper->method('findForCandidate')->willReturn([]);
 
-		$service = new RetentionService(
-			$this->candidateMapper,
-			$this->voteMapper,
-			$this->eventMapper,
-			$offerMapper,
-			$this->documents,
-			$this->createMock(NotificationService::class),
-			$this->config,
-			$this->createMock(ICommentsManager::class),
-			$this->timeFactory,
-			new NullLogger(),
-		);
-		$service->anonymize($candidate);
+		$this->makeService($offerMapper)->anonymize($candidate);
 
 		$this->assertNull($offer->getNotes());
 		$this->assertSame('Designer', $offer->getJobTitle());
+	}
+
+	public function testAnonymizePurgesActivityAndScrubsInterviews(): void {
+		$candidate = $this->candidate(5);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+
+		$this->activityPurge->expects($this->once())->method('purgeForCandidate')->with(5);
+		$this->interviews->expects($this->once())->method('scrubForCandidate')->with($candidate, true);
+
+		$this->service->anonymize($candidate);
+	}
+
+	public function testClosedOpeningRuleUsesTheRetentionPeriod(): void {
+		$this->config->method('getRetentionDays')->willReturn(30);
+		$this->candidateMapper->expects($this->once())
+			->method('findLeftInClosedOpenings')
+			->with($this->callback(
+				static fn (\DateTimeInterface $cutoff) => $cutoff->format('Y-m-d') === '2026-07-17',
+			))
+			->willReturn([]);
+		$this->service->findLeftInClosedOpenings();
+	}
+
+	public function testClosedOpeningRuleIsOffWithRetention(): void {
+		$this->config->method('getRetentionDays')->willReturn(0);
+		$this->candidateMapper->expects($this->never())->method('findLeftInClosedOpenings');
+		$this->assertSame([], $this->service->findLeftInClosedOpenings());
+	}
+
+	public function testTriageRuleUsesItsOwnPeriod(): void {
+		$this->config->method('getRetentionDays')->willReturn(0);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->candidateMapper->expects($this->once())
+			->method('findTriageCreatedBefore')
+			->with($this->callback(
+				static fn (\DateTimeInterface $cutoff) => $cutoff->format('Y-m-d') === '2026-05-18',
+			))
+			->willReturn([]);
+		$this->service->findExpiredTriage();
+	}
+
+	public function testTriageRuleCanBeDisabled(): void {
+		$this->config->method('getTriageRetentionDays')->willReturn(0);
+		$this->candidateMapper->expects($this->never())->method('findTriageCreatedBefore');
+		$this->assertSame([], $this->service->findExpiredTriage());
+	}
+
+	public function testDryRunListsEveryGroupWithCountAndReason(): void {
+		$this->config->method('getRetentionDays')->willReturn(180);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->candidateMapper->method('findTriageCreatedBefore')->willReturn([$this->named(1, 'Mail Delivery System')]);
+		$this->candidateMapper->method('findRetentionEligible')->willReturn([$this->named(2, 'Rita Rejected')]);
+		$this->candidateMapper->method('findLeftInClosedOpenings')->willReturn([$this->named(3, 'Carl Closed'), $this->named(4, 'Nina New')]);
+		$this->candidateMapper->method('findExpiredPoolMembers')->willReturn([]);
+
+		$this->candidates->expects($this->never())->method('purge');
+		$this->candidateMapper->expects($this->never())->method('update');
+
+		$result = $this->service->run(dryRun: true);
+
+		$this->assertSame(3, $result['anonymized']);
+		$this->assertSame(1, $result['deleted']);
+		$groups = $result['groups'];
+		$this->assertSame(
+			[RetentionService::GROUP_TRIAGE, RetentionService::GROUP_ENDED, RetentionService::GROUP_CLOSED_OPENING, RetentionService::GROUP_POOL_EXPIRED],
+			array_keys($groups),
+		);
+		$this->assertSame(RetentionService::ACTION_DELETE, $groups[RetentionService::GROUP_TRIAGE]['action']);
+		$this->assertSame(['Mail Delivery System'], $groups[RetentionService::GROUP_TRIAGE]['names']);
+		$this->assertStringContainsString('90 days', $groups[RetentionService::GROUP_TRIAGE]['reason']);
+		$this->assertSame(RetentionService::ACTION_ANONYMIZE, $groups[RetentionService::GROUP_CLOSED_OPENING]['action']);
+		$this->assertSame(['Carl Closed', 'Nina New'], $groups[RetentionService::GROUP_CLOSED_OPENING]['names']);
+		$this->assertStringContainsString('opening closed more than 180 days ago', $groups[RetentionService::GROUP_CLOSED_OPENING]['reason']);
+		$this->assertSame([], $groups[RetentionService::GROUP_POOL_EXPIRED]['names']);
+		$this->assertTrue($groups[RetentionService::GROUP_POOL_EXPIRED]['enabled']);
+	}
+
+	public function testDisabledGroupsAreMarked(): void {
+		$this->config->method('getRetentionDays')->willReturn(0);
+		$this->config->method('getTriageRetentionDays')->willReturn(0);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->candidateMapper->method('findExpiredPoolMembers')->willReturn([]);
+
+		$groups = $this->service->run(dryRun: true)['groups'];
+		$this->assertFalse($groups[RetentionService::GROUP_TRIAGE]['enabled']);
+		$this->assertFalse($groups[RetentionService::GROUP_ENDED]['enabled']);
+		$this->assertFalse($groups[RetentionService::GROUP_CLOSED_OPENING]['enabled']);
+	}
+
+	/**
+	 * Triage candidates are deleted through the regular deletion path; the
+	 * other groups are anonymized. A rejected triage candidate is in both
+	 * lists and is only deleted.
+	 */
+	public function testRunDeletesTriageAndAnonymizesTheRest(): void {
+		$this->config->method('getRetentionDays')->willReturn(180);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$spam = $this->named(1, 'Spam');
+		$closed = $this->named(3, 'Carl Closed');
+		$this->candidateMapper->method('findTriageCreatedBefore')->willReturn([$spam]);
+		$this->candidateMapper->method('findRetentionEligible')->willReturn([$spam]);
+		$this->candidateMapper->method('findLeftInClosedOpenings')->willReturn([$closed]);
+		$this->candidateMapper->method('findExpiredPoolMembers')->willReturn([]);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+
+		$this->candidates->expects($this->once())->method('purge')->with($spam);
+		$anonymized = [];
+		$this->candidateMapper->method('update')->willReturnCallback(function (Candidate $c) use (&$anonymized) {
+			$anonymized[] = $c->getId();
+			return $c;
+		});
+
+		$result = $this->service->run();
+		$this->assertSame(1, $result['deleted']);
+		$this->assertSame(1, $result['anonymized']);
+		$this->assertSame([3], $anonymized);
+		$this->assertSame([], $result['groups'][RetentionService::GROUP_ENDED]['names']);
+		$this->assertSame(RetentionService::ANONYMIZED_NAME, $closed->getDisplayName());
+	}
+
+	private function named(int $id, string $name): Candidate {
+		$candidate = new Candidate();
+		$candidate->setId($id);
+		$candidate->setDisplayName($name);
+		return $candidate;
 	}
 
 	private function candidate(int $id): Candidate {

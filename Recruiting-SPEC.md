@@ -670,6 +670,52 @@ A review pass acting on an external audit of the app:
   `ConflictException` → HTTP 409 `{message, stage, displayName}`, nothing
   changes.
 
+### 10.12 Privacy: names, retention, links and uploads (2026-11-10)
+
+- **Names are resolved, never stored (§4.8, §10.4).** Activity entries and
+  notifications carry only the candidate id; `Activity\Provider` and
+  `Notification\Notifier` look the name up per request
+  (`CandidateNameResolver`) and show "Anonymized candidate" or "Deleted
+  candidate". Stored names from older versions are ignored when rendering and
+  stripped once by the `StripActivityCandidateNames` repair step.
+- **Activity purge without an API.** OCP cannot delete activities, so
+  `ActivityPurgeService` deletes this app's rows from the activity app's
+  `activity` and `activity_mq` tables (app/amq_appid, object_type
+  `candidate`, object_id) when those tables exist — best-effort, never
+  aborting the delete or anonymization.
+- **Calendar scrub.** Backend writes through `CalDavBackend` bypass the
+  scheduling plugin, so neither an update nor a delete reaches the copies
+  that iTIP delivered to the interviewers at creation. The app therefore
+  finds those copies by event UID (`<UID>.ics` is the object name) and
+  rewrites or deletes each one itself. On delete/anonymize: upcoming
+  interviews are cancelled (copies deleted past the calendar trash bin),
+  past events are rewritten to "Interview: <opening>" without name, Talk link
+  or URL (`IcsScrubber`), and Talk rooms are deleted. Normal cancellation now
+  removes the attendee copies too. No iTIP mail is sent for any of this, and
+  invitation mails already in mailboxes cannot be recalled.
+- **Retention groups.** Besides rejected/withdrawn and expired pool consent:
+  candidates in an active stage of an opening closed longer ago than
+  `retention_days` are anonymized, and triage candidates older than
+  `triage_retention_days` (default 90, 0 = off) are deleted through the
+  regular hard-delete path (`CandidateService::purge`, no user permission
+  check), because anonymized spam would clutter the inbox. A candidate in
+  several groups is handled once (triage first). The dry run lists every
+  group; there is no admin-UI preview yet.
+- **Public interview links expire** (`InterviewService::findByPublicToken`):
+  not found for cancelled interviews, seven days after `end_at`, and for
+  rejected, withdrawn or anonymized candidates. `public_token` is NOT NULL
+  and unique, so anonymization replaces it with a fresh random value that is
+  never sent anywhere; no migration needed.
+- **Virus scanning.** files_antivirus registers its storage wrapper on
+  `BeforeFileSystemSetupEvent`, which the server only dispatches when a
+  user's filesystem is set up; app-data paths only set up the root. The
+  public form (anonymous) and the mail fetch job (cron, no user) therefore
+  write unscanned, and its background scanner skips `appdata_*`. The app
+  scans explicitly via files_antivirus' `ScannerFactory` before storing
+  (`VirusScanService`, soft dependency); infected → rejected with a
+  translated validation error, scanner errors → stored and logged. Office
+  formats are served as `attachment`, PDF/images/text `inline`.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

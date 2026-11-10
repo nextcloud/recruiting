@@ -68,6 +68,11 @@ your own server.
 		<job>OCA\Recruiting\BackgroundJob\RetentionJob</job>
 		<job>OCA\Recruiting\BackgroundJob\DigestJob</job>
 	</background-jobs>
+	<repair-steps>
+		<post-migration>
+			<step>OCA\Recruiting\Migration\StripActivityCandidateNames</step>
+		</post-migration>
+	</repair-steps>
 	<commands>
 		<command>OCA\Recruiting\Command\FetchMail</command>
 		<command>OCA\Recruiting\Command\RetentionRun</command>

@@ -62,6 +62,9 @@ class SettingsController extends Controller {
 			if (array_key_exists('retentionDays', $params)) {
 				$this->config->setRetentionDays((int)$params['retentionDays']);
 			}
+			if (array_key_exists('triageRetentionDays', $params)) {
+				$this->config->setTriageRetentionDays((int)$params['triageRetentionDays']);
+			}
 			if (array_key_exists('poolRetentionMonths', $params)) {
 				$this->config->setPoolRetentionMonths((int)$params['poolRetentionMonths']);
 			}
@@ -124,6 +127,7 @@ class SettingsController extends Controller {
 			'senderName' => $this->config->getSenderName(),
 			'senderEmail' => $this->config->getSenderEmail(),
 			'retentionDays' => $this->config->getRetentionDays(),
+			'triageRetentionDays' => $this->config->getTriageRetentionDays(),
 			'poolRetentionMonths' => $this->config->getPoolRetentionMonths(),
 			'autoAckDailyCap' => $this->config->getAutoAckDailyCap(),
 			'imapEnabled' => $this->config->isImapEnabled(),

@@ -43,8 +43,8 @@ class NotificationService {
 	 * @param array<string, string> $parameters
 	 */
 	public function notify(array $recipients, string $subject, Candidate $candidate, ?string $actorUid, array $parameters = []): void {
+		// The name is resolved by Notification\Notifier when shown
 		$parameters['candidateId'] = (string)$candidate->getId();
-		$parameters['candidateName'] = $candidate->getDisplayName();
 		$parameters['openingId'] = (string)($candidate->getOpeningId() ?? 0);
 		if ($actorUid !== null) {
 			$parameters['actor'] = $actorUid;

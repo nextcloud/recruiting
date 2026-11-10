@@ -67,3 +67,11 @@ spl_autoload_register(static function (string $class) use ($appRoot, $serverPubl
 		}
 	}
 });
+
+// Server-internal classes the app uses as documented escape hatches
+if (!class_exists(\OCA\DAV\CalDAV\CalDavBackend::class)) {
+	require_once $appRoot . '/tests/stubs/CalDavBackend.php';
+}
+if (!class_exists(\Doctrine\DBAL\ParameterType::class)) {
+	require_once $appRoot . '/tests/stubs/DoctrineDbal.php';
+}

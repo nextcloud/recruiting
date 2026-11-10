@@ -14,24 +14,49 @@ use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IAppData;
+use OCP\Files\InvalidContentException;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IL10N;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 
 /**
  * Candidate documents live in app data — never in user Files — and are
  * only served through the app with permission checks (spec §3).
  */
 class DocumentService {
+	/**
+	 * Types the browser may render in a tab. Everything else (Word, ODT) is
+	 * served as a download, so office documents from unknown senders are
+	 * never opened by the browser itself.
+	 */
+	public const INLINE_MIMES = [
+		'application/pdf',
+		'image/png',
+		'image/jpeg',
+		'image/webp',
+		'text/plain',
+		'text/markdown',
+	];
+
 	public function __construct(
 		private DocumentMapper $documentMapper,
 		private IAppData $appData,
+		private VirusScanService $virusScan,
 		private ISecureRandom $random,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * @return 'inline'|'attachment'
+	 */
+	public static function dispositionFor(string $mime): string {
+		return in_array($mime, self::INLINE_MIMES, true) ? 'inline' : 'attachment';
 	}
 
 	/**
@@ -67,9 +92,22 @@ class DocumentService {
 			throw new ValidationException($this->l10n->t('This file type is not allowed'));
 		}
 
+		$threat = $this->virusScan->findThreat($content);
+		if ($threat !== null) {
+			$this->logger->warning('Rejected an infected document for candidate ' . $candidate->getId() . ': ' . $threat);
+			throw new ValidationException($this->l10n->t('The file "%s" was rejected by the virus scanner', [$name]));
+		}
+
 		$fileKey = $this->random->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
 		$folder = $this->folderFor($candidate->getId(), create: true);
-		$folder->newFile($fileKey, $content);
+		try {
+			$folder->newFile($fileKey, $content);
+		} catch (InvalidContentException $e) {
+			// The files_antivirus storage wrapper, when it is active for this
+			// request, blocks the write itself
+			$this->logger->warning('The storage refused a document for candidate ' . $candidate->getId() . ': ' . $e->getMessage());
+			throw new ValidationException($this->l10n->t('The file "%s" was rejected by the virus scanner', [$name]));
+		}
 
 		$document = new Document();
 		$document->setCandidateId($candidate->getId());

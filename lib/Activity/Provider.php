@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace OCA\Recruiting\Activity;
 
 use OCA\Recruiting\AppInfo\Application;
+use OCA\Recruiting\Service\CandidateNameResolver;
 use OCP\Activity\Exceptions\UnknownActivityException;
 use OCP\Activity\IEvent;
 use OCP\Activity\IProvider;
@@ -21,6 +22,7 @@ class Provider implements IProvider {
 		private IFactory $l10nFactory,
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
+		private CandidateNameResolver $names,
 	) {
 	}
 
@@ -31,7 +33,12 @@ class Provider implements IProvider {
 		}
 		$l = $this->l10nFactory->get(Application::APP_ID, $language);
 		$params = $event->getSubjectParameters();
-		$candidate = (string)($params['candidate'] ?? '');
+		// The name is always looked up live; a name stored by older versions
+		// in the parameters may belong to a since anonymized candidate.
+		$candidateId = $event->getObjectType() === 'candidate'
+			? (int)$event->getObjectId()
+			: (int)($params['candidateId'] ?? 0);
+		$candidate = $this->names->displayName($candidateId, $l);
 		$actor = $this->displayName($event->getAuthor());
 		$title = (string)($params['title'] ?? '');
 

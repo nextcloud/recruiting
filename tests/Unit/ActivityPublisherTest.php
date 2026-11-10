@@ -128,6 +128,19 @@ class ActivityPublisherTest extends TestCase {
 			'subject' => 'Your offer for the Senior Engineer position',
 		]);
 		$this->assertArrayNotHasKey('subject', $this->lastParameters);
-		$this->assertSame('Ada Lovelace', $this->lastParameters['candidate']);
+		$this->assertSame(7, $this->lastParameters['candidateId']);
+	}
+
+	/**
+	 * Stored parameters outlive deletion and anonymization, so the name is
+	 * never part of them; Activity\Provider looks it up when rendering.
+	 */
+	public function testCandidateNameIsNeverStored(): void {
+		$this->permissions->method('canViewCandidate')->willReturn(true);
+		$this->permissions->method('canSeeOffers')->willReturn(true);
+
+		$this->publisher->publish($this->candidate(), 'stage_changed', 'boss', ['toStage' => 'screening']);
+		$this->assertArrayNotHasKey('candidate', $this->lastParameters);
+		$this->assertNotContains('Ada Lovelace', $this->lastParameters);
 	}
 }

@@ -35,6 +35,16 @@ All notable changes to this app are documented here. The format follows
   (`DELETE /api/openings/{id}`); its hiring team and Talk room go with it.
 - The board polls `GET /api/openings/{id}/revision` every 30 s while visible
   and reloads in place when someone else changed the opening.
+- Retention covers two more groups: candidates still in an opening that was
+  closed longer ago than the retention period (and never hired) are
+  anonymized, and triage candidates older than the new *Triage inbox
+  retention* setting (default 90 days, 0 = off) are deleted.
+  `recruiting:retention:run --dry-run` lists every group separately with
+  its count and reason.
+- Uploaded documents are scanned with files_antivirus before they are
+  stored, when that app is enabled. Infected files are rejected with an
+  error (mail attachments are skipped); if the scanner cannot be reached,
+  the file is stored and a warning is logged.
 
 ### Changed
 
@@ -50,6 +60,14 @@ All notable changes to this app are documented here. The format follows
 - Stage moves from the board, the bulk bar and the sidebar send the stage
   the user saw; if someone else moved the candidate in the meantime the
   server answers 409, nothing changes, and the user is told who went where.
+- Word and ODT documents are downloaded instead of opened in the browser;
+  PDFs, images and text still open in a tab.
+
+### Fixed
+
+- Cancelling an interview now also removes the event from the interviewers'
+  calendars. The CalDAV backend writes the app uses do not send iTIP
+  messages, so their copies used to stay.
 
 ### Security
 
@@ -63,6 +81,21 @@ All notable changes to this app are documented here. The format follows
   carry spam text.
 - No automatic confirmation to senders whose `Authentication-Results` show a
   forged address (DMARC fail, or SPF fail without DKIM pass).
+- Candidate names no longer outlive deletion and anonymization in other
+  apps: activity entries and notifications store only the candidate id and
+  look the name up when shown ("Anonymized candidate" / "Deleted
+  candidate"); deleting or anonymizing a candidate removes their activity
+  entries; a repair step strips the names older versions stored in the
+  activity tables.
+- Deleting or anonymizing a candidate scrubs the interview calendar events:
+  upcoming interviews are cancelled, past events are rewritten to
+  "Interview: <opening>" without the name or Talk link, in the organizer's
+  calendar and in every interviewer's copy; interview Talk rooms are
+  deleted.
+- Public interview links expire: they stop working for cancelled
+  interviews, seven days after the interview ended, and once the candidate
+  is rejected, withdrawn or anonymized. Anonymization also replaces every
+  interview link token.
 
 ## [0.7.1] - 2026-08-17
 

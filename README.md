@@ -35,8 +35,10 @@ a third party.
   every offer needs a designated approver (never yourself), and expiring
   offers warn you three days ahead.
 * 🔒 **GDPR on autopilot** — documents live in app storage (never in Files),
-  rejected candidates are anonymized automatically after the retention
-  period, exports for data-access requests are one click, and the talent pool
+  rejected candidates and candidates left in closed openings are anonymized
+  automatically after the retention period, unassigned triage mail is
+  deleted after its own period, uploads are virus-scanned when
+  files_antivirus is enabled, exports for data-access requests are one click, and the talent pool
   is strictly consent-based.
 * 🪄 **AI where it removes busywork** (optional, via Nextcloud Assistant) —
   summaries, screening hints, mail drafts, interview questions. Always
@@ -169,9 +171,11 @@ Click any card and the sidebar opens with five tabs:
 * **Profile** — contact details (editable by managers), source, an optional
   AI summary (labeled, regenerable), duplicate warning with a link to the
   earlier application, and — in triage — the "Assign to opening" control.
-  At the bottom, **Documents**: CVs and attachments, previewable in the
-  browser. Stored in app storage: never visible in Files, never accessible to
-  people without access to this candidate.
+  At the bottom, **Documents**: CVs and attachments. PDFs, images and text
+  open in the browser; Word and ODT files are downloaded. Stored in app
+  storage: never visible in Files, never accessible to people without access
+  to this candidate. With files_antivirus enabled, every upload is scanned
+  first and infected files are rejected.
 
   ![Candidate profile tab](screenshots/03-candidate-profile.png)
   ![Candidate documents](screenshots/04-candidate-documents.png)
@@ -186,7 +190,9 @@ Click any card and the sidebar opens with five tabs:
 
 * **Interviews** — every round with its status. *Awaiting candidate* means the
   public link is out; copy it from here if you want to resend it yourself.
-  Cancelling notifies all interviewers and cancels the calendar event.
+  The link stops working once the interview is cancelled, seven days after
+  it ended, or when the candidate is rejected, withdraws or is anonymized.
+  Cancelling notifies all interviewers and removes the calendar event.
   Optional AI interview-question suggestions.
 
   ![Interviews tab](screenshots/06-interviews-tab.png)
@@ -207,8 +213,13 @@ Click any card and the sidebar opens with five tabs:
 menu carries **Book interview**, **Move to …**, and for
 recruiters **Export data (GDPR)** (ZIP with everything about this person —
 without reviewer identities) and **Delete permanently (GDPR)** (removes the
-candidate with all documents, votes, comments, interviews and notifications —
-irreversible, confirmation required).
+candidate with all documents, votes, comments, interviews, notifications and
+activity entries — irreversible, confirmation required). Deleting and
+anonymizing also clean up the calendars: upcoming interviews are cancelled,
+past interview events are renamed to "Interview: <opening>" without the
+candidate's name or Talk link (for the organizer and every interviewer), and
+interview Talk rooms are deleted. Activity entries and notifications always
+show the candidate's current name.
 
 ### Booking an interview
 
@@ -339,7 +350,10 @@ resolved preview first, and every sent mail lands on the candidate's timeline.
 for candidate mail, the application mailbox (IMAP host/user/password with a
 *Test connection* button; fetched every 5 minutes), the daily limit of
 automatic confirmations per opening (0 means no limit), the GDPR retention
-period (0 disables the automation) and the talent-pool membership duration.
+period (rejected and withdrawn candidates, and candidates left in openings
+closed that long ago, are anonymized; 0 disables the automation), the triage
+inbox retention (unassigned mail is deleted after this many days, default 90,
+0 disables it) and the talent-pool membership duration.
 
 **Personal settings → Groupware** (everyone): the **email digest** — off,
 daily or weekly. It bundles new applications in your openings, your pending
@@ -373,7 +387,7 @@ hints, drafts). Without them, the corresponding buttons simply don't appear.
 | Command | Purpose |
 |---|---|
 | `recruiting:fetch-mail` | Fetch the applications mailbox now |
-| `recruiting:retention:run [--dry-run]` | Anonymize candidates whose retention period is over |
+| `recruiting:retention:run [--dry-run]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason |
 
 ## Development
 

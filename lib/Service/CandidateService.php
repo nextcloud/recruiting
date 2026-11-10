@@ -65,6 +65,7 @@ class CandidateService {
 		private TimelineEventMapper $eventMapper,
 		private NotificationService $notifications,
 		private ActivityPublisher $activity,
+		private ActivityPurgeService $activityPurge,
 		private ICommentsManager $commentsManager,
 		private IUserManager $userManager,
 		private ITimeFactory $timeFactory,
@@ -494,9 +495,17 @@ class CandidateService {
 	 */
 	public function destroy(string $uid, int $id): void {
 		$this->permissions->assertRecruiter($uid);
-		$candidate = $this->candidateMapper->find($id);
+		$this->purge($this->candidateMapper->find($id));
+	}
 
-		$this->interviews->cancelAllFor($candidate, $uid, notify: false);
+	/**
+	 * The deletion itself, without a permission check: for callers that
+	 * already decided, such as the retention automation.
+	 */
+	public function purge(Candidate $candidate): void {
+		$id = $candidate->getId();
+
+		$this->interviews->scrubForCandidate($candidate, revokeLinks: false);
 		$this->documents->deleteAllFor($id);
 		$this->voteMapper->deleteForCandidate($id);
 		$this->assignmentMapper->deleteForCandidate($id);
@@ -504,6 +513,7 @@ class CandidateService {
 		$this->interviews->deleteAllFor($id);
 		$this->offerMapper->deleteForCandidate($id);
 		$this->notifications->purgeForCandidate($id);
+		$this->activityPurge->purgeForCandidate($id);
 		try {
 			$this->commentsManager->deleteCommentsAtObject(CommentService::OBJECT_TYPE, (string)$id);
 		} catch (\Exception) {

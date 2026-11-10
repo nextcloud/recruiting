@@ -80,35 +80,114 @@ class CalendarService {
 	}
 
 	/**
-	 * Remove the interview event again.
+	 * Remove the interview event again: the organizer's object and every
+	 * internal attendee's copy.
 	 *
 	 * OCP\Calendar can only *create* objects — `createFromString()` refuses an
-	 * existing UID — so cancellation goes through the CalDAV backend, which is
-	 * also what makes the scheduling plugin send the iTIP CANCEL to every
-	 * attendee. Without this the event would quietly stay in everyone's
-	 * calendar after the interview was called off.
+	 * existing UID — so this goes through the CalDAV backend. Backend writes
+	 * bypass the scheduling plugin, so no iTIP CANCEL is sent and the copies
+	 * that scheduling delivered into the attendees' calendars at creation
+	 * have to be removed one by one.
+	 *
+	 * @param string[] $attendeeUids
+	 * @param bool $permanently skip the calendar trash bin, so the old event
+	 *                          text does not linger there (data protection)
 	 */
-	public function cancelEvent(IUser $organizer, string $objectFileName): void {
-		if ($objectFileName === '') {
-			return;
-		}
+	public function cancelEvent(IUser $organizer, string $objectFileName, array $attendeeUids = [], bool $permanently = false): void {
 		$backend = $this->calDavBackend();
-		if ($backend === null) {
-			$this->logger->warning('Calendar backend unavailable, interview event not cancelled');
+		if ($objectFileName === '' || $backend === null) {
+			if ($objectFileName !== '') {
+				$this->logger->warning('Calendar backend unavailable, interview event not cancelled');
+			}
 			return;
 		}
 
 		try {
-			$principal = 'principals/users/' . $organizer->getUID();
-			foreach ($backend->getCalendarsForUser($principal) as $calendar) {
-				if ($backend->getCalendarObject($calendar['id'], $objectFileName) !== null) {
-					$backend->deleteCalendarObject($calendar['id'], $objectFileName);
-					return;
-				}
+			foreach ($this->copiesOf($backend, $organizer, $objectFileName, $attendeeUids) as [$calendarId, $objectUri]) {
+				$backend->deleteCalendarObject($calendarId, $objectUri, CalDavBackend::CALENDAR_TYPE_CALENDAR, $permanently);
 			}
 		} catch (\Throwable $e) {
 			$this->logger->warning('Failed to cancel interview calendar event: ' . $e->getMessage(), ['exception' => $e]);
 		}
+	}
+
+	/**
+	 * Replace the text of a past interview event — in the organizer's
+	 * calendar and in every internal attendee's copy — with neutral wording,
+	 * so that the candidate's name and the Talk link disappear while the
+	 * appointment itself stays on record.
+	 *
+	 * @param string[] $attendeeUids
+	 * @param ?string $location null removes the location
+	 */
+	public function neutralizeEvent(IUser $organizer, string $objectFileName, array $attendeeUids, string $summary, string $description, ?string $location): void {
+		$backend = $this->calDavBackend();
+		if ($objectFileName === '' || $backend === null) {
+			if ($objectFileName !== '') {
+				$this->logger->warning('Calendar backend unavailable, interview event not neutralized');
+			}
+			return;
+		}
+
+		try {
+			foreach ($this->copiesOf($backend, $organizer, $objectFileName, $attendeeUids) as [$calendarId, $objectUri]) {
+				$object = $backend->getCalendarObject($calendarId, $objectUri);
+				if ($object === null) {
+					continue;
+				}
+				$backend->updateCalendarObject(
+					$calendarId,
+					$objectUri,
+					IcsScrubber::neutralize((string)$object['calendardata'], $summary, $description, $location),
+				);
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to neutralize interview calendar event: ' . $e->getMessage(), ['exception' => $e]);
+		}
+	}
+
+	/**
+	 * Every stored copy of one interview event.
+	 *
+	 * The event builder names the object `<UID>.ics`, and scheduling delivers
+	 * attendee copies under the same UID, so the copies are found by UID
+	 * even when the organizer has already removed their own.
+	 *
+	 * @param string[] $attendeeUids
+	 * @return list<array{0: int, 1: string}> calendar id and object URI
+	 */
+	private function copiesOf(CalDavBackend $backend, IUser $organizer, string $objectFileName, array $attendeeUids): array {
+		$copies = [];
+		foreach ($backend->getCalendarsForUser($this->principal($organizer->getUID())) as $calendar) {
+			if ($backend->getCalendarObject((int)$calendar['id'], $objectFileName) !== null) {
+				$copies[] = [(int)$calendar['id'], $objectFileName];
+				break;
+			}
+		}
+
+		$eventUid = preg_replace('/\.ics$/i', '', $objectFileName) ?? $objectFileName;
+		foreach (array_unique($attendeeUids) as $attendeeUid) {
+			if ($attendeeUid === $organizer->getUID()) {
+				continue;
+			}
+			$principal = $this->principal($attendeeUid);
+			$path = $backend->getCalendarObjectByUID($principal, $eventUid);
+			if (!is_string($path) || !str_contains($path, '/')) {
+				continue;
+			}
+			[$calendarUri, $objectUri] = explode('/', $path, 2);
+			foreach ($backend->getCalendarsForUser($principal) as $calendar) {
+				if (($calendar['uri'] ?? null) === $calendarUri) {
+					$copies[] = [(int)$calendar['id'], $objectUri];
+					break;
+				}
+			}
+		}
+		return $copies;
+	}
+
+	private function principal(string $uid): string {
+		return 'principals/users/' . $uid;
 	}
 
 	/**

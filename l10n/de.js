@@ -345,7 +345,7 @@ OC.L10N.register(
         "Reject {name}": "{name} ablehnen",
         "Reject …": "Ablehnen …",
         "Rejected": "Abgelehnt",
-        "Rejected and withdrawn candidates are anonymized automatically after this many days (GDPR). 0 disables the automation; deleting on request is always possible from the candidate view.": "Abgelehnte und zurückgezogene Bewerbungen werden nach so vielen Tagen automatisch anonymisiert (DSGVO). 0 deaktiviert die Automatik; Löschen auf Anfrage ist aus der Bewerbungsansicht jederzeit möglich.",
+        "Rejected and withdrawn candidates are anonymized automatically after this many days (GDPR), and so are candidates still in an opening that was closed this many days ago without hiring them. 0 disables the automation; deleting on request is always possible from the candidate view.": "Abgelehnte und zurückgezogene Bewerbungen werden nach so vielen Tagen automatisch anonymisiert (DSGVO), ebenso Bewerbungen, die noch in einer Stelle stehen, die vor so vielen Tagen ohne ihre Einstellung geschlossen wurde. 0 deaktiviert die Automatik; Löschen auf Anfrage ist aus der Bewerbungsansicht jederzeit möglich.",
         "Rejected candidates stay on file until the retention period ends — click to see them in the table view": "Abgelehnte Bewerbungen bleiben bis zum Ende der Aufbewahrungsfrist gespeichert — klicken, um sie in der Tabellenansicht zu sehen",
         "Rejection": "Absage",
         "Rejection (built-in)": "Absage (eingebaut)",
@@ -635,6 +635,12 @@ OC.L10N.register(
             "%n ausgewählt",
             "%n ausgewählt"
         ],
+        "Deleted candidate": "Gelöschte Bewerbung",
+        "Anonymized candidate": "Anonymisierte Bewerbung",
+        "Interview: %s": "Interview: %s",
+        "The file \"%s\" was rejected by the virus scanner": "Die Datei „%s“ wurde vom Virenscanner abgewiesen",
+        "Triage inbox retention (days)": "Aufbewahrung im Triage-Eingang (Tage)",
+        "Mail that was never assigned to an opening is deleted from the triage inbox after this many days, including spam and bounces. It is deleted rather than anonymized, so the inbox does not fill up with empty entries. 0 disables the automation.": "Mails, die nie einer Stelle zugeordnet wurden, werden nach so vielen Tagen aus dem Triage-Eingang gelöscht, auch Spam und Unzustellbarkeitsmeldungen. Sie werden gelöscht statt anonymisiert, damit sich der Triage-Eingang nicht mit leeren Einträgen füllt. 0 deaktiviert die Automatik.",
         "Handbook (PDF)": "Handbuch (PDF)"
     },
 "nplurals=2; plural=(n != 1);");
