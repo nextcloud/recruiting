@@ -67,9 +67,10 @@ class DocumentController extends Controller {
 	}
 
 	/**
-	 * Streamed inline in a new browser tab, i.e. a plain navigation without a
-	 * request token — read-only, so CSRF protection is not required (and would
-	 * break the link).
+	 * Opened as a plain navigation without a request token — read-only, so
+	 * CSRF protection is not required (and would break the link). PDFs,
+	 * images and text open in the tab; office documents are downloaded
+	 * (DocumentService::dispositionFor).
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
@@ -92,7 +93,7 @@ class DocumentController extends Controller {
 			$ascii = preg_replace('/[^\x20-\x7E]/', '_', str_replace(['"', '\\'], '_', $name)) ?: 'document';
 			$response->addHeader(
 				'Content-Disposition',
-				'inline; filename="' . $ascii . '"; filename*=UTF-8\'\'' . rawurlencode($name),
+				DocumentService::dispositionFor($document->getMime()) . '; filename="' . $ascii . '"; filename*=UTF-8\'\'' . rawurlencode($name),
 			);
 			return $response;
 		});

@@ -21,10 +21,12 @@ use PHPUnit\Framework\TestCase;
 
 class PoolServiceTest extends TestCase {
 	private CandidateMapper $candidateMapper;
+	private \OCA\Recruiting\Db\DocumentMapper $documentMapper;
 	private PoolService $service;
 
 	protected function setUp(): void {
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
+		$this->documentMapper = $this->createMock(\OCA\Recruiting\Db\DocumentMapper::class);
 		$random = $this->createMock(ISecureRandom::class);
 		$random->method('generate')->willReturn(str_repeat('a', 48));
 		$urlGenerator = $this->createMock(IURLGenerator::class);
@@ -42,6 +44,7 @@ class PoolServiceTest extends TestCase {
 			$urlGenerator,
 			$random,
 			$timeFactory,
+			$this->documentMapper,
 		);
 	}
 
@@ -81,5 +84,25 @@ class PoolServiceTest extends TestCase {
 		$candidate->setAnonymizedAt(new \DateTime());
 		$this->candidateMapper->method('findByPoolToken')->willReturn($candidate);
 		$this->assertNull($this->service->findByToken(str_repeat('b', 48)));
+	}
+
+	public function testSearchCombinesNameEmailAndDocumentText(): void {
+		$this->documentMapper->expects($this->once())->method('findCandidateIdsByText')
+			->with('Kubernetes', $this->greaterThan(0))->willReturn([4, 9]);
+		$member = new Candidate();
+		$member->setId(9);
+		$this->candidateMapper->expects($this->never())->method('findPoolMembers');
+		$this->candidateMapper->expects($this->once())->method('searchPoolMembers')
+			->with('Kubernetes', [4, 9], PoolService::PAGE_SIZE + 1, 0)->willReturn([$member]);
+
+		$result = $this->service->listMembers('hr', 0, '  Kubernetes ');
+		$this->assertSame([9], array_column($result['members'], 'id'));
+		$this->assertFalse($result['hasMore']);
+	}
+
+	public function testWithoutAQueryThePlainListIsUsed(): void {
+		$this->documentMapper->expects($this->never())->method('findCandidateIdsByText');
+		$this->candidateMapper->expects($this->once())->method('findPoolMembers')->willReturn([]);
+		$this->assertSame(['members' => [], 'hasMore' => false], $this->service->listMembers('hr'));
 	}
 }

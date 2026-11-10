@@ -129,4 +129,21 @@ class VoteMapper extends QBMapper {
 			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
+
+	/**
+	 * Move the votes of one candidate to another (merging duplicates).
+	 * Where both have one by the same user, the target's is kept; the
+	 * source's stays behind and goes when the source is deleted.
+	 */
+	public function moveToCandidate(int $fromId, int $toId): void {
+		$kept = array_map(static fn (Vote $row) => $row->getUid(), $this->findForCandidate($toId));
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('candidate_id', $qb->createNamedParameter($toId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($fromId, IQueryBuilder::PARAM_INT)));
+		if ($kept !== []) {
+			$qb->andWhere($qb->expr()->notIn('uid', $qb->createNamedParameter($kept, IQueryBuilder::PARAM_STR_ARRAY)));
+		}
+		$qb->executeStatement();
+	}
 }

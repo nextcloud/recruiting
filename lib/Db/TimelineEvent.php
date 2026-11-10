@@ -50,6 +50,18 @@ class TimelineEvent extends Entity implements \JsonSerializable {
 	public const TYPE_POOL_INVITED = 'pool_invited';
 	public const TYPE_POOL_JOINED = 'pool_joined';
 	public const TYPE_POOL_COPIED = 'pool_copied';
+	public const TYPE_MERGED = 'merged';
+
+	/**
+	 * Data key on events carried over from a merged duplicate: the id of
+	 * the application they were recorded for.
+	 */
+	public const MERGED_FROM = 'mergedFrom';
+
+	public const TYPE_DELETION_REQUESTED = 'deletion_requested';
+	public const TYPE_INTERVIEW_SLOTS_DECLINED = 'interview_slots_declined';
+	public const TYPE_INTERVIEW_RESCHEDULE_REQUESTED = 'interview_reschedule_requested';
+	public const TYPE_REFERRAL_NOTE = 'referral_note';
 
 	protected int $candidateId = 0;
 	protected string $type = '';

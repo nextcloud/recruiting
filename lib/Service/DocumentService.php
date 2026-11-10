@@ -14,24 +14,50 @@ use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IAppData;
+use OCP\Files\InvalidContentException;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
 use OCP\Files\SimpleFS\ISimpleFolder;
 use OCP\IL10N;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 
 /**
  * Candidate documents live in app data — never in user Files — and are
  * only served through the app with permission checks (spec §3).
  */
 class DocumentService {
+	/**
+	 * Types the browser may render in a tab. Everything else (Word, ODT) is
+	 * served as a download, so office documents from unknown senders are
+	 * never opened by the browser itself.
+	 */
+	public const INLINE_MIMES = [
+		'application/pdf',
+		'image/png',
+		'image/jpeg',
+		'image/webp',
+		'text/plain',
+		'text/markdown',
+	];
+
 	public function __construct(
 		private DocumentMapper $documentMapper,
 		private IAppData $appData,
+		private VirusScanService $virusScan,
 		private ISecureRandom $random,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private TextExtractionService $textExtraction,
+		private LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * @return 'inline'|'attachment'
+	 */
+	public static function dispositionFor(string $mime): string {
+		return in_array($mime, self::INLINE_MIMES, true) ? 'inline' : 'attachment';
 	}
 
 	/**
@@ -42,10 +68,13 @@ class DocumentService {
 	}
 
 	/**
+	 * Check a file against the size limit and the type allow-list without
+	 * storing it, so callers can validate before creating anything else.
+	 *
+	 * @return string the normalised mime type
 	 * @throws ValidationException
 	 */
-	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy): Document {
-		$name = $this->sanitizeName($name);
+	public function validate(string $mime, string $content): string {
 		if (strlen($content) === 0) {
 			throw new ValidationException($this->l10n->t('The file is empty'));
 		}
@@ -66,10 +95,32 @@ class DocumentService {
 		if (!in_array($mime, ConfigService::ALLOWED_MIMES, true)) {
 			throw new ValidationException($this->l10n->t('This file type is not allowed'));
 		}
+		return $mime;
+	}
+
+	/**
+	 * @throws ValidationException
+	 */
+	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy): Document {
+		$name = $this->sanitizeName($name);
+		$mime = $this->validate($mime, $content);
+
+		$threat = $this->virusScan->findThreat($content);
+		if ($threat !== null) {
+			$this->logger->warning('Rejected an infected document for candidate ' . $candidate->getId() . ': ' . $threat);
+			throw new ValidationException($this->l10n->t('The file "%s" was rejected by the virus scanner', [$name]));
+		}
 
 		$fileKey = $this->random->generate(32, ISecureRandom::CHAR_ALPHANUMERIC);
 		$folder = $this->folderFor($candidate->getId(), create: true);
-		$folder->newFile($fileKey, $content);
+		try {
+			$folder->newFile($fileKey, $content);
+		} catch (InvalidContentException $e) {
+			// The files_antivirus storage wrapper, when it is active for this
+			// request, blocks the write itself
+			$this->logger->warning('The storage refused a document for candidate ' . $candidate->getId() . ': ' . $e->getMessage());
+			throw new ValidationException($this->l10n->t('The file "%s" was rejected by the virus scanner', [$name]));
+		}
 
 		$document = new Document();
 		$document->setCandidateId($candidate->getId());
@@ -79,7 +130,52 @@ class DocumentService {
 		$document->setFileKey($fileKey);
 		$document->setUploadedBy($uploadedBy);
 		$document->setCreatedAt($this->timeFactory->getDateTime());
+		$document->setTextContent($this->extractText($mime, $content));
 		return $this->documentMapper->insert($document);
+	}
+
+	/**
+	 * Fill text_content for documents stored before text extraction existed
+	 * (or whose extraction failed). Works through the table by id.
+	 *
+	 * @return array{checked: int, extracted: int, lastId: int}
+	 */
+	public function backfillText(int $afterId, int $limit): array {
+		$checked = 0;
+		$extracted = 0;
+		$lastId = $afterId;
+		foreach ($this->documentMapper->findWithoutText(TextExtractionService::EXTRACTABLE_MIMES, $afterId, $limit) as $document) {
+			$checked++;
+			$lastId = $document->getId();
+			try {
+				$content = $this->getFile($document)->getContent();
+			} catch (\Exception) {
+				continue;
+			}
+			$text = $this->extractText($document->getMime(), $content);
+			if ($text !== null) {
+				$document->setTextContent($text);
+				$this->documentMapper->update($document);
+				$extracted++;
+			}
+		}
+		return ['checked' => $checked, 'extracted' => $extracted, 'lastId' => $lastId];
+	}
+
+	/**
+	 * Extraction is a convenience: a failure is logged and leaves the
+	 * document without text, it never blocks storing the file.
+	 */
+	private function extractText(string $mime, string $content): ?string {
+		if (!$this->textExtraction->supports($mime)) {
+			return null;
+		}
+		try {
+			return $this->textExtraction->extract($mime, $content);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Recruiting: text extraction failed: ' . $e->getMessage(), ['exception' => $e]);
+			return null;
+		}
 	}
 
 	public function getFile(Document $document): ISimpleFile {
@@ -105,6 +201,32 @@ class DocumentService {
 		} catch (NotFoundException) {
 			// nothing stored
 		}
+	}
+
+	/**
+	 * Move every document of one candidate to another (merging duplicates):
+	 * the stored file is copied into the target's folder, then the row is
+	 * re-pointed and the original file removed, so a failure part-way
+	 * leaves each document intact on one of the two.
+	 *
+	 * @return int the number of documents moved
+	 */
+	public function moveAll(int $fromCandidateId, Candidate $target): int {
+		$moved = 0;
+		foreach ($this->documentMapper->findForCandidate($fromCandidateId) as $document) {
+			try {
+				$source = $this->getFile($document);
+			} catch (NotFoundException) {
+				// file already gone — the row goes with the source candidate
+				continue;
+			}
+			$this->folderFor($target->getId(), create: true)->newFile($document->getFileKey(), $source->getContent());
+			$document->setCandidateId($target->getId());
+			$this->documentMapper->update($document);
+			$source->delete();
+			$moved++;
+		}
+		return $moved;
 	}
 
 	private function folderFor(int $candidateId, bool $create): ISimpleFolder {

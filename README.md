@@ -35,8 +35,10 @@ a third party.
   every offer needs a designated approver (never yourself), and expiring
   offers warn you three days ahead.
 * 🔒 **GDPR on autopilot** — documents live in app storage (never in Files),
-  rejected candidates are anonymized automatically after the retention
-  period, exports for data-access requests are one click, and the talent pool
+  rejected candidates and candidates left in closed openings are anonymized
+  automatically after the retention period, unassigned triage mail is
+  deleted after its own period, uploads are virus-scanned when
+  files_antivirus is enabled, exports for data-access requests are one click, and the talent pool
   is strictly consent-based.
 * 🪄 **AI where it removes busywork** (optional, via Nextcloud Assistant) —
   summaries, screening hints, mail drafts, interview questions. Always
@@ -83,7 +85,8 @@ grants no candidate access at all.
 | **My interviews** | everyone | Your interview panel appointments, incl. "pending" ones the candidate hasn't confirmed yet |
 | **Mail templates** | recruiters | Manage the invitation/rejection/offer/confirmation mail templates |
 | **Reports** | team members & recruiters | Funnel, time-to-hire, rejection reasons — scoped to what you may see |
-| **Talent pool** | recruiters | Candidates who consented to be kept for future openings |
+| **Talent pool** | recruiters | Candidates who consented to be kept for future openings, searchable by name, email and CV text |
+| **Refer someone** | everyone (if enabled) | Put a person forward for an open position and follow the coarse status of your referrals |
 | **Openings** | team members & recruiters | One entry per opening with the count of active candidates; closed openings collapse at the bottom |
 | **Handbook (PDF)** | everyone | The illustrated user handbook, at the bottom of the navigation |
 
@@ -168,10 +171,14 @@ Click any card and the sidebar opens with five tabs:
 
 * **Profile** — contact details (editable by managers), source, an optional
   AI summary (labeled, regenerable), duplicate warning with a link to the
-  earlier application, and — in triage — the "Assign to opening" control.
-  At the bottom, **Documents**: CVs and attachments, previewable in the
-  browser. Stored in app storage: never visible in Files, never accessible to
-  people without access to this candidate.
+  earlier application and a **Merge** action (same opening only), "Also
+  applied for …" links to the person's other applications, and — in triage —
+  the "Assign to opening" control.
+  At the bottom, **Documents**: CVs and attachments. PDFs, images and text
+  open in the browser; Word and ODT files are downloaded. Stored in app
+  storage: never visible in Files, never accessible to people without access
+  to this candidate. With files_antivirus enabled, every upload is scanned
+  first and infected files are rejected.
 
   ![Candidate profile tab](screenshots/03-candidate-profile.png)
   ![Candidate documents](screenshots/04-candidate-documents.png)
@@ -186,7 +193,9 @@ Click any card and the sidebar opens with five tabs:
 
 * **Interviews** — every round with its status. *Awaiting candidate* means the
   public link is out; copy it from here if you want to resend it yourself.
-  Cancelling notifies all interviewers and cancels the calendar event.
+  The link stops working once the interview is cancelled, seven days after
+  it ended, or when the candidate is rejected, withdraws or is anonymized.
+  Cancelling notifies all interviewers and removes the calendar event.
   Optional AI interview-question suggestions.
 
   ![Interviews tab](screenshots/06-interviews-tab.png)
@@ -207,8 +216,13 @@ Click any card and the sidebar opens with five tabs:
 menu carries **Book interview**, **Move to …**, and for
 recruiters **Export data (GDPR)** (ZIP with everything about this person —
 without reviewer identities) and **Delete permanently (GDPR)** (removes the
-candidate with all documents, votes, comments, interviews and notifications —
-irreversible, confirmation required).
+candidate with all documents, votes, comments, interviews, notifications and
+activity entries — irreversible, confirmation required). Deleting and
+anonymizing also clean up the calendars: upcoming interviews are cancelled,
+past interview events are renamed to "Interview: <opening>" without the
+candidate's name or Talk link (for the organizer and every interviewer), and
+interview Talk rooms are deleted. Activity entries and notifications always
+show the candidate's current name.
 
 ### Booking an interview
 
@@ -229,6 +243,39 @@ irreversible, confirmation required).
    moves the card to "Interview", and notifies the panel. The confirmation
    page offers the appointment as an .ics download for the candidate's own
    calendar.
+5. If none of the proposed times work, the candidate can say so on the same
+   page (with an optional message); after confirming, they can ask to
+   reschedule. Both land on the timeline and notify the organizer and the
+   interviewers — nothing is cancelled automatically.
+6. About 24 hours before a confirmed interview the candidate gets a reminder
+   mail (template *Interview reminder*) with the time, the location or video
+   link, and their interview and self-service links.
+
+### The candidate's self-service page
+
+Every candidate has a personal link (`/apps/recruiting/portal/…`, in the
+built-in confirmation-of-receipt mail via the `{{portal_link}}` placeholder)
+where they see a deliberately coarse status — received, in review,
+interview scheduled, offer, closed — and their upcoming interviews. No stage
+names, votes, comments or rejection reasons are shown. From there they can
+**withdraw** (the opening's hiring managers are notified), **ask for their data
+to be deleted** (the HR group is notified and the candidate sidebar shows a
+banner with the request date and a *Delete now* shortcut — the deletion itself
+stays a recruiter's decision), and **add documents** (same types and size limit
+as everywhere, at most 10 documents per candidate). The page works without an
+account, is rate limited, and stops working when the candidate is anonymized
+or deleted.
+
+### Employee referrals
+
+Any logged-in user can open **Refer someone**, pick an open position, and enter
+the person's name, email, optional phone, a note why they recommend them and an
+optional CV — after confirming that the person agreed to be referred. The
+candidate lands in the opening's "New" column with source *Employee referral*;
+the hiring managers are notified as for any application, the note is on the
+timeline and the candidate sidebar shows *Referred by*. The referrer sees their
+own referrals with the coarse status only and gets a notification when it
+changes; they gain no access to the candidate. Admins can turn referrals off.
 
 | Picking a slot — no account required | After confirming: details + calendar file |
 |---|---|
@@ -304,7 +351,9 @@ the top; "My interviews" also shows rounds the candidate has not confirmed yet.
 ### Talent pool
 
 Only candidates who clicked the consent link from their rejection mail appear
-here — consent is never assumed. **Add to opening** creates a fresh copy
+here — consent is never assumed. The search box matches names, email
+addresses and the text of uploaded documents (e.g. "Kubernetes" finds every
+pool member whose CV mentions it). **Add to opening** creates a fresh copy
 (documents included) in the target opening's "New" column; the pool entry
 stays for further openings. Membership expires automatically after the
 configured period, after which the candidate is anonymized like everyone
@@ -314,18 +363,23 @@ else.
 
 ### Reports
 
-Headline tiles (candidates, hired, average days to hire, open offers), an
-applications-per-week chart, and per opening: the funnel with average
-time-in-stage, open offers, and the rejection-reason breakdown. All numbers
-are reconstructed from each candidate's actual history and survive
-anonymization. You only see openings you have access to.
+For the applications received in a period you pick (default: the last 12
+months): headline tiles (candidates, hired, average days to hire, open
+offers), applications per week (per month for periods over half a year),
+stage conversion (how many applications reached at least each stage), the
+source of applications, and per opening: the funnel with average
+time-in-stage, open offers, rejection reasons and sources. **Export CSV**
+downloads the per-opening table. All numbers are reconstructed from each
+candidate's actual history and survive anonymization. You only see openings
+you manage or observe (or all, as a recruiter); figures are cached for up to
+ten minutes and refreshed as soon as a candidate of the opening changes.
 
 ![Reports](screenshots/14-reports.png)
 
 ### Mail templates
 
 Per mail type (confirmation of receipt, interview invitation, rejection,
-offer) the built-in template is always available; **Customize** copies it into
+offer, interview reminder) the built-in template is always available; **Customize** copies it into
 an editable one and **Make default** activates it. The editor offers each
 type's placeholders as chips — click to insert — and validates them when you
 save, so typos can't reach a candidate. Every send shows a
@@ -339,7 +393,11 @@ resolved preview first, and every sent mail lands on the candidate's timeline.
 for candidate mail, the application mailbox (IMAP host/user/password with a
 *Test connection* button; fetched every 5 minutes), the daily limit of
 automatic confirmations per opening (0 means no limit), the GDPR retention
-period (0 disables the automation) and the talent-pool membership duration.
+period (rejected and withdrawn candidates, and candidates left in openings
+closed that long ago, are anonymized; 0 disables the automation), the triage
+inbox retention (unassigned mail is deleted after this many days, default 90,
+0 disables it), the talent-pool membership duration and whether employee
+referrals are enabled (on by default).
 
 **Personal settings → Groupware** (everyone): the **email digest** — off,
 daily or weekly. It bundles new applications in your openings, your pending
@@ -353,7 +411,9 @@ only sent when there is something to report.
 Bell notifications for everything that concerns you (assignments, interview
 confirmations, candidate replies, offer approvals, @-mentions, expiring
 offers), Activity stream entries per candidate, unified search over candidates
-and openings (permission-scoped), and deep links from every notification
+and openings (permission-scoped in the database query, anonymized candidates
+excluded, paged; terms of three or more characters also match the text of
+candidates' documents), and deep links from every notification
 straight to the right candidate. The interface ships in English and German.
 
 ## Setup
@@ -368,12 +428,21 @@ integrations light up automatically when available: **Talk** (video interview
 rooms, team chats) and **Nextcloud Assistant** with an AI provider (summaries,
 hints, drafts). Without them, the corresponding buttons simply don't appear.
 
+The AI features read the application mail or form text plus the text of the
+most recent PDF, Word (DOCX), OpenDocument or text document — usually the CV.
+Email addresses and phone numbers on file are never sent to the AI provider;
+the name only for the intake extraction while it is still unknown (drafts
+still use it in the salutation). PDF text comes from `pdftotext`
+(poppler-utils) when it is installed, otherwise from a built-in reader that
+handles common PDFs and discards anything that does not look like text.
+
 ## occ commands
 
 | Command | Purpose |
 |---|---|
 | `recruiting:fetch-mail` | Fetch the applications mailbox now |
-| `recruiting:retention:run [--dry-run]` | Anonymize candidates whose retention period is over |
+| `recruiting:retention:run [--dry-run]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason |
+| `recruiting:documents:extract-text [--limit=N]` | Extract the text of documents stored before text extraction existed |
 
 ## Development
 

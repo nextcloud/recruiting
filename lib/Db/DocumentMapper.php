@@ -66,6 +66,70 @@ class DocumentMapper extends QBMapper {
 		return $counts;
 	}
 
+	/**
+	 * The most recent document of a candidate that carries extracted text —
+	 * the CV the AI material uses.
+	 */
+	public function findLatestWithText(int $candidateId): ?Document {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNotNull('text_content'))
+			->orderBy('created_at', 'DESC')
+			->addOrderBy('id', 'DESC')
+			->setMaxResults(1);
+		$rows = $this->findEntities($qb);
+		return $rows[0] ?? null;
+	}
+
+	/**
+	 * Candidates with a document whose extracted text contains the term
+	 * (case-insensitive), newest documents first.
+	 *
+	 * @return int[]
+	 */
+	public function findCandidateIdsByText(string $term, int $limit): array {
+		$term = trim($term);
+		if ($term === '' || $limit <= 0) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('candidate_id')
+			->from($this->getTableName())
+			->where($qb->expr()->isNotNull('text_content'))
+			->andWhere($qb->expr()->iLike('text_content', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($term) . '%')))
+			->groupBy('candidate_id')
+			->orderBy($qb->func()->max('id'), 'DESC')
+			->setMaxResults($limit);
+		$result = $qb->executeQuery();
+		$ids = [];
+		while (($id = $result->fetchOne()) !== false) {
+			$ids[] = (int)$id;
+		}
+		$result->closeCursor();
+		return $ids;
+	}
+
+	/**
+	 * Documents of the given types that have no extracted text yet, in id
+	 * order after $afterId (for the back-fill).
+	 *
+	 * @param string[] $mimes
+	 * @return Document[]
+	 */
+	public function findWithoutText(array $mimes, int $afterId, int $limit): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->isNull('text_content'))
+			->andWhere($qb->expr()->in('mime', $qb->createNamedParameter($mimes, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->gt('id', $qb->createNamedParameter($afterId, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC')
+			->setMaxResults($limit);
+		return $this->findEntities($qb);
+	}
+
 	public function deleteForCandidate(int $candidateId): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->delete($this->getTableName())

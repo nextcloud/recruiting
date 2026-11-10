@@ -14,8 +14,8 @@ use OCP\BackgroundJob\TimedJob;
 use Psr\Log\LoggerInterface;
 
 /**
- * Daily GDPR housekeeping: anonymize candidates whose retention period is
- * over (spec §4.8).
+ * Daily GDPR housekeeping: anonymize or delete candidates whose retention
+ * period is over (spec §4.8, RetentionService).
  */
 class RetentionJob extends TimedJob {
 	public function __construct(
@@ -34,8 +34,8 @@ class RetentionJob extends TimedJob {
 	protected function run($argument): void {
 		try {
 			$result = $this->retention->run();
-			if ($result['anonymized'] > 0) {
-				$this->logger->info('Recruiting retention: anonymized ' . $result['anonymized'] . ' candidate(s)');
+			if ($result['anonymized'] > 0 || $result['deleted'] > 0) {
+				$this->logger->info('Recruiting retention: anonymized ' . $result['anonymized'] . ', deleted ' . $result['deleted'] . ' candidate(s)');
 			}
 		} catch (\Exception $e) {
 			$this->logger->error('Recruiting retention job failed: ' . $e->getMessage(), ['exception' => $e]);

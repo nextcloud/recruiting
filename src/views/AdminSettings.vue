@@ -42,7 +42,16 @@
 					max="3650"
 					:label="t('recruiting', 'Retention period (days)')" />
 				<p class="admin-recruiting__hint">
-					{{ t('recruiting', 'Rejected and withdrawn candidates are anonymized automatically after this many days (GDPR). 0 disables the automation; deleting on request is always possible from the candidate view.') }}
+					{{ t('recruiting', 'Rejected and withdrawn candidates are anonymized automatically after this many days (GDPR), and so are candidates still in an opening that was closed this many days ago without hiring them. 0 disables the automation; deleting on request is always possible from the candidate view.') }}
+				</p>
+				<NcTextField
+					v-model.number="settings.triageRetentionDays"
+					type="number"
+					min="0"
+					max="3650"
+					:label="t('recruiting', 'Triage inbox retention (days)')" />
+				<p class="admin-recruiting__hint">
+					{{ t('recruiting', 'Mail that was never assigned to an opening is deleted from the triage inbox after this many days, including spam and bounces. It is deleted rather than anonymized, so the inbox does not fill up with empty entries. 0 disables the automation.') }}
 				</p>
 				<NcTextField
 					v-model.number="settings.poolRetentionMonths"
@@ -52,6 +61,12 @@
 					:label="t('recruiting', 'Talent pool membership (months)')" />
 				<p class="admin-recruiting__hint">
 					{{ t('recruiting', 'How long a talent-pool consent stays valid. Expired members are anonymized automatically.') }}
+				</p>
+				<NcCheckboxRadioSwitch v-model="settings.referralsEnabled" type="switch">
+					{{ t('recruiting', 'Employee referrals') }}
+				</NcCheckboxRadioSwitch>
+				<p class="admin-recruiting__hint">
+					{{ t('recruiting', 'Every user can refer someone for an open position via “Refer someone” in the app. Referrers only see the coarse status of their own referrals, never the candidate’s details.') }}
 				</p>
 			</div>
 		</NcSettingsSection>
@@ -129,6 +144,7 @@ export default {
 				senderName: '',
 				senderEmail: '',
 				autoAckDailyCap: 100,
+				referralsEnabled: true,
 				imapEnabled: false,
 				imapHost: '',
 				imapPort: 993,

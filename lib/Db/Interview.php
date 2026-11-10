@@ -39,6 +39,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedBy(string $createdBy)
  * @method \DateTime getCreatedAt()
  * @method void setCreatedAt(\DateTime $createdAt)
+ * @method ?\DateTime getReminderSentAt()
+ * @method void setReminderSentAt(?\DateTime $reminderSentAt)
  */
 class Interview extends Entity implements \JsonSerializable {
 	public const STATUS_PROPOSED = 'proposed';
@@ -60,6 +62,7 @@ class Interview extends Entity implements \JsonSerializable {
 	protected string $publicToken = '';
 	protected string $createdBy = '';
 	protected ?\DateTime $createdAt = null;
+	protected ?\DateTime $reminderSentAt = null;
 
 	public function __construct() {
 		$this->addType('candidateId', 'integer');
@@ -68,6 +71,7 @@ class Interview extends Entity implements \JsonSerializable {
 		$this->addType('startAt', 'datetime');
 		$this->addType('endAt', 'datetime');
 		$this->addType('createdAt', 'datetime');
+		$this->addType('reminderSentAt', 'datetime');
 	}
 
 	#[\Override]

@@ -13,6 +13,7 @@ use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\MailService;
+use OCA\Recruiting\Service\PortalService;
 use OCA\Recruiting\Service\TemplateService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\Defaults;
@@ -44,6 +45,7 @@ class MailRenderingTest extends TestCase {
 			$this->createMock(Defaults::class),
 			$l10n,
 			new NullLogger(),
+			$this->createMock(PortalService::class),
 		);
 	}
 
@@ -71,11 +73,46 @@ class MailRenderingTest extends TestCase {
 	}
 
 	public function testBuiltinTemplatesResolveForEveryType(): void {
-		foreach (['rejection', 'interview_invite', 'receipt_confirmation'] as $type) {
+		foreach (['rejection', 'interview_invite', 'receipt_confirmation', 'offer', 'interview_reminder'] as $type) {
 			$template = $this->templates->effectiveFor($type);
 			$this->assertNotSame('', $template['subject']);
 			$this->assertStringContainsString('{{candidate_name}}', $template['body']);
 		}
+	}
+
+	public function testReceiptAndReminderCarryThePortalLink(): void {
+		$this->assertStringContainsString('{{portal_link}}', $this->templates->effectiveFor('receipt_confirmation')['body']);
+		$reminder = $this->templates->effectiveFor('interview_reminder');
+		foreach (['{{portal_link}}', '{{interview_date}}', '{{interview_time}}', '{{interview_location}}', '{{interview_link}}'] as $placeholder) {
+			$this->assertStringContainsString($placeholder, $reminder['body']);
+		}
+		// Every placeholder the built-ins use passes the save-time validation
+		$this->templates->assertValidPlaceholders($reminder['subject'] . $reminder['body']);
+	}
+
+	public function testContextCarriesThePortalLink(): void {
+		$portal = $this->createMock(PortalService::class);
+		$portal->method('portalUrl')->willReturn('https://cloud.example/apps/recruiting/portal/abc');
+		$l10n = $this->createMock(IL10N::class);
+		$mail = new MailService(
+			$this->createMock(IMailer::class),
+			$this->createMock(ConfigService::class),
+			$this->templates,
+			$this->createMock(TimelineService::class),
+			$this->createMock(ActivityPublisher::class),
+			$this->createMock(\OCA\Recruiting\Db\CandidateMapper::class),
+			$this->createMock(\OCP\Security\ISecureRandom::class),
+			$this->createMock(IUserManager::class),
+			$this->createMock(Defaults::class),
+			$l10n,
+			new NullLogger(),
+			$portal,
+		);
+		$candidate = new \OCA\Recruiting\Db\Candidate();
+		$candidate->setId(3);
+		$candidate->setDisplayName('Ada');
+		$rendered = $mail->render('See {{portal_link}}', $mail->contextFor($candidate, 'Dev', null));
+		$this->assertSame('See https://cloud.example/apps/recruiting/portal/abc', $rendered);
 	}
 
 	public function testInviteBuiltinContainsTheSchedulingLink(): void {

@@ -670,6 +670,138 @@ A review pass acting on an external audit of the app:
   `ConflictException` → HTTP 409 `{message, stage, displayName}`, nothing
   changes.
 
+### 10.12 Privacy: names, retention, links and uploads (2026-11-10)
+
+- **Names are resolved, never stored (§4.8, §10.4).** Activity entries and
+  notifications carry only the candidate id; `Activity\Provider` and
+  `Notification\Notifier` look the name up per request
+  (`CandidateNameResolver`) and show "Anonymized candidate" or "Deleted
+  candidate". Stored names from older versions are ignored when rendering and
+  stripped once by the `StripActivityCandidateNames` repair step.
+- **Activity purge without an API.** OCP cannot delete activities, so
+  `ActivityPurgeService` deletes this app's rows from the activity app's
+  `activity` and `activity_mq` tables (app/amq_appid, object_type
+  `candidate`, object_id) when those tables exist — best-effort, never
+  aborting the delete or anonymization.
+- **Calendar scrub.** Backend writes through `CalDavBackend` bypass the
+  scheduling plugin, so neither an update nor a delete reaches the copies
+  that iTIP delivered to the interviewers at creation. The app therefore
+  finds those copies by event UID (`<UID>.ics` is the object name) and
+  rewrites or deletes each one itself. On delete/anonymize: upcoming
+  interviews are cancelled (copies deleted past the calendar trash bin),
+  past events are rewritten to "Interview: <opening>" without name, Talk link
+  or URL (`IcsScrubber`), and Talk rooms are deleted. Normal cancellation now
+  removes the attendee copies too. No iTIP mail is sent for any of this, and
+  invitation mails already in mailboxes cannot be recalled.
+- **Retention groups.** Besides rejected/withdrawn and expired pool consent:
+  candidates in an active stage of an opening closed longer ago than
+  `retention_days` are anonymized, and triage candidates older than
+  `triage_retention_days` (default 90, 0 = off) are deleted through the
+  regular hard-delete path (`CandidateService::purge`, no user permission
+  check), because anonymized spam would clutter the inbox. A candidate in
+  several groups is handled once (triage first). The dry run lists every
+  group; there is no admin-UI preview yet.
+- **Public interview links expire** (`InterviewService::findByPublicToken`):
+  not found for cancelled interviews, seven days after `end_at`, and for
+  rejected, withdrawn or anonymized candidates. `public_token` is NOT NULL
+  and unique, so anonymization replaces it with a fresh random value that is
+  never sent anywhere; no migration needed.
+- **Virus scanning.** files_antivirus registers its storage wrapper on
+  `BeforeFileSystemSetupEvent`, which the server only dispatches when a
+  user's filesystem is set up; app-data paths only set up the root. The
+  public form (anonymous) and the mail fetch job (cron, no user) therefore
+  write unscanned, and its background scanner skips `appdata_*`. The app
+  scans explicitly via files_antivirus' `ScannerFactory` before storing
+  (`VirusScanService`, soft dependency); infected → rejected with a
+  translated validation error, scanner errors → stored and logged. Office
+  formats are served as `attachment`, PDF/images/text `inline`.
+
+### 10.13 Reports, search and duplicates (fix wave 2026-11-10)
+
+- **Reports from SQL, cached per opening (§4.11).** `ReportMapper` groups
+  stage, source and rejection-reason counts in SQL and reads only
+  `id, stage, created_at, hired_at` of the applications and the stage-change
+  events for timings — no candidate entities. Per-opening blocks live in the
+  distributed cache (`recruiting-reports`, local fallback) for 10 minutes;
+  `CandidateMapper` bumps the opening's generation on every insert, update
+  and delete of a candidate (moving a candidate between openings bumps a
+  global one), so every path — stage change, merge, anonymization, deletion
+  — invalidates without callers having to remember. Overviews are composed
+  from the blocks of the openings the user may see, so the cache is not per
+  user. Interviewers still get no reports.
+- **Date range = application cohort.** All figures (stage counts, funnel,
+  timings, sources) describe applications whose `created_at` falls in the
+  chosen UTC days; "open offers" stays a live number. Ranges over 26 weeks
+  chart per month.
+- **Stage conversion** counts, per pipeline stage, the applications whose
+  current stage or any `from`/`to` of their history reached at least that
+  stage. Events carried over by a merge (`data.mergedFrom`) are ignored by
+  the timings and the funnel, as they describe the other application.
+- **CSV export** `GET /api/reports/export.csv?from&to`, scoped like the
+  overview; text cells starting with `= + - @`, tab or CR get a leading `'`.
+- **Unified search (§4.12)** builds the role scope into the query
+  (`PermissionService::candidateScope` → `CandidateMapper::search`), the SQL
+  twin of `canViewCandidate`, which still runs on the returned page.
+  Openings come first on the first page; candidates page by offset cursor.
+- **Duplicates.** Emails are compared as `LOWER(email)` against the
+  lowercased address rather than normalized on write: stored addresses stay
+  as entered (the AI name-placeholder check compares the name with the
+  stored address, and other features write emails too), and no data
+  migration is needed; the cost is a scan of the candidates table on these
+  lookups. Cross-opening applications are a hint in the detail payload
+  (`otherApplications`), not `duplicate_of`, which stays same-opening.
+  **Merge** is restricted to the same opening; votes and screener
+  assignments keep the target's on a per-user conflict; the duplicate's
+  reply token is carried over when the target has none.
+
+### 10.14 Candidate experience (Unreleased)
+
+Beyond the §9 non-goals, which did not exclude these:
+
+- **Less personal data to the AI provider (§4.7).** The material no longer
+  carries email or phone; the name only for the intake task while it is still
+  the `Unknown applicant` placeholder. The draft prompts (rejection, invite,
+  offer) still pass the name, because the salutation needs it.
+- **CV text.** `TextExtractionService` extracts plain text/Markdown, DOCX
+  (`word/document.xml`) and ODT (`content.xml`) with `ZipArchive` (16 MB
+  uncompressed cap, checked against the header and the actual stream) and DOM
+  without DTDs (`<!DOCTYPE` refused, `LIBXML_NONET`, no entity substitution);
+  PDF via `pdftotext` (argument vector, 20 s timeout) or a built-in
+  FlateDecode/Tj/TJ reader whose result is dropped when a letters/whitespace
+  heuristic says it is not text. Stored in `recruiting_documents.text_content`
+  (≤ 100 000 chars), filled on upload; `occ recruiting:documents:extract-text`
+  back-fills. The AI material includes the most recent extracted document,
+  splitting `MATERIAL_LIMIT` between cover letter and CV. The talent pool
+  searches it (`DocumentMapper::findCandidateIdsByText`); the unified search
+  provider does not (yet). The text goes with the document on deletion and
+  anonymization; the GDPR export ships the documents themselves.
+- **Self-service page** `/portal/{token}` (`portal_token`, 48 alnum, unique,
+  set on insert and lazily for older candidates by `{{portal_link}}`; cleared
+  on anonymization). Coarse status from `CandidateStatus` (stage-only:
+  new → received, screening → in review, interview → interview scheduled,
+  offer → offer, terminal → closed). Withdraw goes through `StageService`;
+  deletion requests set `deletion_requested_at` and notify the HR group;
+  uploads use the document allow-list, max 10 per candidate. Actions on the
+  page notify the opening's managers, or the HR group when there are none.
+  Open interviews are not cancelled on withdrawal — the team does that.
+- **Interview page requests:** "none of these times work" (proposed) and
+  "I need to reschedule" (confirmed), with an optional message (≤ 2000
+  chars); timeline event + notification to organizer and attendees, no
+  automatic cancellation. Candidate messages and referral notes are stripped
+  on anonymization like other PII events.
+- **Interview reminder:** hourly `InterviewReminderJob` mails confirmed
+  interviews starting in 23–25 h once (`reminder_sent_at`, claimed atomically,
+  released on a send failure). Template type `interview_reminder`; times are
+  formatted in the organizer's timezone with the zone named, since the
+  candidate's own is unknown server-side.
+- **Employee referrals:** admin switch `referrals_enabled` (default on);
+  `GET /api/referrals/openings` (open openings, id + title),
+  `POST /api/referrals` (consent required, optional CV validated before the
+  candidate is created), `GET /api/referrals` (own referrals, coarse status).
+  Candidates get source `referral` and `referred_by`; `StageService` notifies
+  the referrer when the coarse status changes. `PermissionService` is
+  unchanged — referrers get no candidate access.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |
@@ -684,11 +816,13 @@ A review pass acting on an external audit of the app:
 | Public slot picking | `/apps/recruiting/i/{token}` | tokenized, no account, rate-limited |
 | Interview calendar file (.ics) | `/apps/recruiting/i/{token}/event.ics` | tokenized, confirmed interviews only |
 | Public pool consent | `/apps/recruiting/pool/{token}` | tokenized, no account, rate-limited |
+| Candidate self-service | `/apps/recruiting/portal/{token}` | tokenized, no account, rate-limited |
+| Refer someone | `#/referrals` | every logged-in user (if enabled) |
 | User handbook (PDF) | `/apps/recruiting/handbook` | logged-in users |
 | Ingestion status | `GET /api/ingestion-status` | recruiters |
 | Admin settings | Administration → Recruiting | admins |
 | Digest setting | Personal settings → Groupware | everyone |
 
 Background jobs: mail fetch (5 min), offer expiry (daily), retention (daily),
-digest (hourly). occ: `recruiting:fetch-mail`,
-`recruiting:retention:run [--dry-run]`.
+digest (hourly), interview reminders (hourly). occ: `recruiting:fetch-mail`,
+`recruiting:retention:run [--dry-run]`, `recruiting:documents:extract-text`.

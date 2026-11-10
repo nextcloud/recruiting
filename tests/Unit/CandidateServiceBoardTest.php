@@ -23,6 +23,7 @@ use OCA\Recruiting\Db\VoteMapper;
 use OCA\Recruiting\Exception\ConflictException;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Service\ActivityPublisher;
+use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\InterviewService;
@@ -31,6 +32,7 @@ use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\OfferService;
 use OCA\Recruiting\Service\PermissionService;
 use OCA\Recruiting\Service\PoolService;
+use OCA\Recruiting\Service\PortalService;
 use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -85,10 +87,12 @@ class CandidateServiceBoardTest extends TestCase {
 			$this->createMock(TimelineEventMapper::class),
 			$this->createMock(NotificationService::class),
 			$this->createMock(ActivityPublisher::class),
+			$this->createMock(ActivityPurgeService::class),
 			$this->createMock(ICommentsManager::class),
 			$this->createMock(IUserManager::class),
 			$time,
 			$l10n,
+			$this->createMock(PortalService::class),
 		);
 	}
 

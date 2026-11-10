@@ -10,6 +10,8 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
 ### Added
 
 - A daily limit for automatic receipt confirmations per opening (Administration
@@ -35,6 +37,46 @@ All notable changes to this app are documented here. The format follows
   (`DELETE /api/openings/{id}`); its hiring team and Talk room go with it.
 - The board polls `GET /api/openings/{id}/revision` every 30 s while visible
   and reloads in place when someone else changed the opening.
+- Retention covers two more groups: candidates still in an opening that was
+  closed longer ago than the retention period (and never hired) are
+  anonymized, and triage candidates older than the new *Triage inbox
+  retention* setting (default 90 days, 0 = off) are deleted.
+  `recruiting:retention:run --dry-run` lists every group separately with
+  its count and reason.
+- Uploaded documents are scanned with files_antivirus before they are
+  stored, when that app is enabled. Infected files are rejected with an
+  error (mail attachments are skipped); if the scanner cannot be reached,
+  the file is stored and a warning is logged.
+- Reports: a date-range filter (applications received from/to, default the
+  last 12 months), source of applications (email, web form, manual, talent
+  pool, referral; unknown values shown as stored), stage conversion (how
+  many applications reached at least each stage, from their history) and a
+  CSV export of the per-opening table. Longer ranges chart applications per
+  month instead of per week.
+- Candidate sidebar: "Also applied for …" lists the person's other
+  applications (same email address, any opening) that you may see, with
+  links.
+- Merge duplicates: the duplicate warning in the sidebar offers "Merge into
+  the earlier application" (opening managers and recruiters, same opening
+  only). Documents, log, comments, screener assignments, votes, interviews
+  and offers move over; the duplicate is deleted
+  (`POST /api/candidates/{id}/merge`).
+- The CV is read: text is extracted from PDF (via `pdftotext` when installed,
+  otherwise a built-in reader that discards unreadable output), DOCX, ODT and
+  text documents on upload, used as AI material next to the application text,
+  and searchable in the talent pool. `occ recruiting:documents:extract-text`
+  fills in documents stored earlier.
+- A self-service page for candidates (`{{portal_link}}`, included in the
+  built-in confirmation of receipt): coarse status, upcoming interviews,
+  withdraw, request deletion (HR is notified; the candidate sidebar shows the
+  request with a "Delete now" shortcut) and upload further documents.
+- On the interview page, candidates can say that none of the proposed times
+  work or ask to reschedule a confirmed interview; the team is notified.
+- A reminder mail to the candidate about 24 hours before a confirmed
+  interview (new mail template type "Interview reminder").
+- Employee referrals: "Refer someone" for every logged-in user, with consent
+  confirmation, optional CV, status updates for the referrer (coarse status
+  only) and "Referred by" in the candidate view. Admins can turn it off.
 
 ### Changed
 
@@ -50,6 +92,29 @@ All notable changes to this app are documented here. The format follows
 - Stage moves from the board, the bulk bar and the sidebar send the stage
   the user saw; if someone else moved the candidate in the meantime the
   server answers 409, nothing changes, and the user is told who went where.
+- Word and ODT documents are downloaded instead of opened in the browser;
+  PDFs, images and text still open in a tab.
+- Reports no longer load every candidate: counts, sources and rejection
+  reasons are grouped in SQL, timings read only the columns they need, and
+  each opening's figures are cached for ten minutes and dropped whenever a
+  candidate of that opening is created, changed, merged, anonymized or
+  deleted.
+- Unified search applies the role scope in SQL (managers and observers: their
+  openings; interviewers: their assigned or attended candidates; offer
+  approvers: their offers), so matches are no longer lost behind invisible
+  ones; anonymized candidates are never found, openings are matched by
+  title in SQL, and results page with "load more". Terms of three or more
+  characters also find candidates whose CV or other documents contain them.
+
+### Fixed
+
+- Cancelling an interview now also removes the event from the interviewers'
+  calendars. The CalDAV backend writes the app uses do not send iTIP
+  messages, so their copies used to stay.
+- Duplicate detection compares email addresses case-insensitively on every
+  database (PostgreSQL and SQLite compared them case-sensitively).
+- The talent pool view read the paged API response as a plain list and so
+  rendered no real members; it now shows them and loads more on demand.
 
 ### Security
 
@@ -63,6 +128,23 @@ All notable changes to this app are documented here. The format follows
   carry spam text.
 - No automatic confirmation to senders whose `Authentication-Results` show a
   forged address (DMARC fail, or SPF fail without DKIM pass).
+- Candidate names no longer outlive deletion and anonymization in other
+  apps: activity entries and notifications store only the candidate id and
+  look the name up when shown ("Anonymized candidate" / "Deleted
+  candidate"); deleting or anonymizing a candidate removes their activity
+  entries; a repair step strips the names older versions stored in the
+  activity tables.
+- Deleting or anonymizing a candidate scrubs the interview calendar events:
+  upcoming interviews are cancelled, past events are rewritten to
+  "Interview: <opening>" without the name or Talk link, in the organizer's
+  calendar and in every interviewer's copy; interview Talk rooms are
+  deleted.
+- Public interview links expire: they stop working for cancelled
+  interviews, seven days after the interview ended, and once the candidate
+  is rejected, withdrawn or anonymized. Anonymization also replaces every
+  interview link token.
+- AI requests no longer send the candidate's email address or phone number,
+  and the name only for intake extraction while it is still unknown.
 
 ## [0.7.1] - 2026-08-17
 

@@ -43,6 +43,7 @@ return [
 		['name' => 'candidate#reject', 'url' => '/api/candidates/{id}/reject', 'verb' => 'POST'],
 		['name' => 'candidate#export', 'url' => '/api/candidates/{id}/export', 'verb' => 'GET'],
 		['name' => 'candidate#destroy', 'url' => '/api/candidates/{id}', 'verb' => 'DELETE'],
+		['name' => 'candidate#merge', 'url' => '/api/candidates/{id}/merge', 'verb' => 'POST'],
 
 		// Talent pool (Phase 3)
 		['name' => 'candidate#pool', 'url' => '/api/pool', 'verb' => 'GET'],
@@ -64,6 +65,7 @@ return [
 
 		// Reports (Phase 2)
 		['name' => 'report#overview', 'url' => '/api/reports', 'verb' => 'GET'],
+		['name' => 'report#export', 'url' => '/api/reports/export.csv', 'verb' => 'GET'],
 
 		// Documents
 		['name' => 'document#upload', 'url' => '/api/candidates/{candidateId}/documents', 'verb' => 'POST'],
@@ -92,6 +94,11 @@ return [
 		['name' => 'template#update', 'url' => '/api/templates/{id}', 'verb' => 'PUT'],
 		['name' => 'template#destroy', 'url' => '/api/templates/{id}', 'verb' => 'DELETE'],
 
+		// Employee referrals (any logged-in user)
+		['name' => 'referral#openings', 'url' => '/api/referrals/openings', 'verb' => 'GET'],
+		['name' => 'referral#index', 'url' => '/api/referrals', 'verb' => 'GET'],
+		['name' => 'referral#create', 'url' => '/api/referrals', 'verb' => 'POST'],
+
 		// People picker
 		['name' => 'user#search', 'url' => '/api/users/search', 'verb' => 'GET'],
 
@@ -105,9 +112,17 @@ return [
 		['name' => 'public#showInterview', 'url' => '/i/{token}', 'verb' => 'GET'],
 		['name' => 'public#confirmSlot', 'url' => '/i/{token}/confirm', 'verb' => 'POST'],
 		['name' => 'public#interviewIcs', 'url' => '/i/{token}/event.ics', 'verb' => 'GET'],
+		['name' => 'public#declineSlots', 'url' => '/i/{token}/decline', 'verb' => 'POST'],
+		['name' => 'public#requestReschedule', 'url' => '/i/{token}/reschedule', 'verb' => 'POST'],
 		['name' => 'public#showPoolConsent', 'url' => '/pool/{token}', 'verb' => 'GET'],
 		['name' => 'public#confirmPoolConsent', 'url' => '/pool/{token}/confirm', 'verb' => 'POST'],
 		['name' => 'public#showApplication', 'url' => '/apply/{slug}', 'verb' => 'GET'],
 		['name' => 'public#submitApplication', 'url' => '/apply/{slug}', 'verb' => 'POST'],
+
+		// Candidate self-service page (no login)
+		['name' => 'portal#show', 'url' => '/portal/{token}', 'verb' => 'GET'],
+		['name' => 'portal#withdraw', 'url' => '/portal/{token}/withdraw', 'verb' => 'POST'],
+		['name' => 'portal#requestDeletion', 'url' => '/portal/{token}/deletion', 'verb' => 'POST'],
+		['name' => 'portal#uploadDocument', 'url' => '/portal/{token}/documents', 'verb' => 'POST'],
 	],
 ];

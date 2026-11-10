@@ -18,10 +18,12 @@ use PHPUnit\Framework\TestCase;
 
 class StageServiceTest extends TestCase {
 	private CandidateMapper $candidateMapper;
+	private \OCA\Recruiting\Service\NotificationService $notifications;
 	private StageService $service;
 
 	protected function setUp(): void {
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
+		$this->notifications = $this->createMock(\OCA\Recruiting\Service\NotificationService::class);
 		$timeFactory = $this->createMock(ITimeFactory::class);
 		$timeFactory->method('getDateTime')->willReturnCallback(static fn () => new \DateTime('2026-08-16T12:00:00+00:00'));
 		$this->service = new StageService(
@@ -29,6 +31,7 @@ class StageServiceTest extends TestCase {
 			$this->createMock(TimelineService::class),
 			$this->createMock(ActivityPublisher::class),
 			$timeFactory,
+			$this->notifications,
 		);
 	}
 
@@ -98,5 +101,28 @@ class StageServiceTest extends TestCase {
 		$this->assertTrue($this->service->apply($candidate, Candidate::STAGE_INTERVIEW, 'hr', [], allowFromTerminal: true));
 		$this->assertSame(Candidate::STAGE_INTERVIEW, $candidate->getStage());
 		$this->assertNull($candidate->getWithdrawnAt());
+	}
+
+	public function testTheReferrerHearsAboutCoarseStatusChanges(): void {
+		$candidate = $this->candidate(Candidate::STAGE_NEW);
+		$candidate->setReferredBy('bob');
+		$this->notifications->expects($this->once())->method('notify')->with(
+			['bob'],
+			\OCA\Recruiting\Service\NotificationService::SUBJECT_REFERRAL_STATUS,
+			$candidate,
+			null,
+			['status' => \OCA\Recruiting\Service\CandidateStatus::CLOSED],
+		);
+		$this->service->apply($candidate, Candidate::STAGE_REJECTED, 'hr', ['reason' => 'other']);
+	}
+
+	public function testNoReferrerNotificationWithoutAReferrerOrAStatusChange(): void {
+		$this->notifications->expects($this->never())->method('notify');
+		$this->service->apply($this->candidate(Candidate::STAGE_NEW), Candidate::STAGE_SCREENING, 'hr');
+
+		// rejected → withdrawn is closed → closed: nothing new to tell
+		$referred = $this->candidate(Candidate::STAGE_REJECTED);
+		$referred->setReferredBy('bob');
+		$this->service->apply($referred, Candidate::STAGE_WITHDRAWN, 'hr', [], allowFromTerminal: true);
 	}
 }

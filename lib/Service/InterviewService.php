@@ -21,6 +21,7 @@ use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IL10N;
 use OCP\IURLGenerator;
@@ -32,6 +33,12 @@ use OCP\Security\ISecureRandom;
  * confirms on the public page → calendar event + Talk room (spec §4.4).
  */
 class InterviewService {
+	/** Days after its end during which an interview's public link still works */
+	public const PUBLIC_LINK_GRACE_DAYS = 7;
+
+	/** Length cap for a message the candidate sends from the public page */
+	public const CANDIDATE_MESSAGE_LIMIT = 2000;
+
 	public function __construct(
 		private InterviewMapper $interviewMapper,
 		private InterviewSlotMapper $slotMapper,
@@ -277,6 +284,58 @@ class InterviewService {
 	}
 
 	/**
+	 * The candidate says none of the proposed times work. Nothing changes
+	 * automatically: the request lands on the timeline and with the
+	 * organizer and interviewers, who propose new times.
+	 *
+	 * @throws ValidationException
+	 */
+	public function declineSlots(Interview $interview, string $message): void {
+		if ($interview->getStatus() !== Interview::STATUS_PROPOSED) {
+			throw new ValidationException($this->l10n->t('This interview is no longer awaiting confirmation'));
+		}
+		$this->recordCandidateRequest($interview, $message, TimelineEvent::TYPE_INTERVIEW_SLOTS_DECLINED, NotificationService::SUBJECT_INTERVIEW_SLOTS_DECLINED);
+	}
+
+	/**
+	 * The candidate asks to move a confirmed interview. The booking stays
+	 * until the team acts on the request.
+	 *
+	 * @throws ValidationException
+	 */
+	public function requestReschedule(Interview $interview, string $message): void {
+		if ($interview->getStatus() !== Interview::STATUS_CONFIRMED) {
+			throw new ValidationException($this->l10n->t('Only a confirmed interview can be rescheduled'));
+		}
+		$this->recordCandidateRequest($interview, $message, TimelineEvent::TYPE_INTERVIEW_RESCHEDULE_REQUESTED, NotificationService::SUBJECT_INTERVIEW_RESCHEDULE_REQUESTED);
+	}
+
+	/**
+	 * @throws ValidationException
+	 */
+	private function recordCandidateRequest(Interview $interview, string $message, string $type, string $subject): void {
+		$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		if ($candidate->getAnonymizedAt() !== null || $candidate->isTerminal()) {
+			throw new ValidationException($this->l10n->t('This application is already closed.'));
+		}
+		$this->timeline->record($candidate->getId(), $type, null, [
+			'title' => $interview->getTitle(),
+			'message' => mb_substr(trim($message), 0, self::CANDIDATE_MESSAGE_LIMIT),
+		]);
+		$attendeeUids = array_map(
+			static fn (InterviewAttendee $a) => $a->getUid(),
+			$this->attendeeMapper->findForInterview($interview->getId()),
+		);
+		$this->notifications->notify(
+			array_unique(array_merge($attendeeUids, [$interview->getCreatedBy()])),
+			$subject,
+			$candidate,
+			null,
+			['interviewTitle' => $interview->getTitle()],
+		);
+	}
+
+	/**
 	 * @throws NotPermittedException
 	 */
 	public function cancel(string $uid, int $interviewId): array {
@@ -301,17 +360,100 @@ class InterviewService {
 	}
 
 	/**
-	 * Cancel every open interview of a candidate (used on deletion).
+	 * Take the candidate out of every interview's calendar traces — used by
+	 * the GDPR hard delete and by anonymization.
+	 *
+	 * Upcoming interviews are cancelled (events removed for organizer and
+	 * attendees, Talk room deleted). Past events stay on record but are
+	 * rewritten to neutral wording without the name or the Talk link, and
+	 * their Talk rooms are deleted. While the process is active none of this
+	 * runs: interviewers need the name in their calendar.
+	 *
+	 * @param bool $revokeLinks give every interview a fresh, never sent
+	 *                          public token, so old links stop working
 	 */
-	public function cancelAllFor(Candidate $candidate, string $actorUid, bool $notify): void {
+	public function scrubForCandidate(Candidate $candidate, bool $revokeLinks): void {
+		$now = $this->timeFactory->getDateTime();
+		$openingTitle = $this->openingMapper->findTitle($candidate->getOpeningId());
 		foreach ($this->interviewMapper->findForCandidate($candidate->getId()) as $interview) {
-			if (in_array($interview->getStatus(), [Interview::STATUS_PROPOSED, Interview::STATUS_CONFIRMED], true)) {
-				$this->doCancel($interview, $candidate, $actorUid, $notify);
+			$status = $interview->getStatus();
+			$upcoming = in_array($status, [Interview::STATUS_PROPOSED, Interview::STATUS_CONFIRMED], true)
+				&& ($interview->getStartAt() === null || $interview->getStartAt() > $now);
+			if ($upcoming) {
+				$this->doCancel($interview, $candidate, null, notify: false, permanently: true);
+			} elseif ($status !== Interview::STATUS_CANCELLED) {
+				$this->neutralizeCalendarEvent($interview, $openingTitle);
+				if ($interview->getTalkToken() !== '') {
+					$this->talk->deleteRoom($interview->getTalkToken());
+					$interview->setTalkToken('');
+					$interview->setTalkLink('');
+				}
 			}
+			if ($revokeLinks) {
+				$interview->setPublicToken($this->random->generate(48, ISecureRandom::CHAR_ALPHANUMERIC));
+			}
+			$this->interviewMapper->update($interview);
 		}
 	}
 
-	private function doCancel(Interview $interview, Candidate $candidate, string $actorUid, bool $notify): void {
+	/**
+	 * The interview behind a public link, or null when the link has expired:
+	 * cancelled interviews, interviews that ended more than
+	 * PUBLIC_LINK_GRACE_DAYS ago, and candidates who were rejected, withdrew
+	 * or were anonymized. Otherwise the page would keep showing the name,
+	 * the opening and the Talk link indefinitely.
+	 */
+	public function findByPublicToken(string $token): ?Interview {
+		$interview = $this->interviewMapper->findByToken($token);
+		if ($interview === null || $interview->getStatus() === Interview::STATUS_CANCELLED) {
+			return null;
+		}
+		$endAt = $interview->getEndAt();
+		if ($endAt !== null) {
+			$expiry = \DateTimeImmutable::createFromInterface($endAt)->modify('+' . self::PUBLIC_LINK_GRACE_DAYS . ' days');
+			if ($expiry < $this->timeFactory->getDateTime()) {
+				return null;
+			}
+		}
+		try {
+			$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		} catch (DoesNotExistException) {
+			return null;
+		}
+		if ($candidate->getAnonymizedAt() !== null
+			|| in_array($candidate->getStage(), [Candidate::STAGE_REJECTED, Candidate::STAGE_WITHDRAWN], true)) {
+			return null;
+		}
+		return $interview;
+	}
+
+	private function neutralizeCalendarEvent(Interview $interview, ?string $openingTitle): void {
+		if ($interview->getCalendarUid() === '') {
+			return;
+		}
+		$organizer = $this->userManager->get($interview->getCreatedBy());
+		if ($organizer === null) {
+			return;
+		}
+		$attendeeUids = array_map(
+			static fn (InterviewAttendee $a) => $a->getUid(),
+			$this->attendeeMapper->findForInterview($interview->getId()),
+		);
+		$this->calendar->neutralizeEvent(
+			$organizer,
+			$interview->getCalendarUid(),
+			$attendeeUids,
+			$openingTitle !== null ? $this->l10n->t('Interview: %s', [$openingTitle]) : $this->l10n->t('Interview'),
+			$openingTitle !== null ? $this->l10n->t('Opening: %s', [$openingTitle]) : '',
+			$interview->getIsVideo() ? null : $interview->getLocation(),
+		);
+	}
+
+	/**
+	 * @param bool $permanently remove calendar events past the calendar
+	 *                          trash bin (data protection)
+	 */
+	private function doCancel(Interview $interview, Candidate $candidate, ?string $actorUid, bool $notify, bool $permanently = false): void {
 		if ($interview->getStatus() === Interview::STATUS_CANCELLED) {
 			return;
 		}
@@ -321,8 +463,7 @@ class InterviewService {
 		if ($interview->getCalendarUid() !== '') {
 			$organizer = $this->userManager->get($interview->getCreatedBy());
 			if ($organizer !== null) {
-				// Deleting the object makes CalDAV send the CANCEL to attendees
-				$this->calendar->cancelEvent($organizer, $interview->getCalendarUid());
+				$this->calendar->cancelEvent($organizer, $interview->getCalendarUid(), $attendeeUids, $permanently);
 			}
 		}
 		if ($interview->getTalkToken() !== '') {
@@ -412,7 +553,7 @@ class InterviewService {
 		);
 	}
 
-	private function publicUrl(Interview $interview): string {
+	public function publicUrl(Interview $interview): string {
 		return $this->urlGenerator->linkToRouteAbsolute('recruiting.public.showInterview', [
 			'token' => $interview->getPublicToken(),
 		]);

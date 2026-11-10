@@ -47,6 +47,50 @@ class InterviewMapper extends QBMapper {
 		return $qb->executeStatement() === 1;
 	}
 
+	/**
+	 * Confirmed interviews starting in [$from, $to) whose reminder has not
+	 * gone out yet.
+	 *
+	 * @return Interview[]
+	 */
+	public function findDueReminders(\DateTimeInterface $from, \DateTimeInterface $to): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('status', $qb->createNamedParameter(Interview::STATUS_CONFIRMED)))
+			->andWhere($qb->expr()->isNull('reminder_sent_at'))
+			->andWhere($qb->expr()->gte('start_at', $qb->createNamedParameter($from, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->andWhere($qb->expr()->lt('start_at', $qb->createNamedParameter($to, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->orderBy('start_at', 'ASC');
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Atomically mark the reminder as sent, so overlapping cron runs never
+	 * mail the candidate twice.
+	 *
+	 * @return bool whether this caller claimed it
+	 */
+	public function claimReminder(int $id, \DateTimeInterface $now): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('reminder_sent_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('reminder_sent_at'));
+		return $qb->executeStatement() === 1;
+	}
+
+	/**
+	 * Undo a claim when the mail could not be sent, so the next run retries.
+	 */
+	public function releaseReminder(int $id): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('reminder_sent_at', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
 	public function findByToken(string $token): ?Interview {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
@@ -128,6 +172,18 @@ class InterviewMapper extends QBMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->delete($this->getTableName())
 			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	/**
+	 * Move the interviews of one candidate to another (merging duplicates).
+	 * Slots and attendees hang off the interview and move with it.
+	 */
+	public function moveToCandidate(int $fromId, int $toId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('candidate_id', $qb->createNamedParameter($toId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('candidate_id', $qb->createNamedParameter($fromId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
 }

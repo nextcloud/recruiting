@@ -22,6 +22,7 @@ class SessionService {
 		private CandidateMapper $candidateMapper,
 		private TalkService $talk,
 		private AiService $ai,
+		private ConfigService $config,
 	) {
 	}
 
@@ -39,6 +40,7 @@ class SessionService {
 			'stages' => Candidate::ACTIVE_STAGES,
 			'terminalStages' => Candidate::TERMINAL_STAGES,
 			'rejectionReasons' => Candidate::REJECTION_REASONS,
+			'referralsEnabled' => $this->config->isReferralsEnabled(),
 		];
 	}
 }

@@ -102,8 +102,8 @@ class CandidateController extends Controller {
 	 * Talent pool (recruiters only).
 	 */
 	#[NoAdminRequired]
-	public function pool(): DataResponse {
-		return $this->handle(fn () => $this->pool->listMembers($this->uid()));
+	public function pool(int $offset = 0, string $q = ''): DataResponse {
+		return $this->handle(fn () => $this->pool->listMembers($this->uid(), $offset, $q));
 	}
 
 	#[NoAdminRequired]
@@ -136,5 +136,14 @@ class CandidateController extends Controller {
 			$this->candidates->destroy($this->uid(), $id);
 			return ['deleted' => true];
 		});
+	}
+
+	/**
+	 * Merge candidate $id (the duplicate, deleted afterwards) into
+	 * $targetId; answers with the target's detail.
+	 */
+	#[NoAdminRequired]
+	public function merge(int $id, int $targetId): DataResponse {
+		return $this->handle(fn () => $this->candidates->merge($this->uid(), $id, $targetId));
 	}
 }

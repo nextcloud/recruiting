@@ -31,6 +31,13 @@ class NotificationService {
 	public const SUBJECT_OFFER_EXPIRING = 'offer_expiring';
 	public const SUBJECT_OFFER_EXPIRED = 'offer_expired';
 	public const SUBJECT_AUTO_ACK_CAP_REACHED = 'auto_ack_cap_reached';
+	public const SUBJECT_CANDIDATE_WITHDREW = 'candidate_withdrew';
+	public const SUBJECT_DELETION_REQUESTED = 'deletion_requested';
+	public const SUBJECT_CANDIDATE_UPLOADED = 'candidate_uploaded';
+	public const SUBJECT_INTERVIEW_SLOTS_DECLINED = 'interview_slots_declined';
+	public const SUBJECT_INTERVIEW_RESCHEDULE_REQUESTED = 'interview_reschedule_requested';
+	/** To the employee who referred the candidate; carries only the coarse status */
+	public const SUBJECT_REFERRAL_STATUS = 'referral_status';
 
 	public function __construct(
 		private INotificationManager $notificationManager,
@@ -43,8 +50,8 @@ class NotificationService {
 	 * @param array<string, string> $parameters
 	 */
 	public function notify(array $recipients, string $subject, Candidate $candidate, ?string $actorUid, array $parameters = []): void {
+		// The name is resolved by Notification\Notifier when shown
 		$parameters['candidateId'] = (string)$candidate->getId();
-		$parameters['candidateName'] = $candidate->getDisplayName();
 		$parameters['openingId'] = (string)($candidate->getOpeningId() ?? 0);
 		if ($actorUid !== null) {
 			$parameters['actor'] = $actorUid;

@@ -4,10 +4,20 @@
 -->
 <template>
 	<div class="profile-tab">
-		<NcNoteCard v-if="candidate.duplicateOf" type="warning">
-			{{ t('recruiting', 'This person applied before — there is an earlier application on file.') }}
-			<a href="#" @click.prevent="sidebar.open(candidate.duplicateOf)">{{ t('recruiting', 'Show it') }}</a>
+		<NcNoteCard v-if="candidate.deletionRequestedAt" type="error">
+			{{ t('recruiting', 'The candidate asked for their data to be deleted on {date} (self-service page).', { date: formatDateTime(candidate.deletionRequestedAt) }) }}
+			<template v-if="session.isRecruiter">
+				<br>
+				<NcButton variant="error" class="profile-tab__delete-now" @click="$emit('delete')">
+					<template #icon>
+						<TrashCanOutline :size="20" />
+					</template>
+					{{ t('recruiting', 'Delete now') }}
+				</NcButton>
+			</template>
 		</NcNoteCard>
+
+		<DuplicateHints :candidate="candidate" />
 
 		<NcNoteCard v-if="candidate.poolMember" type="success">
 			{{ t('recruiting', 'Talent pool member since {date} — consented to being considered for future openings.', { date: formatDateTime(candidate.poolConsentAt) }) }}
@@ -50,6 +60,10 @@
 			<div>
 				<dt>{{ t('recruiting', 'Source') }}</dt>
 				<dd>{{ sourceLabel(candidate.source) }}</dd>
+			</div>
+			<div v-if="candidate.referredByDisplayName">
+				<dt>{{ t('recruiting', 'Referred by') }}</dt>
+				<dd>{{ candidate.referredByDisplayName }}</dd>
 			</div>
 			<div>
 				<dt>{{ t('recruiting', 'Applied') }}</dt>
@@ -105,20 +119,22 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import AiAssist from '../AiAssist.vue'
 import DocumentsSection from './DocumentsSection.vue'
+import DuplicateHints from './DuplicateHints.vue'
 import api, { errorMessage } from '../../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
 import { formatDateTime, sourceLabel } from '../../utils/format.js'
 
 export default {
 	name: 'ProfileTab',
-	components: { AiAssist, CloseCircleOutline, DocumentsSection, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline },
+	components: { AiAssist, CloseCircleOutline, DocumentsSection, DuplicateHints, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline, TrashCanOutline },
 	props: {
 		candidate: { type: Object, required: true },
 	},
 
-	emits: ['reject'],
+	emits: ['reject', 'delete'],
 	setup() {
 		return {
 			sidebar: useSidebarStore(),
@@ -223,6 +239,10 @@ export default {
 		display: flex;
 		justify-content: flex-end;
 		gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__delete-now {
+		margin-top: var(--default-grid-baseline);
 	}
 
 	&__reject {

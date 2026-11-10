@@ -25,6 +25,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setUploadedBy(?string $uploadedBy)
  * @method \DateTime getCreatedAt()
  * @method void setCreatedAt(\DateTime $createdAt)
+ * @method ?string getTextContent()
+ * @method void setTextContent(?string $textContent)
  */
 class Document extends Entity implements \JsonSerializable {
 	protected int $candidateId = 0;
@@ -34,6 +36,8 @@ class Document extends Entity implements \JsonSerializable {
 	protected string $fileKey = '';
 	protected ?string $uploadedBy = null;
 	protected ?\DateTime $createdAt = null;
+	/** Plain text extracted from the file for AI material and search; never serialized */
+	protected ?string $textContent = null;
 
 	public function __construct() {
 		$this->addType('candidateId', 'integer');

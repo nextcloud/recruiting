@@ -27,12 +27,14 @@ class MailTemplate extends Entity implements \JsonSerializable {
 	public const TYPE_REJECTION = 'rejection';
 	public const TYPE_RECEIPT = 'receipt_confirmation';
 	public const TYPE_OFFER = 'offer';
+	public const TYPE_INTERVIEW_REMINDER = 'interview_reminder';
 
 	public const TYPES = [
 		self::TYPE_INTERVIEW_INVITE,
 		self::TYPE_REJECTION,
 		self::TYPE_RECEIPT,
 		self::TYPE_OFFER,
+		self::TYPE_INTERVIEW_REMINDER,
 	];
 
 	protected string $type = '';

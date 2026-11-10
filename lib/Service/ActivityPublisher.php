@@ -52,7 +52,8 @@ class ActivityPublisher {
 	 * @param array<string, mixed> $parameters
 	 */
 	public function publish(Candidate $candidate, string $subject, ?string $actorUid, array $parameters = []): void {
-		$parameters['candidate'] = $candidate->getDisplayName();
+		// Never the name: Activity\Provider resolves it when the entry is shown,
+		// so deletion and anonymization also reach entries already published.
 		$parameters['candidateId'] = $candidate->getId();
 		$parameters['openingId'] = $candidate->getOpeningId();
 

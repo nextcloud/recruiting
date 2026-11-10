@@ -41,6 +41,31 @@ class OpeningMapper extends QBMapper {
 	}
 
 	/**
+	 * Openings whose title contains the term (any letter case), newest
+	 * first, limited to $openingIds unless null.
+	 *
+	 * @param int[]|null $openingIds
+	 * @return Opening[]
+	 */
+	public function searchByTitle(string $term, ?array $openingIds, int $limit): array {
+		if ($openingIds === [] || $limit <= 0) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$like = '%' . $this->db->escapeLikeParameter(mb_strtolower($term)) . '%';
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->iLike('title', $qb->createNamedParameter($like)))
+			->orderBy('created_at', 'DESC')
+			->addOrderBy('id', 'DESC')
+			->setMaxResults($limit);
+		if ($openingIds !== null) {
+			$qb->andWhere($qb->expr()->in('id', $qb->createNamedParameter($openingIds, IQueryBuilder::PARAM_INT_ARRAY)));
+		}
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * The title of an opening, or null when there is none / it vanished —
 	 * every surface that labels a candidate needs exactly this.
 	 */
