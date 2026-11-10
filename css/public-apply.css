@@ -1,0 +1,92 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * Hand-written (not build output) — served via style('recruiting', 'public-apply').
+ */
+.recruiting-apply {
+	max-width: 560px;
+	margin: 24px auto;
+	padding: 0 12px;
+}
+
+.recruiting-apply__card {
+	color: var(--color-main-text);
+	background-color: var(--color-main-background);
+	border-radius: var(--border-radius-container, 16px);
+	padding: 28px;
+	box-shadow: 0 2px 12px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
+}
+
+.recruiting-apply__card h2 {
+	margin: 0 0 4px;
+}
+
+.recruiting-apply__meta {
+	color: var(--color-text-maxcontrast);
+	margin: 0 0 16px;
+}
+
+.recruiting-apply__desc {
+	white-space: pre-wrap;
+	margin-bottom: 20px;
+	padding-bottom: 20px;
+	border-bottom: 1px solid var(--color-border);
+	color: var(--color-text-maxcontrast);
+}
+
+.recruiting-apply__form {
+	display: flex;
+	flex-direction: column;
+}
+
+.recruiting-apply__label {
+	font-weight: 600;
+	margin: 14px 0 4px;
+}
+
+.recruiting-apply__form input[type="text"],
+.recruiting-apply__form input[type="email"],
+.recruiting-apply__form textarea {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.recruiting-apply__consent {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 18px 0;
+	font-size: 0.9em;
+	color: var(--color-text-maxcontrast);
+}
+
+.recruiting-apply__consent input {
+	margin-top: 3px;
+}
+
+.recruiting-apply__errors {
+	background-color: var(--color-error, #e9322d);
+	color: var(--color-primary-element-text, #fff);
+	border-radius: var(--border-radius, 8px);
+	padding: 10px 14px;
+	margin-bottom: 12px;
+}
+
+.recruiting-apply__errors p {
+	margin: 2px 0;
+}
+
+.recruiting-apply__done {
+	text-align: center;
+}
+
+/* The honeypot must be unreachable and invisible, but not display:none — some
+   bots skip hidden fields, so it is merely moved off-screen. */
+.recruiting-apply__hp {
+	position: absolute;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}

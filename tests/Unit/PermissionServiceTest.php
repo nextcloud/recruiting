@@ -19,6 +19,7 @@ use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\PermissionService;
 use OCP\IGroupManager;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
 class PermissionServiceTest extends TestCase {
@@ -46,6 +47,7 @@ class PermissionServiceTest extends TestCase {
 			$this->assignmentMapper,
 			$this->attendeeMapper,
 			$this->offerMapper,
+			$this->createMock(IL10N::class),
 		);
 	}
 

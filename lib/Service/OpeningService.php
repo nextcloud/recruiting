@@ -17,6 +17,7 @@ use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IL10N;
+use OCP\IURLGenerator;
 use OCP\IUserManager;
 
 class OpeningService {
@@ -28,6 +29,7 @@ class OpeningService {
 		private TalkService $talk,
 		private IUserManager $userManager,
 		private ITimeFactory $timeFactory,
+		private IURLGenerator $urlGenerator,
 		private IL10N $l10n,
 	) {
 	}
@@ -69,7 +71,7 @@ class OpeningService {
 
 	/**
 	 * @param array{title?: string, department?: string, location?: string, employmentType?: string,
-	 *     description?: string, requirements?: string, autoAck?: bool, team?: array[]} $data
+	 *     description?: string, requirements?: string, autoAck?: bool, publicApply?: bool, team?: array[]} $data
 	 * @throws ValidationException
 	 */
 	public function create(string $uid, array $data): array {
@@ -87,6 +89,7 @@ class OpeningService {
 		$opening->setDescription((string)($data['description'] ?? ''));
 		$opening->setRequirements((string)($data['requirements'] ?? ''));
 		$opening->setAutoAck((bool)($data['autoAck'] ?? false));
+		$opening->setPublicApply((bool)($data['publicApply'] ?? false));
 		$opening->setMailSlug($this->uniqueSlug($title));
 		$opening->setCreatedBy($uid);
 		$opening->setCreatedAt($this->timeFactory->getDateTime());
@@ -122,6 +125,9 @@ class OpeningService {
 		}
 		if (array_key_exists('autoAck', $data)) {
 			$opening->setAutoAck((bool)$data['autoAck']);
+		}
+		if (array_key_exists('publicApply', $data)) {
+			$opening->setPublicApply((bool)$data['publicApply']);
 		}
 		$this->openingMapper->update($opening);
 
@@ -266,6 +272,11 @@ class OpeningService {
 			'stageCounts' => $counts,
 			'activeCount' => $active,
 			'talkUrl' => $talkToken !== '' ? $this->talk->urlForToken($talkToken) : null,
+			// The public application link — shown to recruiters to share/copy;
+			// null unless the opening opted in and is open.
+			'applyUrl' => ($opening->getPublicApply() && $opening->getStatus() === 'open')
+				? $this->urlGenerator->linkToRouteAbsolute('recruiting.public.showApplication', ['slug' => $opening->getMailSlug()])
+				: null,
 		]);
 	}
 

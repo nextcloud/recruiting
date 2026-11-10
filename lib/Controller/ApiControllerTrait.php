@@ -61,13 +61,14 @@ trait ApiControllerTrait {
 		if ($e instanceof NotPermittedException) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
 		}
+		$l = \OCP\Server::get(\OCP\L10N\IFactory::class)->get('recruiting');
 		if ($e instanceof DoesNotExistException) {
-			return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
+			return new DataResponse(['message' => $l->t('Not found')], Http::STATUS_NOT_FOUND);
 		}
 		\OCP\Server::get(\Psr\Log\LoggerInterface::class)->error(
 			'Recruiting: unhandled error in API request',
 			['exception' => $e, 'app' => 'recruiting'],
 		);
-		return new DataResponse(['message' => 'An unexpected error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		return new DataResponse(['message' => $l->t('An unexpected error occurred.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 	}
 }

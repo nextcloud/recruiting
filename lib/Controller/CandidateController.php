@@ -41,8 +41,8 @@ class CandidateController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function triage(): DataResponse {
-		return $this->handle(fn () => $this->candidates->triage($this->uid()));
+	public function triage(int $offset = 0): DataResponse {
+		return $this->handle(fn () => $this->candidates->triage($this->uid(), $offset));
 	}
 
 	#[NoAdminRequired]

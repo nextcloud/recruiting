@@ -130,9 +130,14 @@ class CandidateService {
 	 *
 	 * @throws NotPermittedException
 	 */
-	public function triage(string $uid): array {
+	public function triage(string $uid, int $offset = 0): array {
 		$this->permissions->assertRecruiter($uid);
-		return $this->serializeCards($this->candidateMapper->findTriage(), $uid);
+		// One page over-fetched by one, so the client can tell whether more exist
+		// without a second count query.
+		$rows = $this->candidateMapper->findTriage(self::PAGE_SIZE + 1, max(0, $offset));
+		$hasMore = count($rows) > self::PAGE_SIZE;
+		$rows = array_slice($rows, 0, self::PAGE_SIZE);
+		return ['cards' => $this->serializeCards($rows, $uid), 'page' => self::PAGE_SIZE, 'hasMore' => $hasMore];
 	}
 
 	/**

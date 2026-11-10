@@ -79,15 +79,21 @@ class PoolService {
 	 *
 	 * @throws NotPermittedException
 	 */
-	public function listMembers(string $uid): array {
+	/** One page of pool members; more via ?offset=. */
+	public const PAGE_SIZE = 100;
+
+	public function listMembers(string $uid, int $offset = 0): array {
 		$this->permissions->assertRecruiter($uid);
+		$rows = $this->candidateMapper->findPoolMembers(self::PAGE_SIZE + 1, max(0, $offset));
+		$hasMore = count($rows) > self::PAGE_SIZE;
+		$rows = array_slice($rows, 0, self::PAGE_SIZE);
 		$result = [];
-		foreach ($this->candidateMapper->findPoolMembers() as $candidate) {
+		foreach ($rows as $candidate) {
 			$entry = $candidate->jsonSerialize();
 			$entry['openingTitle'] = $this->openingMapper->findTitle($candidate->getOpeningId());
 			$result[] = $entry;
 		}
-		return $result;
+		return ['members' => $result, 'hasMore' => $hasMore];
 	}
 
 }

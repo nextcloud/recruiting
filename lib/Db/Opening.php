@@ -31,6 +31,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setTalkToken(?string $talkToken)
  * @method bool getAutoAck()
  * @method void setAutoAck(bool $autoAck)
+ * @method bool getPublicApply()
+ * @method void setPublicApply(bool $publicApply)
  * @method string getCreatedBy()
  * @method void setCreatedBy(string $createdBy)
  * @method \DateTime getCreatedAt()
@@ -53,12 +55,14 @@ class Opening extends Entity implements \JsonSerializable {
 	protected string $mailSlug = '';
 	protected ?string $talkToken = null;
 	protected bool $autoAck = false;
+	protected bool $publicApply = false;
 	protected string $createdBy = '';
 	protected ?\DateTime $createdAt = null;
 	protected ?\DateTime $closedAt = null;
 
 	public function __construct() {
 		$this->addType('autoAck', 'boolean');
+		$this->addType('publicApply', 'boolean');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('closedAt', 'datetime');
 	}
@@ -76,6 +80,7 @@ class Opening extends Entity implements \JsonSerializable {
 			'status' => $this->status,
 			'mailSlug' => $this->mailSlug,
 			'autoAck' => $this->autoAck,
+			'publicApply' => $this->publicApply,
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt?->format(\DateTimeInterface::ATOM),
 			'closedAt' => $this->closedAt?->format(\DateTimeInterface::ATOM),

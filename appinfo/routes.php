@@ -104,5 +104,7 @@ return [
 		['name' => 'public#interviewIcs', 'url' => '/i/{token}/event.ics', 'verb' => 'GET'],
 		['name' => 'public#showPoolConsent', 'url' => '/pool/{token}', 'verb' => 'GET'],
 		['name' => 'public#confirmPoolConsent', 'url' => '/pool/{token}/confirm', 'verb' => 'POST'],
+		['name' => 'public#showApplication', 'url' => '/apply/{slug}', 'verb' => 'GET'],
+		['name' => 'public#submitApplication', 'url' => '/apply/{slug}', 'verb' => 'POST'],
 	],
 ];
