@@ -10,16 +10,17 @@
 	<summary>Manage job applications, screening, interviews and rejections</summary>
 	<description><![CDATA[
 Recruiting covers your full hiring funnel inside Nextcloud: applications arrive by
-email or manual entry, the hiring team screens them, interviews are booked against
+email, a public application form, employee referrals or manual entry, the hiring team screens them, interviews are booked against
 interviewers' real calendars, and rejections go out — all from one place, and all on
 your own server.
 
 **Intake**
 
-* 📥 A dedicated IMAP mailbox is fetched automatically — every mail becomes a candidate, attachments become documents
+* 📥 A dedicated IMAP mailbox is fetched automatically — every application mail becomes a candidate, attachments become documents; bounces and autoresponders are skipped
 * 🎯 Plus-addressing (`jobs+backend-dev@…`) routes applications straight into the right opening
 * 📨 Optional automatic confirmation mail to the candidate
 * ✍️ Manual entry with drag-and-drop CV upload
+* 🤝 Employees refer people they know and follow the status of their referrals
 
 **Screening**
 
@@ -34,14 +35,16 @@ your own server.
 * 🔗 The candidate picks a slot on a public page — no account needed
 * 🗓️ Confirmed interviews land in the calendar with all interviewers invited
 * 🎥 A Talk room is created automatically for video interviews
+* ⏰ Candidates get a reminder the day before and can ask for other times
 
 **Communication & privacy**
 
 * ✉️ Mail templates with placeholders, always previewed before sending, always logged
 * 🔒 Interviewers only see candidates assigned to them; documents are never exposed via Files
-* 🗑️ Candidates can be deleted completely on request (GDPR)
+* 🙋 A self-service page where candidates see their status, upload documents, withdraw or ask for deletion
+* 🗑️ Candidates can be deleted completely on request (GDPR); retention anonymizes or deletes old data automatically
 	]]></description>
-	<version>0.7.2</version>
+	<version>0.8.0</version>
 	<licence>agpl</licence>
 	<author mail="frank@nextcloud.com">Frank Karlitschek</author>
 	<namespace>Recruiting</namespace>

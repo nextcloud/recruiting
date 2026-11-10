@@ -10,6 +10,8 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
 ### Added
 
 - A daily limit for automatic receipt confirmations per opening (Administration
