@@ -54,6 +54,14 @@ class DocumentService {
 				(string)(ConfigService::MAX_DOCUMENT_SIZE / 1024 / 1024),
 			]));
 		}
+		// The declared type is constrained to a safe allow-list; the download
+		// endpoint then serves the file with exactly this Content-Type plus
+		// X-Content-Type-Options: nosniff (see DocumentController::show), so a
+		// browser cannot be tricked into executing bytes smuggled under an
+		// allowed type — even an anonymous public-form upload. (A content sniff
+		// was considered, but OCP's detector reports HTML/SVG fragments as
+		// text/plain, so it could not add what the serving hardening already
+		// guarantees.)
 		$mime = strtolower(trim(explode(';', $mime)[0]));
 		if (!in_array($mime, ConfigService::ALLOWED_MIMES, true)) {
 			throw new ValidationException($this->l10n->t('This file type is not allowed'));

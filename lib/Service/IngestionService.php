@@ -199,6 +199,55 @@ class IngestionService {
 	}
 
 	/**
+	 * Materialise a public web-application submission (spec §4.13) through the
+	 * same pipeline an emailed application uses: candidate row, a timeline entry
+	 * carrying the cover letter (so AI intake still finds the body), the CV as a
+	 * document, optional AI analysis, and the opening's auto-acknowledgement.
+	 *
+	 * The web form has already validated its inputs; everything here mirrors
+	 * {@see processMessage()} minus the IMAP/idempotency machinery.
+	 *
+	 * @param array{name?:string,mime?:string,content?:string}|null $cv
+	 * @return Candidate the created candidate
+	 */
+	public function ingestWebApplication(Opening $opening, string $name, string $email, string $coverLetter, ?array $cv): Candidate {
+		$candidate = $this->candidates->insertCandidate(
+			$opening->getId(),
+			$name,
+			filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? $email : '',
+			'',
+			Candidate::SOURCE_WEB,
+			null,
+		);
+
+		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_WEB_APPLICATION, null, [
+			'subject' => 'Application for ' . $opening->getTitle(),
+			'body' => mb_substr(trim($coverLetter), 0, self::BODY_SNIPPET_LENGTH),
+		]);
+
+		if ($cv !== null && (string)($cv['content'] ?? '') !== '') {
+			try {
+				$this->documents->add($candidate, (string)($cv['name'] ?? 'CV'), (string)($cv['mime'] ?? ''), (string)$cv['content'], null);
+			} catch (ValidationException $e) {
+				$this->logger->info('Skipped web-application CV: ' . $e->getMessage());
+			}
+		}
+
+		$this->ai->scheduleIntakeAnalysis($candidate);
+
+		if ($opening->getAutoAck() && $candidate->getEmail() !== '') {
+			try {
+				$draft = $this->mail->preview($candidate, $opening->getTitle(), MailTemplate::TYPE_RECEIPT, null, null);
+				$this->mail->sendToCandidate($candidate, $draft['subject'], $draft['body'], null);
+			} catch (\Exception $e) {
+				$this->logger->warning('Auto-acknowledgement failed: ' . $e->getMessage(), ['exception' => $e]);
+			}
+		}
+
+		return $candidate;
+	}
+
+	/**
 	 * Match the per-candidate Reply-To ("jobs+c{id}.{token}@…", spec §4.2).
 	 * The token must match the stored one — the candidate id alone is
 	 * guessable and must not let outsiders write onto someone's timeline.

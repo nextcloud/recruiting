@@ -15,6 +15,7 @@ use OCA\Recruiting\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IUserManager;
 use OCP\IUserSession;
@@ -35,6 +36,7 @@ class UserController extends Controller {
 		private PermissionService $permissions,
 		private TeamMemberMapper $teamMapper,
 		private IUserSession $userSession,
+		private IL10N $l10n,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -70,7 +72,7 @@ class UserController extends Controller {
 	private function assertMayPickPeople(): void {
 		$uid = $this->uid();
 		if ($uid === '') {
-			throw new NotPermittedException('No session user');
+			throw new NotPermittedException($this->l10n->t('No session user'));
 		}
 		if ($this->permissions->isRecruiter($uid)) {
 			return;
@@ -80,6 +82,6 @@ class UserController extends Controller {
 				return;
 			}
 		}
-		throw new NotPermittedException('Only recruiters and hiring managers may search for people');
+		throw new NotPermittedException($this->l10n->t('Only recruiters and hiring managers may search for people'));
 	}
 }

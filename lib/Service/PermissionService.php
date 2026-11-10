@@ -16,6 +16,7 @@ use OCA\Recruiting\Db\TeamMember;
 use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCP\IGroupManager;
+use OCP\IL10N;
 
 /**
  * The single authority for every permission decision in the app.
@@ -48,6 +49,7 @@ class PermissionService {
 		private AssignmentMapper $assignmentMapper,
 		private InterviewAttendeeMapper $attendeeMapper,
 		private OfferMapper $offerMapper,
+		private IL10N $l10n,
 	) {
 	}
 
@@ -169,7 +171,7 @@ class PermissionService {
 	 */
 	public function assertRecruiter(string $uid): void {
 		if (!$this->isRecruiter($uid)) {
-			throw new NotPermittedException('Recruiter access required');
+			throw new NotPermittedException($this->l10n->t('Recruiter access required'));
 		}
 	}
 
@@ -178,7 +180,7 @@ class PermissionService {
 	 */
 	public function assertCanViewOpening(string $uid, int $openingId): void {
 		if (!$this->canViewOpening($uid, $openingId)) {
-			throw new NotPermittedException('No access to this opening');
+			throw new NotPermittedException($this->l10n->t('No access to this opening'));
 		}
 	}
 
@@ -187,7 +189,7 @@ class PermissionService {
 	 */
 	public function assertCanManageOpening(string $uid, int $openingId): void {
 		if (!$this->canManageOpening($uid, $openingId)) {
-			throw new NotPermittedException('No management access to this opening');
+			throw new NotPermittedException($this->l10n->t('No management access to this opening'));
 		}
 	}
 
@@ -196,7 +198,7 @@ class PermissionService {
 	 */
 	public function assertCanViewCandidate(string $uid, Candidate $candidate): void {
 		if (!$this->canViewCandidate($uid, $candidate)) {
-			throw new NotPermittedException('No access to this candidate');
+			throw new NotPermittedException($this->l10n->t('No access to this candidate'));
 		}
 	}
 
@@ -205,7 +207,7 @@ class PermissionService {
 	 */
 	public function assertCanManageCandidate(string $uid, Candidate $candidate): void {
 		if (!$this->canManageCandidate($uid, $candidate)) {
-			throw new NotPermittedException('No management access to this candidate');
+			throw new NotPermittedException($this->l10n->t('No management access to this candidate'));
 		}
 	}
 }

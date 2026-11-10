@@ -7,8 +7,8 @@
 **Your whole hiring funnel inside Nextcloud — private, automated where it's
 boring, human where it matters.**
 
-Applications arrive by email and become candidates on a pipeline board by
-themselves. The hiring team screens with unbiased votes, interviews are booked
+Applications arrive by email — or through an opening's own public application
+page — and become candidates on a pipeline board by themselves. The hiring team screens with unbiased votes, interviews are booked
 against real calendars with the candidate picking a slot on a public page, and
 offers run through a proper four-eyes approval before they go out. Rejections,
 retention, anonymization — the compliance chores run on autopilot. Everything
@@ -119,11 +119,21 @@ Header actions (managers and recruiters):
   with the current hiring team. (Talk's API fixes the member list at creation,
   so if the team changes, delete and recreate the room.)
 * **⋮ → Edit opening & team** — title, description, requirements (these feed
-  the AI features), the auto-confirmation toggle, and the hiring team with
-  roles.
+  the AI features), the auto-confirmation toggle, the **public application
+  page** toggle (see below), and the hiring team with roles.
 * **⋮ → Put on hold / Reopen / Close** — closing warns you if candidates are
   still active; they keep their stage and can still be rejected (with mail)
   afterwards.
+
+**Public application page.** Turn on *"Publish a public application page"* in
+the opening editor and the app exposes a self-contained, login-free form at
+`…/apps/recruiting/apply/<opening-slug>` — the copyable link appears right in
+the editor. Applicants see the opening and submit their name, email, an optional
+cover letter and CV, and a consent checkbox; the submission lands in *New* just
+like an emailed application, complete with auto-acknowledgement and the full
+GDPR lifecycle. The page is server-rendered and hardened (rate limits,
+brute-force protection, a honeypot); closed or opted-out openings return a
+neutral 404.
 
 The header also shows the opening's **mail tag** (e.g.
 `[backend-engineer]`): applications sent to `jobs+backend-engineer@…` or with

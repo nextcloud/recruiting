@@ -52,7 +52,7 @@ class CommentService {
 	public function create(string $uid, int $candidateId, string $message): array {
 		$candidate = $this->candidateMapper->find($candidateId);
 		if (!$this->permissions->canComment($uid, $candidate)) {
-			throw new NotPermittedException('Not allowed to comment on this candidate');
+			throw new NotPermittedException($this->l10n->t('Not allowed to comment on this candidate'));
 		}
 		$message = trim($message);
 		if ($message === '') {

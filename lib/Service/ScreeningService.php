@@ -94,7 +94,7 @@ class ScreeningService {
 	public function vote(string $uid, int $candidateId, string $value, string $comment): Vote {
 		$candidate = $this->candidateMapper->find($candidateId);
 		if (!$this->permissions->canVote($uid, $candidate)) {
-			throw new NotPermittedException('Not allowed to vote on this candidate');
+			throw new NotPermittedException($this->l10n->t('Not allowed to vote on this candidate'));
 		}
 		if (!in_array($value, Vote::VALUES, true)) {
 			throw new ValidationException($this->l10n->t('Invalid vote'));

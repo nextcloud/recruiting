@@ -16,6 +16,7 @@ use OCA\Recruiting\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IUserSession;
 
@@ -29,6 +30,7 @@ class AiController extends Controller {
 		private CandidateService $candidates,
 		private PermissionService $permissions,
 		private IUserSession $userSession,
+		private IL10N $l10n,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -45,10 +47,10 @@ class AiController extends Controller {
 				$this->permissions->assertCanManageCandidate($uid, $candidate);
 			} elseif (in_array($action, AiService::VOTE_ACTIONS, true)) {
 				if (!$this->permissions->canVote($uid, $candidate)) {
-					throw new NotPermittedException('Not allowed');
+					throw new NotPermittedException($this->l10n->t('Not allowed'));
 				}
 			} else {
-				throw new ValidationException('Unknown AI action');
+				throw new ValidationException($this->l10n->t('Unknown AI action'));
 			}
 			return ['taskId' => $this->ai->request($uid, $candidate, $action)];
 		});

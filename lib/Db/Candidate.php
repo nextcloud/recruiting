@@ -78,6 +78,7 @@ class Candidate extends Entity implements \JsonSerializable {
 	public const SOURCE_EMAIL = 'email';
 	public const SOURCE_MANUAL = 'manual';
 	public const SOURCE_POOL = 'pool';
+	public const SOURCE_WEB = 'web';
 
 	public const REJECTION_REASONS = [
 		'not_qualified',

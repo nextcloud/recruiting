@@ -66,7 +66,7 @@ class InterviewService {
 		$this->permissions->assertCanManageCandidate($uid, $candidate);
 		$organizer = $this->userManager->get($uid);
 		if ($organizer === null) {
-			throw new NotPermittedException('No session user');
+			throw new NotPermittedException($this->l10n->t('No session user'));
 		}
 		return $this->slotFinder->propose($organizer, $attendeeUids, $durationMin, $timezone);
 	}

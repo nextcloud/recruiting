@@ -14,6 +14,7 @@ use OCA\Recruiting\Service\IngestionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IGroupManager;
+use OCP\IL10N;
 use OCP\IRequest;
 
 /**
@@ -29,6 +30,7 @@ class SettingsController extends Controller {
 		private ConfigService $config,
 		private IngestionService $ingestion,
 		private IGroupManager $groupManager,
+		private IL10N $l10n,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -43,7 +45,7 @@ class SettingsController extends Controller {
 			if (array_key_exists('hrGroup', $params)) {
 				$gid = (string)$params['hrGroup'];
 				if ($gid !== '' && !$this->groupManager->groupExists($gid)) {
-					throw new ValidationException('This group does not exist');
+					throw new ValidationException($this->l10n->t('This group does not exist'));
 				}
 				$this->config->setHrGroup($gid);
 			}
@@ -53,7 +55,7 @@ class SettingsController extends Controller {
 			if (array_key_exists('senderEmail', $params)) {
 				$email = trim((string)$params['senderEmail']);
 				if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-					throw new ValidationException('The sender address is invalid');
+					throw new ValidationException($this->l10n->t('The sender address is invalid'));
 				}
 				$this->config->setSenderEmail($email);
 			}

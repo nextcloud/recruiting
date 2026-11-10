@@ -34,6 +34,7 @@ class TimelineEvent extends Entity implements \JsonSerializable {
 	public const TYPE_DOCUMENT_ADDED = 'document_added';
 	public const TYPE_MAIL_SENT = 'mail_sent';
 	public const TYPE_MAIL_RECEIVED = 'mail_received';
+	public const TYPE_WEB_APPLICATION = 'web_application';
 	public const TYPE_INTERVIEW_PROPOSED = 'interview_proposed';
 	public const TYPE_INTERVIEW_CONFIRMED = 'interview_confirmed';
 	public const TYPE_INTERVIEW_CANCELLED = 'interview_cancelled';

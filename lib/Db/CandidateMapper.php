@@ -54,12 +54,17 @@ class CandidateMapper extends QBMapper {
 	 *
 	 * @return Candidate[]
 	 */
-	public function findTriage(): array {
+	public function findTriage(int $limit = 0, int $offset = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->isNull('opening_id'))
-			->orderBy('created_at', 'DESC');
+			->orderBy('created_at', 'DESC')
+			->addOrderBy('id', 'DESC');
+		if ($limit > 0) {
+			$qb->setMaxResults($limit);
+			$qb->setFirstResult(max(0, $offset));
+		}
 		return $this->findEntities($qb);
 	}
 
@@ -139,13 +144,18 @@ class CandidateMapper extends QBMapper {
 	 *
 	 * @return Candidate[]
 	 */
-	public function findPoolMembers(): array {
+	public function findPoolMembers(int $limit = 0, int $offset = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('pool_member', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNull('anonymized_at'))
-			->orderBy('pool_consent_at', 'DESC');
+			->orderBy('pool_consent_at', 'DESC')
+			->addOrderBy('id', 'DESC');
+		if ($limit > 0) {
+			$qb->setMaxResults($limit);
+			$qb->setFirstResult(max(0, $offset));
+		}
 		return $this->findEntities($qb);
 	}
 

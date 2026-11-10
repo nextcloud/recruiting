@@ -131,7 +131,7 @@ class OfferService {
 		$offer = $this->offerMapper->find($offerId);
 		$candidate = $this->candidateMapper->find($offer->getCandidateId());
 		if ($offer->getApproverUid() !== $uid) {
-			throw new NotPermittedException('Only the designated approver can decide on this offer');
+			throw new NotPermittedException($this->l10n->t('Only the designated approver can decide on this offer'));
 		}
 		$this->assertTransition($offer, Offer::STATUS_APPROVED);
 
@@ -154,7 +154,7 @@ class OfferService {
 		$offer = $this->offerMapper->find($offerId);
 		$candidate = $this->candidateMapper->find($offer->getCandidateId());
 		if ($offer->getApproverUid() !== $uid) {
-			throw new NotPermittedException('Only the designated approver can decide on this offer');
+			throw new NotPermittedException($this->l10n->t('Only the designated approver can decide on this offer'));
 		}
 		$this->assertTransition($offer, Offer::STATUS_DRAFT);
 

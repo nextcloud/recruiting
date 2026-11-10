@@ -40,8 +40,11 @@ class PublicController extends Controller {
 		private InterviewMapper $interviewMapper,
 		private InterviewService $interviews,
 		private \OCA\Recruiting\Service\PoolService $pool,
+		private \OCA\Recruiting\Db\OpeningMapper $openingMapper,
+		private \OCA\Recruiting\Service\IngestionService $ingestion,
 		private IInitialState $initialState,
 		private Defaults $defaults,
+		private \OCP\IL10N $l10n,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct($appName, $request);
@@ -187,6 +190,153 @@ class PublicController extends Controller {
 			'confirmed' => true,
 			'token' => $token,
 		], TemplateResponse::RENDER_AS_GUEST);
+	}
+
+	/**
+	 * The public application form for one opening (spec §4.13), reached at
+	 * /apply/{slug}. Only openings that opted in and are still open show a form;
+	 * anything else is a neutral 404 so a closed opening's slug leaks nothing.
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'recruitingPublicApply')]
+	#[AnonRateLimit(limit: 30, period: 60)]
+	public function showApplication(string $slug): TemplateResponse {
+		$opening = $this->openApplicationOpening($slug);
+		if ($opening === null) {
+			return $this->applyNotFound();
+		}
+		return $this->applyForm($opening);
+	}
+
+	/**
+	 * Receive a submission. Guarded by brute-force + rate limits (attributes), a
+	 * hidden honeypot field, and a minimum fill time — a bot that posts instantly
+	 * or fills the invisible field is dropped without creating anything. Consent
+	 * is mandatory (GDPR). On success the applicant sees a thank-you page (POST /
+	 * redirect / GET would need a token; a rendered confirmation is simpler and
+	 * has no state to leak).
+	 */
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[BruteForceProtection(action: 'recruitingPublicApply')]
+	#[AnonRateLimit(limit: 5, period: 60)]
+	public function submitApplication(string $slug): TemplateResponse {
+		$opening = $this->openApplicationOpening($slug);
+		if ($opening === null) {
+			return $this->applyNotFound();
+		}
+
+		// Honeypot: a field hidden from humans that bots dutifully fill.
+		if (trim((string)$this->request->getParam('website', '')) !== '') {
+			$this->logger->info('Recruiting: public application dropped (honeypot)');
+			return $this->applyThankYou($opening); // lie kindly: bots get a success page
+		}
+		// Minimum fill time: the form embeds a signed-ish timestamp; a submission
+		// faster than 3s is a script, not a person.
+		$startedAt = (int)$this->request->getParam('t', '0');
+		if ($startedAt > 0 && (time() - $startedAt) < 3) {
+			$this->logger->info('Recruiting: public application dropped (too fast)');
+			return $this->applyThankYou($opening);
+		}
+
+		$name = trim((string)$this->request->getParam('name', ''));
+		$email = trim((string)$this->request->getParam('email', ''));
+		$cover = (string)$this->request->getParam('cover', '');
+		$consent = $this->request->getParam('consent', '');
+
+		$errors = [];
+		if ($name === '') {
+			$errors[] = $this->l10n->t('Please enter your name.');
+		}
+		if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+			$errors[] = $this->l10n->t('Please enter a valid email address.');
+		}
+		if ($consent !== 'on' && $consent !== '1') {
+			$errors[] = $this->l10n->t('Please agree to the processing of your application.');
+		}
+		if (mb_strlen($cover) > 20000) {
+			$errors[] = $this->l10n->t('Your message is too long.');
+		}
+
+		$cv = null;
+		$file = $this->request->getUploadedFile('cv');
+		if (is_array($file) && ($file['error'] ?? \UPLOAD_ERR_NO_FILE) === \UPLOAD_ERR_OK) {
+			$content = @file_get_contents((string)($file['tmp_name'] ?? ''));
+			if ($content === false) {
+				$errors[] = $this->l10n->t('The uploaded file could not be read.');
+			} else {
+				$cv = [
+					'name' => (string)($file['name'] ?? 'CV'),
+					'mime' => (string)($file['type'] ?? 'application/octet-stream'),
+					'content' => $content,
+				];
+			}
+		}
+
+		if ($errors !== []) {
+			$response = $this->applyForm($opening, $errors, ['name' => $name, 'email' => $email, 'cover' => $cover]);
+			$response->setStatus(Http::STATUS_BAD_REQUEST);
+			return $response;
+		}
+
+		try {
+			$this->ingestion->ingestWebApplication($opening, $name, $email, $cover, $cv);
+		} catch (\Throwable $e) {
+			$this->logger->error('Recruiting: public application failed', ['exception' => $e]);
+			$response = $this->applyForm($opening, [$this->l10n->t('Something went wrong. Please try again.')], ['name' => $name, 'email' => $email, 'cover' => $cover]);
+			$response->setStatus(Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $response;
+		}
+
+		return $this->applyThankYou($opening);
+	}
+
+	/** An opening that currently accepts public applications, or null. */
+	private function openApplicationOpening(string $slug): ?\OCA\Recruiting\Db\Opening {
+		if ($slug === '' || strlen($slug) > 64) {
+			return null;
+		}
+		$opening = $this->openingMapper->findByMailSlug($slug);
+		if ($opening === null || !$opening->getPublicApply() || $opening->getStatus() !== 'open') {
+			return null;
+		}
+		return $opening;
+	}
+
+	/**
+	 * @param string[] $errors
+	 * @param array{name?:string,email?:string,cover?:string} $values
+	 */
+	private function applyForm(\OCA\Recruiting\Db\Opening $opening, array $errors = [], array $values = []): TemplateResponse {
+		$response = new TemplateResponse($this->appName, 'public-apply', [
+			'opening' => $opening,
+			'errors' => $errors,
+			'values' => $values,
+			'now' => time(),
+			'instanceName' => $this->defaults->getName(),
+			'done' => false,
+		], TemplateResponse::RENDER_AS_GUEST);
+		return $response;
+	}
+
+	private function applyThankYou(\OCA\Recruiting\Db\Opening $opening): TemplateResponse {
+		$response = new TemplateResponse($this->appName, 'public-apply', [
+			'opening' => $opening,
+			'errors' => [],
+			'values' => [],
+			'now' => time(),
+			'instanceName' => $this->defaults->getName(),
+			'done' => true,
+		], TemplateResponse::RENDER_AS_GUEST);
+		return $response;
+	}
+
+	private function applyNotFound(): TemplateResponse {
+		$response = new TemplateResponse($this->appName, 'public-notfound', [], TemplateResponse::RENDER_AS_GUEST);
+		$response->setStatus(Http::STATUS_NOT_FOUND);
+		$response->throttle(['action' => 'recruitingPublicApply']);
+		return $response;
 	}
 
 	private function lookup(string $token): ?\OCA\Recruiting\Db\Interview {

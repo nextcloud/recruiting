@@ -115,7 +115,13 @@ class RetentionServiceTest extends TestCase {
 		$documentEvent->setCandidateId(5);
 		$documentEvent->setType(TimelineEvent::TYPE_DOCUMENT_ADDED);
 		$documentEvent->setData(json_encode(['name' => 'Jane_Doe_CV.pdf']));
-		$this->eventMapper->method('findForCandidate')->willReturn([$mailEvent, $stageEvent, $documentEvent]);
+		// A public web application: the cover letter is personal data too.
+		$webEvent = new TimelineEvent();
+		$webEvent->setId(14);
+		$webEvent->setCandidateId(5);
+		$webEvent->setType(TimelineEvent::TYPE_WEB_APPLICATION);
+		$webEvent->setData(json_encode(['subject' => 'Application', 'body' => 'I am Jane, I worked at ...']));
+		$this->eventMapper->method('findForCandidate')->willReturn([$mailEvent, $stageEvent, $documentEvent, $webEvent]);
 
 		$this->documents->expects($this->once())->method('deleteAllFor')->with(5);
 		$this->voteMapper->expects($this->once())->method('stripCommentsForCandidate')->with(5);
@@ -135,10 +141,11 @@ class RetentionServiceTest extends TestCase {
 		$this->assertNotNull($candidate->getAnonymizedAt());
 		$this->assertFalse($candidate->getPoolMember());
 		$this->assertNull($candidate->getPoolConsentToken());
-		// mail and document events are scrubbed, the stage history stays
-		$this->assertSame([11, 13], $updatedEvents);
+		// mail, document and web-application events are scrubbed, stage stays
+		$this->assertSame([11, 13, 14], $updatedEvents);
 		$this->assertNull($mailEvent->getData());
 		$this->assertNull($documentEvent->getData());
+		$this->assertNull($webEvent->getData());
 		$this->assertNotNull($stageEvent->getData());
 	}
 

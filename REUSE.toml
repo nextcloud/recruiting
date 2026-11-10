@@ -36,7 +36,7 @@ SPDX-FileCopyrightText = "2026 Nextcloud GmbH and Nextcloud contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 
 [[annotations]]
-path = ["package.json", "package-lock.json", "composer.json", "composer.lock", "psalm.xml", "**/phpunit.xml", ".tx/config"]
+path = ["package.json", "package-lock.json", "composer.json", "composer.lock", "psalm.xml", "**/phpunit.xml", "**/phpunit.integration.xml", "tests/Integration/base-query-count.txt", ".tx/config"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "none"
 SPDX-License-Identifier = "CC0-1.0"

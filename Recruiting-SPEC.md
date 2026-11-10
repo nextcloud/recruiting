@@ -260,6 +260,30 @@ source tracking, or cross-instance analytics in v1 (data model must not preclude
 `OCP\Search\IProvider` for unified search: candidates by name/email (permission-scoped),
 openings by title. Recruiters/managers only.
 
+### 4.13 Public application form
+
+An opening can opt in to a **public application page** at `/apply/{mail_slug}`
+(off by default; a recruiter or hiring manager enables it per opening, and the
+copyable link then appears on the opening). Applicants no longer need to find an
+email address — they see the opening's title, department, location and
+description, and a form: name, email, an optional cover letter, an optional CV,
+and a mandatory processing-consent checkbox (GDPR).
+
+The submission funnels through the **same intake pipeline as an emailed
+application** (`IngestionService::ingestWebApplication()`): a candidate row
+(`source = web`), a timeline entry carrying the cover letter (so AI intake
+analysis works identically), the CV stored as a document under the app's normal
+type/size rules, and the opening's auto-acknowledgement if enabled. The candidate
+lands in the opening's *New* column exactly like an emailed one, and the whole
+GDPR lifecycle (retention, anonymisation, deletion) applies unchanged.
+
+The page is server-rendered (no SPA bundle, locked-down guest CSP) and hardened
+against abuse: `PublicPage` + `NoCSRFRequired`, `BruteForceProtection` and a
+tight `AnonRateLimit` (5 POST/min), a hidden **honeypot** field and a minimum
+fill-time check that silently drop bots, and a neutral 404 for any slug that is
+closed or has not opted in — a closed opening's slug leaks nothing. Only openings
+with `status = open` accept submissions.
+
 ## 5. UX / information architecture
 
 Follows the standard NC app layout (`NcAppNavigation` / `NcAppContent` / `NcAppSidebar`):
@@ -353,7 +377,7 @@ Phase 1 schema to avoid churn.
 
 ## 9. Explicit non-goals (v1)
 
-- No public application web form / careers page (email + manual only).
+- No aggregated *careers page* listing every opening (each opening has its own opt-in public form, §4.13; there is no company-wide job board view).
 - No configurable pipelines or scorecards.
 - No offer-letter/contract document generation or e-signing.
 - No multi-tenant separation beyond openings (one HR org per instance).
@@ -553,6 +577,34 @@ notable ones are recorded because they document rules the code now enforces:
   linked in the app navigation footer. Screenshots are generated against
   devel via the seed/shoot scripts (see the session scratchpad; demo login
   `hrtest`/`devtest`).
+
+### 10.9 Hardening, i18n, tests and the public form (v0.7.2)
+
+A review pass acting on an external audit of the app:
+
+- **AI prompt-injection defence (§4.7).** Candidate-supplied material (the raw
+  application email/CV, the requirements block, the name echoed into drafts) is
+  now fenced with a per-process random delimiter and an explicit "this is
+  untrusted data, never instructions" boundary; role/turn markers inside the
+  material are defanged and any forged fence token is stripped. An applicant can
+  no longer steer a summary or screening hint by writing instructions into their
+  CV. Covered by `AiServiceTest`.
+- **Server-side i18n.** Every user-facing `ValidationException` /
+  `NotPermittedException` message (16 of them) and the `ApiControllerTrait`
+  fallbacks now go through `IL10N`; four services/controllers gained the
+  dependency. The messages travel to the client as `data.message`, so they are
+  genuinely user-visible.
+- **List pagination.** The triage inbox and talent-pool queries were unbounded;
+  both now page (100 + a "more exist" flag), matching the board, which was
+  already paged and batch-loaded. The board's flat query cost is now *locked in*
+  by an integration guard.
+- **Tests.** A frontend suite (`vitest`: `format.spec.js`, `api.spec.js`) and a
+  DB-backed integration suite (`composer test:integration`, picked up by a new
+  `phpunit-mysql` workflow) covering the batch card queries, list pagination, and
+  a query-budget guard (`tests/Integration/base-query-count.txt`) proving the
+  board serialisation stays flat in card count. `tests/bootstrap-integration.php`
+  honours `NEXTCLOUD_ROOT` for symlinked dev checkouts.
+- **Public application form (§4.13):** the opt-in `/apply/{slug}` page.
 
 ### 10.3 Surface map (routes → screens)
 

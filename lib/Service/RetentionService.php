@@ -30,6 +30,7 @@ class RetentionService {
 	public const PII_EVENT_TYPES = [
 		TimelineEvent::TYPE_MAIL_SENT,
 		TimelineEvent::TYPE_MAIL_RECEIVED,
+		TimelineEvent::TYPE_WEB_APPLICATION,
 		TimelineEvent::TYPE_DOCUMENT_ADDED,
 	];
 
