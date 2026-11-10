@@ -11,6 +11,7 @@ namespace OCA\Recruiting\Tests\Unit;
 use OCA\Recruiting\Controller\SettingsController;
 use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Notification\Notifier;
+use OCA\Recruiting\Service\CandidateNameResolver;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\IngestionService;
 use OCA\Recruiting\Service\NotificationService;
@@ -127,6 +128,6 @@ class AutoAckCapSettingsTest extends TestCase {
 		$notification->expects($this->once())->method('setLink')->with('https://cloud.example/apps/recruiting/#/openings/7')->willReturnSelf();
 		$notification->method('setIcon')->willReturnSelf();
 
-		(new Notifier($factory, $urls, $this->createMock(IUserManager::class)))->prepare($notification, 'en');
+		(new Notifier($factory, $urls, $this->createMock(IUserManager::class), $this->createMock(CandidateNameResolver::class)))->prepare($notification, 'en');
 	}
 }
