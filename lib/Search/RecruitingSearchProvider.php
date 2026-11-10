@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Search;
 
 use OCA\Recruiting\AppInfo\Application;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Service\PermissionService;
 use OCP\IL10N;
@@ -27,10 +28,14 @@ use OCP\Search\SearchResultEntry;
  */
 class RecruitingSearchProvider implements IProvider {
 	private const MAX_OPENINGS = 3;
+	/** Shorter terms would match nearly every CV */
+	private const MIN_TEXT_TERM_LENGTH = 3;
+	private const TEXT_MATCH_LIMIT = 200;
 
 	public function __construct(
 		private CandidateMapper $candidateMapper,
 		private OpeningMapper $openingMapper,
+		private DocumentMapper $documentMapper,
 		private PermissionService $permissions,
 		private IURLGenerator $urlGenerator,
 		private IL10N $l10n,
@@ -96,7 +101,10 @@ class RecruitingSearchProvider implements IProvider {
 		}
 
 		$candidateLimit = max(0, $limit - count($entries));
-		$rows = $this->candidateMapper->search($term, $scope, $candidateLimit + 1, $offset);
+		$textMatchIds = mb_strlen(trim($term)) >= self::MIN_TEXT_TERM_LENGTH
+			? $this->documentMapper->findCandidateIdsByText($term, self::TEXT_MATCH_LIMIT)
+			: [];
+		$rows = $this->candidateMapper->search($term, $scope, $candidateLimit + 1, $offset, $textMatchIds);
 		$hasMore = count($rows) > $candidateLimit;
 		foreach (array_slice($rows, 0, $candidateLimit) as $candidate) {
 			if (!$this->permissions->canViewCandidate($uid, $candidate)) {

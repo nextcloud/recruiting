@@ -64,6 +64,9 @@ class PortalService {
 	 * existed get their token here, on first use.
 	 */
 	public function portalUrl(Candidate $candidate): string {
+		if ($candidate->getAnonymizedAt() !== null) {
+			return '';
+		}
 		$token = $candidate->getPortalToken();
 		if ($token === null || $token === '') {
 			$token = $this->newToken();

@@ -129,6 +129,14 @@ class PortalServiceTest extends TestCase {
 		$this->assertSame($url, $this->service->portalUrl($candidate));
 	}
 
+	public function testAnonymizedCandidatesGetNoNewPortalLink(): void {
+		$candidate = $this->candidate();
+		$candidate->setPortalToken(null);
+		$candidate->setAnonymizedAt(new \DateTime('2026-11-01'));
+		$this->candidateMapper->expects($this->never())->method('update');
+		$this->assertSame('', $this->service->portalUrl($candidate));
+	}
+
 	public function testViewShowsTheCoarseStatusAndUpcomingInterviewsOnly(): void {
 		$confirmed = $this->interview(1, Interview::STATUS_CONFIRMED, '2026-11-12T10:00:00Z');
 		$past = $this->interview(2, Interview::STATUS_CONFIRMED, '2026-11-01T10:00:00Z');

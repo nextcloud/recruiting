@@ -101,7 +101,8 @@ All notable changes to this app are documented here. The format follows
   openings; interviewers: their assigned or attended candidates; offer
   approvers: their offers), so matches are no longer lost behind invisible
   ones; anonymized candidates are never found, openings are matched by
-  title in SQL, and results page with "load more".
+  title in SQL, and results page with "load more". Terms of three or more
+  characters also find candidates whose CV or other documents contain them.
 
 ### Fixed
 

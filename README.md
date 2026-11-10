@@ -412,7 +412,8 @@ Bell notifications for everything that concerns you (assignments, interview
 confirmations, candidate replies, offer approvals, @-mentions, expiring
 offers), Activity stream entries per candidate, unified search over candidates
 and openings (permission-scoped in the database query, anonymized candidates
-excluded, paged), and deep links from every notification
+excluded, paged; terms of three or more characters also match the text of
+candidates' documents), and deep links from every notification
 straight to the right candidate. The interface ships in English and German.
 
 ## Setup

@@ -433,19 +433,25 @@ class CandidateMapper extends QBMapper {
 	/**
 	 * Name/email search for the unified search provider, restricted in SQL
 	 * to what the scope allows and never returning anonymized rows. Newest
-	 * first; $offset pages through the matches.
+	 * first; $offset pages through the matches. $textMatchIds are
+	 * candidates whose documents contain the term.
 	 *
+	 * @param int[] $textMatchIds
 	 * @return Candidate[]
 	 */
-	public function search(string $term, CandidateScope $scope, int $limit, int $offset = 0): array {
+	public function search(string $term, CandidateScope $scope, int $limit, int $offset = 0, array $textMatchIds = []): array {
 		$qb = $this->db->getQueryBuilder();
 		$like = '%' . $this->db->escapeLikeParameter(mb_strtolower($term)) . '%';
+		$matches = $qb->expr()->orX(
+			$qb->expr()->iLike('c.display_name', $qb->createNamedParameter($like)),
+			$qb->expr()->iLike('c.email', $qb->createNamedParameter($like)),
+		);
+		if ($textMatchIds !== []) {
+			$matches->add($qb->expr()->in('c.id', $qb->createNamedParameter(array_slice($textMatchIds, 0, 1000), IQueryBuilder::PARAM_INT_ARRAY)));
+		}
 		$qb->select('c.*')
 			->from($this->getTableName(), 'c')
-			->where($qb->expr()->orX(
-				$qb->expr()->iLike('c.display_name', $qb->createNamedParameter($like)),
-				$qb->expr()->iLike('c.email', $qb->createNamedParameter($like)),
-			))
+			->where($matches)
 			->andWhere($qb->expr()->isNull('c.anonymized_at'));
 		if (!$scope->everything) {
 			$qb->andWhere($this->scopeCondition($qb, $scope));

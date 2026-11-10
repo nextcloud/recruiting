@@ -173,6 +173,15 @@ class CandidateMapperTest extends TestCase {
 		$this->assertSame(0, $this->calls['first']);
 	}
 
+	public function testSearchIncludesCandidatesWithMatchingDocuments(): void {
+		$this->mapper->search('kubernetes', new CandidateScope('hr', true), 11, 0, [4, 9]);
+
+		$this->assertSame(
+			'(c.display_name ILIKE "%kubernetes%" OR c.email ILIKE "%kubernetes%" OR c.id IN [4,9])',
+			$this->conditions[0],
+		);
+	}
+
 	public function testSearchAppliesTheRoleScopeInSql(): void {
 		$this->mapper->search('jane', new CandidateScope('alice', false, [3, 4], [7]), 6, 12);
 
