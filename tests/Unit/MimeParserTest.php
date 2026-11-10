@@ -160,4 +160,56 @@ class MimeParserTest extends TestCase {
 		$mail = $this->parser->parse($raw);
 		$this->assertSame([], $mail->attachments);
 	}
+
+	public function testClassificationHeadersAreExposed(): void {
+		$raw = "Return-Path: <>\r\n"
+			. "Authentication-Results: mx.company.com;\r\n"
+			. "\tspf=pass smtp.mailfrom=a@example.com;\r\n"
+			. "\tdmarc=pass header.from=example.com\r\n"
+			. "Authentication-Results: relay.example.net; dmarc=fail\r\n"
+			. "From: Mail Delivery System <MAILER-DAEMON@mx.example.com>\r\n"
+			. "To: jobs@company.com\r\n"
+			. "Subject: Undelivered Mail Returned to Sender\r\n"
+			. "Auto-Submitted: auto-replied\r\n"
+			. "Precedence: bulk\r\n"
+			. "List-Id: <jobs.example.org>\r\n"
+			. "X-Autoreply: yes\r\n"
+			. "X-Autorespond: yes\r\n"
+			. "X-Auto-Response-Suppress: All\r\n"
+			. "X-Unrelated: dropped\r\n"
+			. "Content-Type: Multipart/Report; report-type=delivery-status; boundary=\"R\"\r\n"
+			. "\r\n"
+			. "--R\r\n"
+			. "Content-Type: text/plain\r\n"
+			. "\r\n"
+			. "Delivery failed.\r\n"
+			. "--R--\r\n";
+
+		$mail = $this->parser->parse($raw);
+		$this->assertSame('multipart/report', $mail->contentType);
+		$this->assertSame('<>', $mail->header('Return-Path'));
+		// Topmost occurrence wins, folded lines are unfolded
+		$this->assertSame('mx.company.com; spf=pass smtp.mailfrom=a@example.com; dmarc=pass header.from=example.com', $mail->header('authentication-results'));
+		$this->assertSame('auto-replied', $mail->header('auto-submitted'));
+		$this->assertSame('bulk', $mail->header('precedence'));
+		$this->assertSame('<jobs.example.org>', $mail->header('list-id'));
+		$this->assertSame('yes', $mail->header('x-autoreply'));
+		$this->assertSame('yes', $mail->header('x-autorespond'));
+		$this->assertSame('All', $mail->header('x-auto-response-suppress'));
+		$this->assertArrayNotHasKey('x-unrelated', $mail->headers);
+		$this->assertSame('', $mail->header('x-unrelated'));
+		$this->assertSame('mailer-daemon@mx.example.com', $mail->fromEmail);
+		$this->assertStringContainsString('Delivery failed.', $mail->textBody);
+	}
+
+	public function testPlainMailHasNoClassificationHeaders(): void {
+		$mail = $this->parser->parse("From: a@example.com\r\nSubject: Hi\r\n\r\nHello\r\n");
+		$this->assertSame([], $mail->headers);
+		$this->assertSame('text/plain', $mail->contentType);
+	}
+
+	public function testOversizedClassificationHeaderIsClamped(): void {
+		$mail = $this->parser->parse("From: a@example.com\r\nList-Id: " . str_repeat('x', 5000) . "\r\n\r\nHello\r\n");
+		$this->assertSame(2000, strlen($mail->header('list-id')));
+	}
 }

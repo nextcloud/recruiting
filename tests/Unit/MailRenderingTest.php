@@ -82,4 +82,53 @@ class MailRenderingTest extends TestCase {
 		$template = $this->templates->effectiveFor('interview_invite');
 		$this->assertStringContainsString('{{interview_link}}', $template['body']);
 	}
+
+	public static function mailNames(): array {
+		return [
+			'plain name' => ['Ada Lovelace', 'Ada Lovelace'],
+			'unicode name' => ['Zoë Ångström-Øberg', 'Zoë Ångström-Øberg'],
+			'initials with spaces' => ['J. R. R. Tolkien', 'J. R. R. Tolkien'],
+			'line breaks and tabs' => ["Ada\r\nBcc: x@evil.test\tLovelace", 'Ada Bcc: Lovelace'],
+			'control and bidi characters' => ["Ada\u{0000}\u{202E}Lovelace", 'Ada Lovelace'],
+			'scheme url' => ['Claim your prize at http://evil.example/win now', 'Claim your prize at now'],
+			'www' => ['Visit www.evil.test today', 'Visit today'],
+			'bare domain' => ['Prize evil.com', 'Prize'],
+			'domain with path' => ['See evil.co/x', 'See'],
+			'email address' => ['Mail me at win@evil.test', 'Mail me at'],
+			'only a url' => ['https://evil.example', 'applicant'],
+			'empty' => ['', 'applicant'],
+			'whitespace only' => ["  \n ", 'applicant'],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('mailNames')]
+	public function testNameForMail(string $name, string $expected): void {
+		$this->assertSame($expected, $this->mail->nameForMail($name));
+	}
+
+	public function testNameForMailIsCapped(): void {
+		$result = $this->mail->nameForMail(str_repeat('Ab ', 60));
+		$this->assertLessThanOrEqual(MailService::MAIL_NAME_MAX_LENGTH, mb_strlen($result));
+		$this->assertSame(trim($result), $result);
+	}
+
+	public function testPlaceholderContextUsesTheSanitizedNameButKeepsTheStoredOne(): void {
+		$candidate = new \OCA\Recruiting\Db\Candidate();
+		$candidate->setDisplayName("Winner\nclaim at https://evil.example/prize");
+
+		$context = $this->mail->contextFor($candidate, 'Backend Engineer', null);
+
+		$this->assertSame('Winner claim at', $context['candidate_name']);
+		$this->assertSame("Winner\nclaim at https://evil.example/prize", $candidate->getDisplayName());
+	}
+
+	public function testReceiptRendersTheSanitizedName(): void {
+		$candidate = new \OCA\Recruiting\Db\Candidate();
+		$candidate->setDisplayName('www.spam.test');
+
+		$mail = $this->mail->preview($candidate, 'Backend Engineer', 'receipt_confirmation', null, null);
+
+		$this->assertStringNotContainsString('spam.test', $mail['body']);
+		$this->assertStringContainsString('applicant', $mail['body']);
+	}
 }

@@ -132,8 +132,19 @@ the editor. Applicants see the opening and submit their name, email, an optional
 cover letter and CV, and a consent checkbox; the submission lands in *New* just
 like an emailed application, complete with auto-acknowledgement and the full
 GDPR lifecycle. The page is server-rendered and hardened (rate limits,
-brute-force protection, a honeypot); closed or opted-out openings return a
-neutral 404.
+brute-force protection, a honeypot, and a signed fill-time token: submissions
+faster than 3 seconds or without a valid token are silently dropped, a form
+left open for more than a day asks the applicant to submit again). Names are
+limited to 120 characters and may not contain links or email addresses;
+closed or opted-out openings return a neutral 404.
+
+**Automatic confirmations are guarded against abuse.** In every outgoing
+mail the candidate's name is cleaned up — line breaks, links and addresses
+are removed and it is shortened to 80 characters ("applicant" stands in if
+nothing is left); the stored name stays as it was. Each opening sends at most
+a configurable number of automatic confirmations per day (100 by default, see
+Settings); beyond that they are skipped and the HR group gets one
+notification per opening and day.
 
 The header also shows the opening's **mail tag** (e.g.
 `[backend-engineer]`): applications sent to `jobs+backend-engineer@…` or with
@@ -248,6 +259,22 @@ A heartbeat line shows when the mailbox was last checked — and warns when
 the last check failed. Pro tip: put the mail tag into your job postings and triage stays
 empty.
 
+Automatic mail — bounces, out-of-office replies, mailing lists (recognised by
+headers such as `Auto-Submitted`, `Precedence`, `List-Id`, an empty
+`Return-Path` or a `MAILER-DAEMON` sender) — never becomes a candidate and is
+never acknowledged; the heartbeat counts it as skipped. If it answers a mail
+to a candidate, it is noted on that candidate's timeline as an automatic
+reply, without notifying anyone. Mail whose `Authentication-Results` show a
+forged sender (DMARC fail, or SPF fail without a valid DKIM signature) still
+becomes a candidate but gets no automatic confirmation.
+
+Each check works through new mail for up to a minute (at most 500 mails). A
+temporary problem such as a database or storage outage leaves the mail
+unread and ends the check; the next check retries it. A mail that fails three
+times is moved to the mailbox folder **Recruiting-Failed** (created when
+needed) and marked as read, and the triage inbox shows how many mails wait
+there.
+
 ![Triage inbox](screenshots/11-triage-inbox.png)
 
 ### My reviews & My interviews
@@ -296,8 +323,9 @@ resolved preview first, and every sent mail lands on the candidate's timeline.
 
 **Administration → Recruiting** (admins): the HR group, the sender identity
 for candidate mail, the application mailbox (IMAP host/user/password with a
-*Test connection* button; fetched every 5 minutes), the GDPR retention period
-(0 disables the automation) and the talent-pool membership duration.
+*Test connection* button; fetched every 5 minutes), the daily limit of
+automatic confirmations per opening (0 means no limit), the GDPR retention
+period (0 disables the automation) and the talent-pool membership duration.
 
 **Personal settings → Groupware** (everyone): the **email digest** — off,
 daily or weekly. It bundles new applications in your openings, your pending

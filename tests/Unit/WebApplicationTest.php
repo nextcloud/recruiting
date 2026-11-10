@@ -16,6 +16,7 @@ use OCA\Recruiting\Db\SeenMailMapper;
 use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Service\AiService;
+use OCA\Recruiting\Service\AutoAckGuard;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\DocumentService;
@@ -39,6 +40,8 @@ class WebApplicationTest extends TestCase {
 	private TimelineService&MockObject $timeline;
 	private AiService&MockObject $ai;
 	private MailService&MockObject $mail;
+	private AutoAckGuard&MockObject $guard;
+	private bool $guardAllows = true;
 	private IngestionService $service;
 
 	protected function setUp(): void {
@@ -47,6 +50,8 @@ class WebApplicationTest extends TestCase {
 		$this->timeline = $this->createMock(TimelineService::class);
 		$this->ai = $this->createMock(AiService::class);
 		$this->mail = $this->createMock(MailService::class);
+		$this->guard = $this->createMock(AutoAckGuard::class);
+		$this->guard->method('tryAcquire')->willReturnCallback(fn () => $this->guardAllows);
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturn(new \DateTime());
 
@@ -64,6 +69,7 @@ class WebApplicationTest extends TestCase {
 			$this->ai,
 			$time,
 			new NullLogger(),
+			$this->guard,
 		);
 	}
 
@@ -121,6 +127,21 @@ class WebApplicationTest extends TestCase {
 		$this->mail->expects($this->once())->method('sendToCandidate');
 
 		$this->service->ingestWebApplication($this->opening(autoAck: true), 'A', 'a@example.org', '', null);
+	}
+
+	public function testNoAutoAckWhenTheDailyCapIsReached(): void {
+		$this->guardAllows = false;
+		$this->candidates->method('insertCandidate')->willReturn($this->candidateFor('a@example.org'));
+		$this->mail->expects($this->never())->method('sendToCandidate');
+
+		$this->service->ingestWebApplication($this->opening(autoAck: true), 'A', 'a@example.org', '', null);
+	}
+
+	public function testDisabledAutoAckDoesNotUseUpTheCap(): void {
+		$this->candidates->method('insertCandidate')->willReturn($this->candidateFor('a@example.org'));
+		$this->guard->expects($this->never())->method('tryAcquire');
+
+		$this->service->ingestWebApplication($this->opening(autoAck: false), 'A', 'a@example.org', '', null);
 	}
 
 	public function testNoAutoAckWhenDisabled(): void {

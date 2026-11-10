@@ -21,7 +21,17 @@
 				fetched: ingestion.status.fetched,
 				created: ingestion.status.created,
 			}) }}
+			<template v-if="ingestion.status.skipped > 0">
+				{{ n('recruiting', '(%n automatic mail skipped)', '(%n automatic mails skipped)', ingestion.status.skipped) }}
+			</template>
 		</p>
+		<NcNoteCard v-if="ingestion?.status?.quarantined > 0" type="warning">
+			{{ n('recruiting',
+				'%n mail could not be processed after several attempts and was moved to the mailbox folder "{folder}". Please check it there.',
+				'%n mails could not be processed after several attempts and were moved to the mailbox folder "{folder}". Please check them there.',
+				ingestion.status.quarantined,
+				{ folder: ingestion.status.quarantineFolder }) }}
+		</NcNoteCard>
 
 		<NcLoadingIcon v-if="loading" :size="44" class="triage-view__loading" />
 		<NcEmptyContent

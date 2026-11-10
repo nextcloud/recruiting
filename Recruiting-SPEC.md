@@ -606,6 +606,36 @@ A review pass acting on an external audit of the app:
   honours `NEXTCLOUD_ROOT` for symlinked dev checkouts.
 - **Public application form (§4.13):** the opt-in `/apply/{slug}` page.
 
+### 10.10 Mail intake and auto-ack hardening
+
+- **Auto-ack cap counter.** Counted per opening in a lazily loaded app-config
+  key (`auto_ack_count_<openingId>`: date, count, notified flag), not by
+  querying the timeline: `mail_sent` events do not record which template was
+  used, and counting would need a candidate join on every send. The cap is
+  soft — two simultaneous submissions may both pass the last slot.
+- **Names in mail.** `MailService::nameForMail()` sanitises `{{candidate_name}}`
+  and the To display name for every send path; a token is dropped as link-like
+  when it contains `://`, `@`, `www.` or a `x.yy` dot pattern, so a greeting may
+  lose a dotted token such as "J.Smith". The public form rejects only
+  `://`, `www.`, `host.tld/` and `@`.
+- **Automatic mail** is classified by `MailClassifier` from headers the parser
+  keeps (`ParsedMail::$headers`). Automatic replies to a candidate token
+  address are recorded on the timeline with `automatic: true`; their
+  attachments are not stored (bounces carry a copy of our own mail).
+- **Forged senders.** Only the topmost `Authentication-Results` header is read;
+  its authserv-id is not checked against a configured host.
+- **Failures.** The Message-ID ledger (`recruiting_mail_seen`) gained
+  `pending`, `attempts`, `last_error`, `quarantined_at`. Mails without a
+  Message-ID are tracked by `sha256:<hash of the raw mail>`. A transient
+  failure after the candidate row was written can create a duplicate on
+  retry (at-least-once, as before). The quarantine folder falls back to
+  `INBOX<delimiter>Recruiting-Failed` on servers that refuse top-level folders;
+  the triage count is the folder's `STATUS MESSAGES`, so it drops once HR
+  empties the folder.
+- **Form token.** 24 h maximum age (the review suggested about 2 h; a day keeps
+  slow applicants from losing their input). Secret: app config
+  `public_form_secret`, sensitive and lazy, generated on first use.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

@@ -16,6 +16,7 @@ use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Imap\ImapClient;
 use OCA\Recruiting\Service\AiService;
+use OCA\Recruiting\Service\AutoAckGuard;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\DocumentService;
@@ -67,7 +68,7 @@ class IngestionReplyTest extends TestCase {
 		$this->client = $this->createMock(ImapClient::class);
 		$client = $this->client;
 
-		$this->service = new class($client, $this->config, $this->createMock(OpeningMapper::class), $this->candidateMapper, $this->seenMail, $this->teamMapper, $this->candidates, $this->documents, $this->createMock(MailService::class), $this->timeline, $this->notifications, $this->createMock(AiService::class), $this->timeFactoryMock(), new NullLogger(), ) extends IngestionService {
+		$this->service = new class($client, $this->config, $this->createMock(OpeningMapper::class), $this->candidateMapper, $this->seenMail, $this->teamMapper, $this->candidates, $this->documents, $this->createMock(MailService::class), $this->timeline, $this->notifications, $this->createMock(AiService::class), $this->timeFactoryMock(), new NullLogger(), $this->createMock(AutoAckGuard::class), ) extends IngestionService {
 			public function __construct(
 				private ImapClient $testClient,
 				...$args,

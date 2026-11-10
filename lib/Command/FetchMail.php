@@ -40,7 +40,14 @@ class FetchMail extends Command {
 			$output->writeln('<error>Fetching failed: ' . $e->getMessage() . '</error>');
 			return self::FAILURE;
 		}
-		$output->writeln(sprintf('Fetched %d message(s), created %d candidate(s).', $stats['fetched'], $stats['created']));
+		$output->writeln(sprintf('Fetched %d message(s), created %d candidate(s), skipped %d automatic mail(s).', $stats['fetched'], $stats['created'], $stats['skipped']));
+		if ($stats['quarantined'] > 0) {
+			$output->writeln(sprintf('<comment>%d message(s) failed repeatedly and wait in the mailbox folder "%s".</comment>', $stats['quarantined'], $stats['quarantineFolder']));
+		}
+		if ($stats['error'] !== null) {
+			$output->writeln('<error>Stopped early by a temporary error, the next run retries: ' . $stats['error'] . '</error>');
+			return self::FAILURE;
+		}
 		return self::SUCCESS;
 	}
 }

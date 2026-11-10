@@ -19,6 +19,7 @@ use OCP\Security\ICrypto;
 class ConfigService {
 	public const DEFAULT_HR_GROUP = 'recruiting';
 	public const MAX_DOCUMENT_SIZE = 20 * 1024 * 1024;
+	public const DEFAULT_AUTO_ACK_DAILY_CAP = 100;
 
 	/** Mime types accepted for candidate documents */
 	public const ALLOWED_MIMES = [
@@ -89,17 +90,54 @@ class ConfigService {
 	}
 
 	/**
-	 * Result of the last ingestion run — the triage view shows it so a
-	 * silently failing mailbox does not go unnoticed.
+	 * Automatic acknowledgements per opening and day; 0 means unlimited.
+	 * Stops the public form and the mailbox from being used as a mail relay.
+	 */
+	public function getAutoAckDailyCap(): int {
+		return max(0, $this->appConfig->getValueInt(Application::APP_ID, 'auto_ack_daily_cap', self::DEFAULT_AUTO_ACK_DAILY_CAP));
+	}
+
+	public function setAutoAckDailyCap(int $cap): void {
+		$this->appConfig->setValueInt(Application::APP_ID, 'auto_ack_daily_cap', max(0, min(100000, $cap)));
+	}
+
+	/**
+	 * Today's auto-acknowledgement tally of one opening. One lazily loaded
+	 * key per opening, overwritten when the date changes.
 	 *
-	 * @param array{ranAt: string, fetched: int, created: int, error: ?string} $status
+	 * @return array{date: string, count: int, notified: bool}
+	 */
+	public function getAutoAckCounter(int $openingId): array {
+		$raw = $this->appConfig->getValueString(Application::APP_ID, 'auto_ack_count_' . $openingId, '', lazy: true);
+		$data = $raw !== '' ? json_decode($raw, true) : null;
+		return [
+			'date' => is_array($data) ? (string)($data['date'] ?? '') : '',
+			'count' => is_array($data) ? (int)($data['count'] ?? 0) : 0,
+			'notified' => is_array($data) && (bool)($data['notified'] ?? false),
+		];
+	}
+
+	/**
+	 * @param array{date: string, count: int, notified: bool} $counter
+	 */
+	public function setAutoAckCounter(int $openingId, array $counter): void {
+		$this->appConfig->setValueString(Application::APP_ID, 'auto_ack_count_' . $openingId, json_encode($counter) ?: '', lazy: true);
+	}
+
+	/**
+	 * Result of the last ingestion run — the triage view shows it so a
+	 * silently failing mailbox does not go unnoticed. `skipped` counts
+	 * automatic mails (bounces, autoresponders) that were not ingested,
+	 * `quarantined` the messages currently in `quarantineFolder`.
+	 *
+	 * @param array{ranAt: string, fetched: int, created: int, skipped: int, quarantined: int, quarantineFolder: string, error: ?string} $status
 	 */
 	public function setIngestionStatus(array $status): void {
 		$this->appConfig->setValueString(Application::APP_ID, 'ingestion_status', json_encode($status) ?: '');
 	}
 
 	/**
-	 * @return ?array{ranAt: string, fetched: int, created: int, error: ?string}
+	 * @return ?array{ranAt?: string, fetched?: int, created?: int, skipped?: int, quarantined?: int, quarantineFolder?: string, error?: ?string}
 	 */
 	public function getIngestionStatus(): ?array {
 		$raw = $this->appConfig->getValueString(Application::APP_ID, 'ingestion_status', '');

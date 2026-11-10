@@ -10,6 +10,40 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A daily limit for automatic receipt confirmations per opening (Administration
+  → Recruiting, default 100, 0 = unlimited). Further confirmations that day are
+  skipped and the HR group gets one notification per opening and day.
+- Mail intake skips automatic mail (bounces, autoresponders, mailing lists): no
+  candidate, no confirmation, counted as "skipped" in the triage heartbeat. An
+  automatic answer to a candidate mail is noted on the candidate's timeline
+  without notifying anyone.
+- Mails that fail three times are moved to the IMAP folder `Recruiting-Failed`;
+  the triage inbox shows how many wait there.
+
+### Changed
+
+- Mail intake works for up to 60 seconds per run (at most 500 mails) instead of
+  25 mails, so a busy mailbox no longer builds a backlog of hours.
+- Database and storage errors during intake leave the mail unread and end the
+  run; the next run retries it. Other failures are retried twice before the
+  mail is quarantined. `recruiting:fetch-mail` reports skipped and quarantined
+  mails and fails when a temporary error stopped the run.
+
+### Security
+
+- The public application form carries a signed fill-time token
+  (`<time>.<HMAC>` with a per-instance secret). Missing, forged or too fast
+  submissions are dropped silently; forms older than 24 hours ask for a new
+  submission. Names longer than 120 characters or containing links or email
+  addresses are rejected.
+- Candidate names are cleaned up in every outgoing mail (no line breaks, links
+  or addresses, at most 80 characters), so the receipt confirmation cannot
+  carry spam text.
+- No automatic confirmation to senders whose `Authentication-Results` show a
+  forged address (DMARC fail, or SPF fail without DKIM pass).
+
 ## [0.7.1] - 2026-08-17
 
 ### Fixed

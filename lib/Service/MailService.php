@@ -24,6 +24,8 @@ use Psr\Log\LoggerInterface;
  * instance SMTP and logging every mail on the candidate timeline (spec §4.5).
  */
 class MailService {
+	public const MAIL_NAME_MAX_LENGTH = 80;
+
 	public function __construct(
 		private IMailer $mailer,
 		private ConfigService $config,
@@ -54,6 +56,36 @@ class MailService {
 	}
 
 	/**
+	 * The candidate name as it may appear in an outgoing mail. Names come from
+	 * web forms and From headers, so they are attacker-controlled: control
+	 * characters and line breaks become spaces, anything link-like (URLs,
+	 * www., host.tld, email addresses) is dropped, and the rest is capped.
+	 * A neutral greeting stands in when nothing is left. The stored name is
+	 * never changed.
+	 */
+	public function nameForMail(string $name): string {
+		$name = (string)preg_replace('/\p{C}+/u', ' ', $name);
+		$kept = [];
+		foreach (preg_split('/\s+/u', $name) ?: [] as $word) {
+			if ($word !== '' && !self::looksLikeLink($word)) {
+				$kept[] = $word;
+			}
+		}
+		$name = trim(mb_substr(implode(' ', $kept), 0, self::MAIL_NAME_MAX_LENGTH));
+		return $name !== '' ? $name : $this->l10n->t('applicant');
+	}
+
+	/**
+	 * Whether a text fragment would be shown as a link by a mail client.
+	 */
+	public static function looksLikeLink(string $text): bool {
+		return str_contains($text, '://')
+			|| str_contains($text, '@')
+			|| stripos($text, 'www.') !== false
+			|| preg_match('/[\p{L}\p{N}-]\.\p{L}{2,}/u', $text) === 1;
+	}
+
+	/**
 	 * @param array<string, string> $extra additional placeholder values
 	 * @return array<string, string>
 	 */
@@ -63,7 +95,7 @@ class MailService {
 			$senderName = $this->userManager->getDisplayName($actorUid) ?? $actorUid;
 		}
 		return array_merge([
-			'candidate_name' => $candidate->getDisplayName(),
+			'candidate_name' => $this->nameForMail($candidate->getDisplayName()),
 			'opening_title' => $openingTitle ?? '',
 			'company' => $this->defaults->getName(),
 			'sender_name' => $senderName,
@@ -117,7 +149,7 @@ class MailService {
 		$template->setSubject($subject);
 
 		$message = $this->mailer->createMessage();
-		$message->setTo([$to => $candidate->getDisplayName()]);
+		$message->setTo([$to => $this->nameForMail($candidate->getDisplayName())]);
 		$message->useTemplate($template);
 
 		$senderEmail = $this->config->getSenderEmail();
