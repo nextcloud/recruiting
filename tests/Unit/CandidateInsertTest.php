@@ -20,6 +20,7 @@ use OCA\Recruiting\Db\TeamMemberMapper;
 use OCA\Recruiting\Db\TimelineEventMapper;
 use OCA\Recruiting\Db\VoteMapper;
 use OCA\Recruiting\Service\ActivityPublisher;
+use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\InterviewService;
@@ -74,6 +75,7 @@ class CandidateInsertTest extends TestCase {
 			$this->createMock(TimelineEventMapper::class),
 			$this->createMock(NotificationService::class),
 			$this->createMock(ActivityPublisher::class),
+			$this->createMock(ActivityPurgeService::class),
 			$this->createMock(ICommentsManager::class),
 			$this->createMock(IUserManager::class),
 			$time,

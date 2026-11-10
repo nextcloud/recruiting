@@ -32,6 +32,7 @@ use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\OfferService;
 use OCA\Recruiting\Service\PermissionService;
 use OCA\Recruiting\Service\PoolService;
+use OCA\Recruiting\Service\PortalService;
 use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -91,6 +92,7 @@ class CandidateServiceBoardTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$time,
 			$l10n,
+			$this->createMock(PortalService::class),
 		);
 	}
 

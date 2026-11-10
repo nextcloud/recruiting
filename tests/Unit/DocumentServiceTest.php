@@ -14,6 +14,7 @@ use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\TextExtractionService;
+use OCA\Recruiting\Service\VirusScanService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IAppData;
 use OCP\Files\SimpleFS\ISimpleFile;
@@ -47,7 +48,7 @@ class DocumentServiceTest extends TestCase {
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(static fn (string $s) => $s);
 
-		$this->service = new DocumentService($this->mapper, $appData, $random, $time, $l10n, $this->extraction, new NullLogger());
+		$this->service = new DocumentService($this->mapper, $appData, $this->createMock(VirusScanService::class), $random, $time, $l10n, $this->extraction, new NullLogger());
 	}
 
 	private function candidate(): Candidate {

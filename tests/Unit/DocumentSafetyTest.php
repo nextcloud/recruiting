@@ -12,6 +12,7 @@ use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\TextExtractionService;
 use OCA\Recruiting\Service\VirusScanService;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -125,7 +126,7 @@ class DocumentSafetyTest extends TestCase {
 		$random->method('generate')->willReturn(str_repeat('k', 32));
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturn(new \DateTime());
-		return new DocumentService($mapper, $appData, $scan, $random, $time, $l10n, new NullLogger());
+		return new DocumentService($mapper, $appData, $scan, $random, $time, $l10n, $this->createMock(TextExtractionService::class), new NullLogger());
 	}
 
 	private function candidate(): Candidate {

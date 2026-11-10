@@ -12,6 +12,7 @@ use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\TextExtractionService;
 use OCA\Recruiting\Service\VirusScanService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\IAppData;
@@ -65,6 +66,7 @@ class DocumentMoveTest extends TestCase {
 			$this->createMock(ISecureRandom::class),
 			$this->createMock(ITimeFactory::class),
 			$this->createMock(IL10N::class),
+			$this->createMock(TextExtractionService::class),
 			$this->createMock(LoggerInterface::class),
 		);
 		$target = new Candidate();

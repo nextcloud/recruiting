@@ -20,6 +20,7 @@ use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\ActivityPublisher;
+use OCA\Recruiting\Service\ApplicationFormToken;
 use OCA\Recruiting\Service\CalendarService;
 use OCA\Recruiting\Service\IngestionService;
 use OCA\Recruiting\Service\InterviewService;
@@ -162,6 +163,7 @@ class InterviewCandidateRequestTest extends TestCase {
 			$this->createMock(PoolService::class),
 			$this->createMock(OpeningMapper::class),
 			$this->createMock(IngestionService::class),
+			$this->createMock(ApplicationFormToken::class),
 			$this->createMock(IInitialState::class),
 			$this->createMock(Defaults::class),
 			$this->createMock(IL10N::class),
@@ -171,8 +173,8 @@ class InterviewCandidateRequestTest extends TestCase {
 
 	public function testEndpointsAnswerUnknownTokensWithAThrottled404(): void {
 		$mapper = $this->createMock(InterviewMapper::class);
-		$mapper->method('findByToken')->willReturn(null);
 		$interviews = $this->createMock(InterviewService::class);
+		$interviews->method('findByPublicToken')->willReturn(null);
 		$interviews->expects($this->never())->method('declineSlots');
 		$interviews->expects($this->never())->method('requestReschedule');
 		$controller = $this->controller($mapper, $interviews);
@@ -185,8 +187,8 @@ class InterviewCandidateRequestTest extends TestCase {
 
 	public function testEndpointsReportValidationErrors(): void {
 		$mapper = $this->createMock(InterviewMapper::class);
-		$mapper->method('findByToken')->willReturn($this->interview(Interview::STATUS_PROPOSED));
 		$interviews = $this->createMock(InterviewService::class);
+		$interviews->method('findByPublicToken')->willReturn($this->interview(Interview::STATUS_PROPOSED));
 		$interviews->method('requestReschedule')->willThrowException(new ValidationException('Only a confirmed interview can be rescheduled'));
 		$interviews->expects($this->once())->method('declineSlots');
 		$controller = $this->controller($mapper, $interviews);
