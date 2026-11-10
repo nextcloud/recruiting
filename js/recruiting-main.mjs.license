@@ -6,11 +6,11 @@ SPDX-FileCopyrightText: Christoph Wurst
 SPDX-FileCopyrightText: Eduardo San Martin Morote
 SPDX-FileCopyrightText: Eric Norris (https://github.com/ericnorris)
 SPDX-FileCopyrightText: Evan You
-SPDX-FileCopyrightText: Iskren Ivov Chernev <iskren.chernev@gmail.com> (https://github.com/ichernev)
 SPDX-FileCopyrightText: Jacob Clevenger<https://github.com/wheatjs>
 SPDX-FileCopyrightText: Nextcloud GmbH and Nextcloud contributors
 SPDX-FileCopyrightText: Nick Frasser (https://nfrasser.com)
 SPDX-FileCopyrightText: Rob Cresswell <robcresswell@pm.me>
+SPDX-FileCopyrightText: moment developers
 SPDX-FileCopyrightText: recruiting developers
 SPDX-FileCopyrightText: ts-md5 developers
 
@@ -28,7 +28,7 @@ This file is generated from multiple sources. Included packages:
 	- version: 4.3.3
 	- license: MIT
 - moment
-	- version: 2.30.1
+	- version: 2.31.0
 	- license: MIT
 - pinia
 	- version: 3.0.4

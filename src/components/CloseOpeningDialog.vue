@@ -12,6 +12,7 @@
 			activeCount,
 		)"
 		size="normal"
+		dialogClasses="close-opening-dialog"
 		@update:open="!$event && $emit('cancel')">
 		<template #actions>
 			<NcButton @click="$emit('cancel')">
@@ -49,3 +50,11 @@ export default {
 	emits: ['cancel', 'closeOnly', 'reject'],
 }
 </script>
+
+<style lang="scss">
+/* Three long button labels do not fit on one line in a normal-sized dialog */
+.close-opening-dialog .dialog__actions {
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+</style>
