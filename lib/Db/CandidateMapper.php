@@ -50,6 +50,42 @@ class CandidateMapper extends QBMapper {
 	}
 
 	/**
+	 * Every candidate of an opening, whatever the stage, anonymized ones
+	 * included.
+	 */
+	public function countForOpening(int $openingId): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('id', 'cnt'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('opening_id', $qb->createNamedParameter($openingId, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$count = (int)$result->fetchOne();
+		$result->closeCursor();
+		return $count;
+	}
+
+	/**
+	 * A cheap marker that changes whenever the board of an opening changes:
+	 * candidates added or removed (count, highest id), moved (latest stage
+	 * change) or touched in any way that leaves a timeline entry (votes,
+	 * screeners, interviews, mail — highest event id). One aggregate query.
+	 */
+	public function revisionForOpening(int $openingId): string {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('COUNT(DISTINCT ' . $qb->getColumnName('id', 'c') . ')'))
+			->addSelect($qb->func()->max('c.id'))
+			->addSelect($qb->func()->max('c.stage_changed_at'))
+			->addSelect($qb->func()->max('e.id'))
+			->from($this->getTableName(), 'c')
+			->leftJoin('c', 'recruiting_events', 'e', $qb->expr()->eq('e.candidate_id', 'c.id'))
+			->where($qb->expr()->eq('c.opening_id', $qb->createNamedParameter($openingId, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$row = $result->fetchNumeric();
+		$result->closeCursor();
+		return implode('-', array_map(static fn ($value) => (string)($value ?? '0'), $row === false ? [] : $row));
+	}
+
+	/**
 	 * Candidates without an opening: the triage inbox.
 	 *
 	 * @return Candidate[]

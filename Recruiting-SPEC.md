@@ -636,6 +636,40 @@ A review pass acting on an external audit of the app:
   slow applicants from losing their input). Secret: app config
   `public_form_secret`, sensitive and lazy, generated on first use.
 
+### 10.11 Board: lazy terminal stages, close/delete, live updates (unreleased)
+
+- **Lazy terminal stages:** `GET …/candidates` without `?stage=` returns cards
+  for the active stages only plus `deferred: [hired, rejected, withdrawn]`;
+  their totals come from `stageCounts`. The client loads a terminal stage on
+  expand (summary chip → extra board column, also shown in the table) through
+  the existing `?stage=&offset=` paging. Interviewers keep one complete
+  response (`complete: true`, terminal cards included, no paging).
+- **Bulk reject (§4.5):** `POST /api/candidates/bulk-reject`
+  `{ids, reason, sendMail, subject, body, askPool}`, ≤ 50 ids per request
+  (`BulkRejectService`); subject/body are template text rendered per
+  candidate via `MailService::render/contextFor`, then the single-reject path
+  (`CandidateService::rejectCandidate`) runs, so "mail first, reject only if
+  sent" still holds. Deviation from §10.7: the mail is no longer reviewed per
+  candidate; the dialog previews the rendered mail for the first candidate
+  (`mail-preview` accepts `subject`/`body` overrides and returns the raw
+  `template`). Candidates without an address are rejected without mail and
+  flagged `mailed: false`; failures never reveal names the user may not see.
+- **Close opening (§4.1):** with active candidates, a dialog offers bulk
+  rejection (reason `position_filled`) or closing as is; the opening is closed
+  after the run, also when some rejections failed.
+- **Delete opening (§4.1):** recruiters only, only with zero candidates in any
+  stage (anonymized included); removes the team rows and the Talk room. No
+  other table references an opening.
+- **Live board:** `GET /api/openings/{id}/revision` = one aggregate query
+  (candidate count, max id, max `stage_changed_at`, max timeline event id via
+  a join on `recruiting_events`). Polled every 30 s while the page is visible;
+  a change triggers an in-place reload that refills every stage to what was
+  loaded before. Edits that leave no timeline entry (e.g. renaming a
+  candidate) do not change the marker. `notify_push` is not used.
+- **Stage conflicts:** `setStage` takes `expectedStage`; a mismatch throws
+  `ConflictException` → HTTP 409 `{message, stage, displayName}`, nothing
+  changes.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

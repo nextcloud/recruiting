@@ -95,6 +95,15 @@
 							</template>
 							{{ t('recruiting', 'Close opening') }}
 						</NcActionButton>
+						<NcActionButton
+							v-if="session.isRecruiter && totalCount === 0"
+							:title="t('recruiting', 'Only possible while the opening has no candidates at all')"
+							@click="deleteOpening">
+							<template #icon>
+								<TrashCanOutline :size="20" />
+							</template>
+							{{ t('recruiting', 'Delete opening') }}
+						</NcActionButton>
 					</NcActions>
 				</div>
 			</div>
@@ -124,16 +133,16 @@
 				{{ t('recruiting', 'Drag cards between stages or use a card’s ⋮ menu. Every move is logged on the candidate’s timeline and visible to the hiring team.') }}
 			</p>
 			<!-- Board -->
-			<div v-if="view === 'board'" class="board">
+			<div v-if="view === 'board'" class="board" :style="{ '--board-columns': boardStages.length }">
 				<section
-					v-for="stage in session.stages"
+					v-for="stage in boardStages"
 					:key="stage"
 					class="board__column"
 					:class="[
 						'board__column--' + stage,
 						{
 							'board__column--dropover': dropStage === stage,
-							'board__column--droppable': dragged !== null && dragged.stage !== stage,
+							'board__column--droppable': dragged !== null && dragged.stage !== stage && session.isActiveStage(stage),
 						},
 					]"
 					:aria-label="stageLabel(stage)"
@@ -144,6 +153,17 @@
 						<span class="board__column-dot" aria-hidden="true" />
 						<span class="board__column-title">{{ stageLabel(stage) }}</span>
 						<span class="board__column-count">{{ stageTotal(stage) }}</span>
+						<NcButton
+							v-if="session.isTerminalStage(stage)"
+							variant="tertiary"
+							size="small"
+							:ariaLabel="t('recruiting', 'Collapse “{stage}”', { stage: stageLabel(stage) })"
+							:title="t('recruiting', 'Collapse “{stage}”', { stage: stageLabel(stage) })"
+							@click="toggleTerminal(stage)">
+							<template #icon>
+								<ChevronLeft :size="20" />
+							</template>
+						</NcButton>
 					</header>
 					<TransitionGroup tag="div" name="card" class="board__cards">
 						<CandidateCard
@@ -165,8 +185,8 @@
 										</template>
 										{{ t('recruiting', 'Move to "{stage}"', { stage: stageLabel(target) }) }}
 									</NcActionButton>
-									<NcActionSeparator />
-									<NcActionButton :closeAfterClick="true" @click="rejectTarget = candidate">
+									<NcActionSeparator v-if="candidate.stage !== 'rejected'" />
+									<NcActionButton v-if="candidate.stage !== 'rejected'" :closeAfterClick="true" @click="rejectTarget = candidate">
 										<template #icon>
 											<CloseCircleOutline :size="20" />
 										</template>
@@ -176,7 +196,8 @@
 							</template>
 						</CandidateCard>
 					</TransitionGroup>
-					<p v-if="byStage(stage).length === 0" class="board__empty">
+					<NcLoadingIcon v-if="byStage(stage).length === 0 && loadingStage === stage" class="board__empty" :size="28" />
+					<p v-else-if="byStage(stage).length === 0" class="board__empty">
 						{{ dragged !== null
 							? t('recruiting', 'Drop the card here')
 							: (filterQuery !== '' || attentionOnly) ? t('recruiting', 'No matches') : t('recruiting', 'No candidates') }}
@@ -290,25 +311,17 @@
 				</div>
 			</div>
 
-			<!-- Terminal summary -->
-			<footer v-if="view === 'board'" class="opening-view__terminal">
+			<!-- Terminal stages: collapsed to their count, cards loaded on expand -->
+			<footer class="opening-view__terminal">
 				<button
+					v-for="chip in terminalChips"
+					:key="chip.stage"
 					class="opening-view__terminal-chip"
-					:title="t('recruiting', 'Candidates who accepted an offer — click to see them in the table view')"
-					@click="view = 'table'">
-					✅ {{ t('recruiting', 'Hired') }}: {{ opening.stageCounts.hired ?? 0 }}
-				</button>
-				<button
-					class="opening-view__terminal-chip"
-					:title="t('recruiting', 'Rejected candidates stay on file until the retention period ends — click to see them in the table view')"
-					@click="view = 'table'">
-					🚫 {{ t('recruiting', 'Rejected') }}: {{ opening.stageCounts.rejected ?? 0 }}
-				</button>
-				<button
-					class="opening-view__terminal-chip"
-					:title="t('recruiting', 'Candidates who withdrew their application — click to see them in the table view')"
-					@click="view = 'table'">
-					↩️ {{ t('recruiting', 'Withdrawn') }}: {{ opening.stageCounts.withdrawn ?? 0 }}
+					:class="{ 'opening-view__terminal-chip--expanded': expanded.has(chip.stage) }"
+					:aria-pressed="expanded.has(chip.stage) ? 'true' : 'false'"
+					:title="chip.title"
+					@click="toggleTerminal(chip.stage)">
+					{{ chip.icon }} {{ stageLabel(chip.stage) }}: {{ stageTotal(chip.stage) }}
 				</button>
 			</footer>
 		</template>
@@ -326,13 +339,26 @@
 		<RejectModal
 			v-if="rejectTarget"
 			:candidate="rejectTarget"
-			@close="abortReject"
+			@close="rejectTarget = null"
 			@rejected="onRejected" />
+		<BulkRejectModal
+			v-if="bulkReject"
+			:candidates="bulkReject.candidates"
+			:presetReason="bulkReject.presetReason"
+			:intro="bulkReject.intro"
+			@finished="onBulkRejected"
+			@close="bulkReject = null" />
+		<CloseOpeningDialog
+			v-if="showCloseDialog"
+			:activeCount="opening?.activeCount ?? 0"
+			@cancel="showCloseDialog = false"
+			@closeOnly="closeWithoutChanges"
+			@reject="closeWithRejection" />
 	</div>
 </template>
 
 <script>
-import { showError, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
@@ -345,21 +371,36 @@ import AccountPlusOutline from 'vue-material-design-icons/AccountPlusOutline.vue
 import AccountSearchOutline from 'vue-material-design-icons/AccountSearchOutline.vue'
 import ArchiveOutline from 'vue-material-design-icons/ArchiveOutline.vue'
 import ArrowRightThin from 'vue-material-design-icons/ArrowRightThin.vue'
+import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
 import ForumOutline from 'vue-material-design-icons/ForumOutline.vue'
 import PauseCircleOutline from 'vue-material-design-icons/PauseCircleOutline.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import PlayCircleOutline from 'vue-material-design-icons/PlayCircleOutline.vue'
 import TableLarge from 'vue-material-design-icons/TableLarge.vue'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import ViewColumnOutline from 'vue-material-design-icons/ViewColumnOutline.vue'
+import BulkRejectModal from '../components/BulkRejectModal.vue'
 import CandidateCard from '../components/CandidateCard.vue'
 import CandidateModal from '../components/CandidateModal.vue'
+import CloseOpeningDialog from '../components/CloseOpeningDialog.vue'
 import OpeningModal from '../components/OpeningModal.vue'
 import RejectModal from '../components/RejectModal.vue'
 import api, { errorMessage } from '../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../store.js'
 import { confirmDestructive } from '../utils/confirm.js'
 import { formatDate, fromNow, roleLabel, stageLabel } from '../utils/format.js'
+import { handleStageConflict, isStageConflict } from '../utils/stageConflict.js'
+
+/** How often an open board asks whether someone else changed it */
+const POLL_INTERVAL = 30000
+
+/**
+ * @param {Array} list cards
+ * @param {string} stage stage to count
+ * @return {number}
+ */
+const countInStage = (list, stage) => list.filter((candidate) => candidate.stage === stage).length
 
 export default {
 	name: 'OpeningView',
@@ -368,9 +409,12 @@ export default {
 		AccountSearchOutline,
 		ArchiveOutline,
 		ArrowRightThin,
+		BulkRejectModal,
 		CandidateCard,
 		CandidateModal,
+		ChevronLeft,
 		CloseCircleOutline,
+		CloseOpeningDialog,
 		ForumOutline,
 		NcActionButton,
 		NcActionSeparator,
@@ -386,6 +430,7 @@ export default {
 		PlayCircleOutline,
 		RejectModal,
 		TableLarge,
+		TrashCanOutline,
 		ViewColumnOutline,
 	},
 
@@ -406,19 +451,28 @@ export default {
 			candidates: [],
 			loading: true,
 			loadingMore: false,
+			loadingStage: null,
+			loadToken: 0,
 			pageSize: 100,
+			// interviewers get their whole list at once: nothing to page
+			complete: false,
+			// terminal stages whose cards are shown (loaded on demand)
+			expanded: new Set(),
+			revision: null,
+			pollTimer: null,
 			filterQuery: '',
 			attentionOnly: false,
 			selection: new Set(),
 			sortKey: null,
 			sortAsc: true,
-			rejectQueue: [],
 			view: 'board',
 			dragged: null,
 			dropStage: null,
 			showCandidateModal: false,
 			showEditModal: false,
 			rejectTarget: null,
+			bulkReject: null,
+			showCloseDialog: false,
 		}
 	},
 
@@ -427,9 +481,13 @@ export default {
 			return this.openingsStore.byId(this.id)
 		},
 
+		visibleCandidates() {
+			return this.candidates.filter((candidate) => this.session.isActiveStage(candidate.stage) || this.expanded.has(candidate.stage))
+		},
+
 		filteredCandidates() {
 			const query = this.filterQuery.trim().toLowerCase()
-			let result = this.candidates
+			let result = this.visibleCandidates
 			if (query !== '') {
 				result = result.filter((candidate) => candidate.displayName.toLowerCase().includes(query)
 					|| (candidate.email ?? '').toLowerCase().includes(query))
@@ -446,6 +504,22 @@ export default {
 
 		allStages() {
 			return this.session.stages.concat(['hired', 'withdrawn'])
+		},
+
+		boardStages() {
+			return this.session.stages.concat(this.session.terminalStages.filter((stage) => this.expanded.has(stage)))
+		},
+
+		terminalChips() {
+			return [
+				{ stage: 'hired', icon: '✅', title: this.t('recruiting', 'Candidates who accepted an offer — click to show or hide them') },
+				{ stage: 'rejected', icon: '🚫', title: this.t('recruiting', 'Rejected candidates stay on file until the retention period ends — click to show or hide them') },
+				{ stage: 'withdrawn', icon: '↩️', title: this.t('recruiting', 'Candidates who withdrew their application — click to show or hide them') },
+			]
+		},
+
+		totalCount() {
+			return Object.values(this.opening?.stageCounts ?? {}).reduce((sum, count) => sum + count, 0)
 		},
 
 		tableColumns() {
@@ -484,9 +558,7 @@ export default {
 		},
 
 		stagesWithMore() {
-			return this.session.stages
-				.concat(['hired', 'rejected', 'withdrawn'])
-				.filter((stage) => this.hasMore(stage))
+			return this.boardStages.filter((stage) => this.hasMore(stage))
 		},
 
 		canManage() {
@@ -498,6 +570,10 @@ export default {
 		id: {
 			immediate: true,
 			handler() {
+				this.candidates = []
+				this.expanded = new Set()
+				this.selection = new Set()
+				this.revision = null
 				this.load()
 			},
 		},
@@ -508,26 +584,168 @@ export default {
 		},
 	},
 
+	mounted() {
+		document.addEventListener('visibilitychange', this.onVisibilityChange)
+		this.startPolling()
+	},
+
+	beforeUnmount() {
+		this.stopPolling()
+		document.removeEventListener('visibilitychange', this.onVisibilityChange)
+	},
+
 	methods: {
 		formatDate,
 		fromNow,
 		roleLabel,
 		stageLabel,
+		/**
+		 * (Re)load the board. A silent reload keeps what the user looks at:
+		 * every stage is refilled to as many cards as were loaded before, and
+		 * expanded terminal stages stay expanded — so the scroll position, the
+		 * selection and the open sidebar survive.
+		 *
+		 * @param {boolean} silent reload in place, without the spinner
+		 */
 		async load(silent = false) {
+			const token = ++this.loadToken
+			const previous = silent ? this.loadedCounts() : {}
 			if (!silent) {
 				this.loading = true
 			}
 			try {
+				// The marker is read before the cards, so a change in between
+				// shows up on the next poll instead of being missed
+				const revision = await this.fetchRevision()
 				const [{ data }] = await Promise.all([
 					api.getCandidates(this.id),
 					this.refreshOpening(),
 				])
-				this.candidates = data.cards
+				if (token !== this.loadToken) {
+					return
+				}
 				this.pageSize = data.page
+				this.complete = data.complete === true
+				// Refilled before it replaces the shown list, so nothing jumps
+				const cards = data.cards
+				await this.fillStages(cards, previous, token)
+				if (token !== this.loadToken) {
+					return
+				}
+				this.candidates = cards
+				this.revision = revision
+				this.pruneSelection()
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not load candidates')))
 			} finally {
-				this.loading = false
+				if (token === this.loadToken) {
+					this.loading = false
+				}
+			}
+		},
+
+		loadedCounts() {
+			return Object.fromEntries(this.boardStages.map((stage) => [stage, this.loadedInStage(stage)]))
+		},
+
+		/**
+		 * @param {Array} list cards to fill up
+		 * @param {object} previous stage => number of cards loaded before
+		 * @param {number} token load the fill belongs to
+		 */
+		async fillStages(list, previous, token) {
+			for (const stage of this.boardStages) {
+				const wanted = Math.max(previous[stage] ?? 0, this.expanded.has(stage) ? 1 : 0)
+				const target = Math.min(wanted, this.stageTotal(stage))
+				while (!this.complete && token === this.loadToken && countInStage(list, stage) < target) {
+					if (await this.fetchPage(stage, list) === 0) {
+						break
+					}
+				}
+			}
+		},
+
+		/**
+		 * Append the next page of one stage.
+		 *
+		 * @param {string} stage the stage to page in
+		 * @param {Array} list cards to append to
+		 * @return {Promise<number>} number of cards that were new
+		 */
+		async fetchPage(stage, list = this.candidates) {
+			const { data } = await api.getCandidates(this.id, { stage, offset: countInStage(list, stage) })
+			const known = new Set(list.map((candidate) => candidate.id))
+			const fresh = data.cards.filter((candidate) => !known.has(candidate.id))
+			list.push(...fresh)
+			return fresh.length
+		},
+
+		async fetchRevision() {
+			try {
+				const { data } = await api.getOpeningRevision(this.id)
+				return data.revision
+			} catch {
+				return null
+			}
+		},
+
+		startPolling() {
+			this.stopPolling()
+			if (document.visibilityState === 'visible') {
+				this.pollTimer = setInterval(this.poll, POLL_INTERVAL)
+			}
+		},
+
+		stopPolling() {
+			clearInterval(this.pollTimer)
+			this.pollTimer = null
+		},
+
+		onVisibilityChange() {
+			if (document.visibilityState === 'visible') {
+				this.poll()
+			}
+			this.startPolling()
+		},
+
+		async poll() {
+			if (this.loading || this.dragged !== null) {
+				return
+			}
+			const id = this.id
+			const revision = await this.fetchRevision()
+			if (revision === null || id !== this.id) {
+				return
+			}
+			if (this.revision === null) {
+				this.revision = revision
+			} else if (revision !== this.revision) {
+				this.load(true)
+			}
+		},
+
+		pruneSelection() {
+			const visible = new Set(this.visibleCandidates.map((candidate) => candidate.id))
+			if ([...this.selection].some((id) => !visible.has(id))) {
+				this.selection = new Set([...this.selection].filter((id) => visible.has(id)))
+			}
+		},
+
+		async toggleTerminal(stage) {
+			const next = new Set(this.expanded)
+			if (next.has(stage)) {
+				next.delete(stage)
+				this.expanded = next
+				if (!this.complete) {
+					this.candidates = this.candidates.filter((candidate) => candidate.stage !== stage)
+				}
+				this.pruneSelection()
+				return
+			}
+			next.add(stage)
+			this.expanded = next
+			if (!this.complete && this.loadedInStage(stage) === 0 && this.stageTotal(stage) > 0) {
+				await this.loadMore(stage)
 			}
 		},
 
@@ -575,42 +793,61 @@ export default {
 				: new Set(this.sortedCandidates.map((candidate) => candidate.id))
 		},
 
+		/**
+		 * Each move carries the stage the user saw, so a candidate someone
+		 * else moved in the meantime is left alone (HTTP 409).
+		 *
+		 * @param {string} stage target stage
+		 */
 		async bulkMove(stage) {
-			const ids = [...this.selection]
+			const targets = this.candidates.filter((candidate) => this.selection.has(candidate.id) && candidate.stage !== stage)
 			let failed = 0
-			for (const id of ids) {
+			const conflicts = []
+			for (const candidate of targets) {
 				try {
-					await api.setStage(id, stage)
-				} catch {
-					failed++
+					await api.setStage(candidate.id, stage, candidate.stage)
+				} catch (error) {
+					if (isStageConflict(error)) {
+						conflicts.push({ error, candidate })
+					} else {
+						failed++
+					}
 				}
 			}
 			this.selection = new Set()
 			this.load(true)
+			if (conflicts.length > 3) {
+				showWarning(this.n('recruiting', '%n candidate was moved by someone else in the meantime and was left unchanged', '%n candidates were moved by someone else in the meantime and were left unchanged', conflicts.length))
+			} else {
+				conflicts.forEach(({ error, candidate }) => handleStageConflict(error, candidate.displayName))
+			}
 			if (failed > 0) {
 				showError(this.n('recruiting', '%n candidate could not be moved', '%n candidates could not be moved', failed))
-			} else {
+			} else if (conflicts.length === 0) {
 				showSuccess(this.t('recruiting', 'Moved to "{stage}"', { stage: this.stageLabel(stage) }))
 			}
 		},
 
-		// Bulk reject: one shared decision, but the mail preview stays per
-		// candidate (spec §4.5 — nothing goes out unreviewed). The modal
-		// walks through the queue one candidate at a time.
+		// Bulk reject: one shared decision and one mail template, rendered
+		// per candidate on the server (the first candidate is previewed).
 		startBulkReject() {
-			this.rejectQueue = this.sortedCandidates
+			const candidates = this.sortedCandidates
 				.filter((candidate) => this.selection.has(candidate.id) && candidate.stage !== 'rejected')
-			this.selection = new Set()
-			this.rejectTarget = this.rejectQueue.shift() ?? null
+			if (candidates.length > 0) {
+				this.bulkReject = { candidates, presetReason: null, intro: '', closeAfter: false }
+			}
 		},
 
-		abortReject() {
-			this.rejectQueue = []
-			this.rejectTarget = null
+		async onBulkRejected() {
+			this.selection = new Set()
+			if (this.bulkReject?.closeAfter) {
+				await this.setStatus('closed')
+				showSuccess(this.t('recruiting', 'Opening closed'))
+			}
 		},
 
 		loadedInStage(stage) {
-			return this.candidates.filter((candidate) => candidate.stage === stage).length
+			return countInStage(this.candidates, stage)
 		},
 
 		stageTotal(stage) {
@@ -620,19 +857,19 @@ export default {
 		hasMore(stage) {
 			// While filtering, pagination hints would be misleading: the filter
 			// only searches what is loaded
-			return this.filterQuery === '' && this.stageTotal(stage) > this.loadedInStage(stage)
+			return !this.complete && this.filterQuery === '' && this.stageTotal(stage) > this.loadedInStage(stage)
 		},
 
 		async loadMore(stage) {
 			this.loadingMore = true
+			this.loadingStage = stage
 			try {
-				const { data } = await api.getCandidates(this.id, { stage, offset: this.loadedInStage(stage) })
-				const known = new Set(this.candidates.map((candidate) => candidate.id))
-				this.candidates.push(...data.cards.filter((candidate) => !known.has(candidate.id)))
+				await this.fetchPage(stage)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not load more candidates')))
 			} finally {
 				this.loadingMore = false
+				this.loadingStage = null
 			}
 		},
 
@@ -657,7 +894,7 @@ export default {
 		},
 
 		onDragOver(stage, event) {
-			if (this.dragged !== null && this.dragged.stage !== stage) {
+			if (this.dragged !== null && this.dragged.stage !== stage && this.session.isActiveStage(stage)) {
 				this.dropStage = stage
 				event.dataTransfer.dropEffect = 'move'
 			}
@@ -667,7 +904,7 @@ export default {
 			const candidate = this.dragged
 			this.dragged = null
 			this.dropStage = null
-			if (candidate && candidate.stage !== stage) {
+			if (candidate && candidate.stage !== stage && this.session.isActiveStage(stage)) {
 				await this.moveTo(candidate, stage)
 			}
 		},
@@ -676,10 +913,14 @@ export default {
 			const previous = candidate.stage
 			candidate.stage = stage // optimistic
 			try {
-				await api.setStage(candidate.id, stage)
+				await api.setStage(candidate.id, stage, previous)
 				this.load(true)
 			} catch (error) {
 				candidate.stage = previous
+				if (handleStageConflict(error, candidate.displayName)) {
+					this.load(true)
+					return
+				}
 				showError(errorMessage(error, this.t('recruiting', 'Could not move the candidate')))
 			}
 		},
@@ -720,22 +961,73 @@ export default {
 		},
 
 		async closeOpening() {
-			const active = this.candidates.filter((c) => this.session.isActiveStage(c.stage))
-			if (active.length > 0
-				&& !await confirmDestructive(
-					this.t('recruiting', 'Close this opening?'),
-					this.n(
-						'recruiting',
-						'There is still %n active candidate. Remaining candidates keep their stage and can still be rejected afterwards.',
-						'There are still %n active candidates. Remaining candidates keep their stage and can still be rejected afterwards.',
-						active.length,
-					),
-					this.t('recruiting', 'Close opening'),
-				)) {
+			if ((this.opening.activeCount ?? 0) > 0) {
+				this.showCloseDialog = true
 				return
 			}
 			await this.setStatus('closed')
 			showSuccess(this.t('recruiting', 'Opening closed'))
+		},
+
+		async closeWithoutChanges() {
+			this.showCloseDialog = false
+			await this.setStatus('closed')
+			showSuccess(this.t('recruiting', 'Opening closed'))
+		},
+
+		/**
+		 * Reject every active candidate — not only the loaded pages — and
+		 * close the opening once the run is over.
+		 */
+		async closeWithRejection() {
+			this.showCloseDialog = false
+			this.loadingMore = true
+			try {
+				for (const stage of this.session.stages) {
+					while (!this.complete && this.loadedInStage(stage) < this.stageTotal(stage)) {
+						if (await this.fetchPage(stage) === 0) {
+							break
+						}
+					}
+				}
+			} catch (error) {
+				showError(errorMessage(error, this.t('recruiting', 'Could not load candidates')))
+				return
+			} finally {
+				this.loadingMore = false
+			}
+			const candidates = this.candidates.filter((candidate) => this.session.isActiveStage(candidate.stage))
+			if (candidates.length === 0) {
+				await this.closeWithoutChanges()
+				return
+			}
+			this.bulkReject = {
+				candidates,
+				presetReason: 'position_filled',
+				intro: this.t('recruiting', 'The opening is closed when the run is over. Candidates who cannot be rejected keep their stage.'),
+				closeAfter: true,
+			}
+		},
+
+		async deleteOpening() {
+			const id = this.opening.id
+			if (!await confirmDestructive(
+				this.t('recruiting', 'Delete this opening?'),
+				this.t('recruiting', '“{title}” is removed together with its hiring team and team chat. This cannot be undone.', { title: this.opening.title }),
+				this.t('recruiting', 'Delete opening'),
+			)) {
+				return
+			}
+			try {
+				await api.deleteOpening(id)
+				this.stopPolling()
+				await this.$router.push({ name: 'home' })
+				this.openingsStore.remove(id)
+				showSuccess(this.t('recruiting', 'Opening deleted'))
+				this.openingsStore.load(true)
+			} catch (error) {
+				showError(errorMessage(error, this.t('recruiting', 'Could not delete the opening')))
+			}
 		},
 
 		onCandidateSaved() {
@@ -749,8 +1041,7 @@ export default {
 		},
 
 		onRejected() {
-			// Bulk reject walks a queue: on to the next candidate, if any
-			this.rejectTarget = this.rejectQueue.shift() ?? null
+			this.rejectTarget = null
 			this.load(true)
 		},
 	},
@@ -871,13 +1162,18 @@ export default {
 		&:hover {
 			background-color: var(--color-background-dark);
 		}
+
+		&--expanded {
+			border-color: var(--color-primary-element);
+			background-color: var(--color-primary-element-light, var(--color-background-hover));
+		}
 	}
 }
 
 .board {
 	@include stages.vars;
 	display: grid;
-	grid-template-columns: repeat(4, minmax(220px, 1fr));
+	grid-template-columns: repeat(var(--board-columns, 4), minmax(220px, 1fr));
 	gap: calc(var(--default-grid-baseline) * 3);
 	flex: 1;
 	min-height: 0;
@@ -908,6 +1204,18 @@ export default {
 
 		&--offer {
 			--recruiting-stage-accent: var(--recruiting-stage-offer);
+		}
+
+		&--hired {
+			--recruiting-stage-accent: var(--recruiting-stage-hired);
+		}
+
+		&--rejected {
+			--recruiting-stage-accent: var(--recruiting-stage-rejected);
+		}
+
+		&--withdrawn {
+			--recruiting-stage-accent: var(--recruiting-stage-withdrawn);
 		}
 
 		// a drag is in flight and this column is a valid target
@@ -1140,7 +1448,7 @@ export default {
 
 @media (max-width: 1024px) {
 	.board {
-		grid-template-columns: repeat(4, minmax(240px, 280px));
+		grid-template-columns: repeat(var(--board-columns, 4), minmax(240px, 280px));
 	}
 }
 </style>

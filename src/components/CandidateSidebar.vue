@@ -149,6 +149,7 @@ import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
 import { confirmDestructive } from '../utils/confirm.js'
 import { reasonLabel, stageLabel } from '../utils/format.js'
+import { handleStageConflict } from '../utils/stageConflict.js'
 
 export default {
 	name: 'CandidateSidebar',
@@ -224,9 +225,13 @@ export default {
 		stageLabel,
 		async moveTo(stage) {
 			try {
-				await api.setStage(this.candidate.id, stage)
+				await api.setStage(this.candidate.id, stage, this.candidate.stage)
 				this.onMutated()
 			} catch (error) {
+				if (handleStageConflict(error, this.candidate.displayName)) {
+					this.onMutated()
+					return
+				}
 				showError(errorMessage(error, this.t('recruiting', 'Could not move the candidate')))
 			}
 		},

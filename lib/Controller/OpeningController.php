@@ -53,6 +53,19 @@ class OpeningController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function destroy(int $id): DataResponse {
+		return $this->handle(function () use ($id) {
+			$this->openings->destroy($this->uid(), $id);
+			return ['deleted' => true];
+		});
+	}
+
+	#[NoAdminRequired]
+	public function revision(int $id): DataResponse {
+		return $this->handle(fn () => $this->openings->revision($this->uid(), $id));
+	}
+
+	#[NoAdminRequired]
 	public function createTalkRoom(int $id): DataResponse {
 		return $this->handle(fn () => $this->openings->createTalkRoom($this->uid(), $id));
 	}
