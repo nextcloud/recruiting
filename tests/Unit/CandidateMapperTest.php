@@ -38,6 +38,8 @@ class CandidateMapperTest extends TestCase {
 	/** @var array<string, mixed> */
 	private array $calls = [];
 	private int $builders = 0;
+	/** rows an UPDATE/DELETE reports as changed */
+	private int $affected = 0;
 
 	protected function setUp(): void {
 		$this->db = $this->createMock(IDBConnection::class);
@@ -93,6 +95,7 @@ class CandidateMapperTest extends TestCase {
 		$result = $this->createMock(IResult::class);
 		$result->method('fetch')->willReturn(false);
 		$qb->method('executeQuery')->willReturn($result);
+		$qb->method('executeStatement')->willReturnCallback(fn () => $this->affected);
 		return $qb;
 	}
 
@@ -160,6 +163,21 @@ class CandidateMapperTest extends TestCase {
 		$candidate->setOpeningId($openingId);
 		$candidate->resetUpdatedFields();
 		return $candidate;
+	}
+
+	public function testTheStageClaimOnlyMatchesTheExpectedStage(): void {
+		$this->affected = 1;
+		$this->reportCache->expects($this->once())->method('invalidate')->with(5);
+
+		$this->assertTrue($this->mapper->claimStage($this->candidate(5), Candidate::STAGE_SCREENING, Candidate::STAGE_REJECTED));
+		$this->assertSame(['id = 7', 'stage = "screening"'], $this->conditions);
+	}
+
+	public function testALostStageClaimChangesNothing(): void {
+		$this->affected = 0;
+		$this->reportCache->expects($this->never())->method('invalidate');
+
+		$this->assertFalse($this->mapper->claimStage($this->candidate(5), Candidate::STAGE_SCREENING, Candidate::STAGE_REJECTED));
 	}
 
 	public function testRecruiterSearchIsUnscopedButSkipsAnonymized(): void {

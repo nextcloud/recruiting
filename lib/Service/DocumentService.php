@@ -8,11 +8,15 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Service;
 
+use OCA\Recruiting\BackgroundJob\ExtractTextJob;
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Exception\ValidationException;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
+use OCP\Files\GenericFileException;
 use OCP\Files\IAppData;
 use OCP\Files\InvalidContentException;
 use OCP\Files\NotFoundException;
@@ -25,6 +29,9 @@ use Psr\Log\LoggerInterface;
 /**
  * Candidate documents live in app data — never in user Files — and are
  * only served through the app with permission checks (spec §3).
+ *
+ * Text extraction (for AI material and search) runs in a queued background
+ * job, never in the request or the mail intake that stores the file.
  */
 class DocumentService {
 	/**
@@ -50,6 +57,7 @@ class DocumentService {
 		private IL10N $l10n,
 		private TextExtractionService $textExtraction,
 		private LoggerInterface $logger,
+		private IJobList $jobList,
 	) {
 	}
 
@@ -99,10 +107,15 @@ class DocumentService {
 	}
 
 	/**
+	 * Store a document. Its text is extracted later by a queued job; a
+	 * caller that queues the extraction itself (to follow it with the AI
+	 * intake analysis) passes $queueExtraction = false and calls
+	 * {@see queueTextExtraction()}.
+	 *
 	 * @throws ValidationException
 	 */
-	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy): Document {
-		$name = $this->sanitizeName($name);
+	public function add(Candidate $candidate, string $name, string $mime, string $content, ?string $uploadedBy, bool $queueExtraction = true): Document {
+		$name = self::sanitizeName($name);
 		$mime = $this->validate($mime, $content);
 
 		$threat = $this->virusScan->findThreat($content);
@@ -130,8 +143,55 @@ class DocumentService {
 		$document->setFileKey($fileKey);
 		$document->setUploadedBy($uploadedBy);
 		$document->setCreatedAt($this->timeFactory->getDateTime());
-		$document->setTextContent($this->extractText($mime, $content));
-		return $this->documentMapper->insert($document);
+		$document = $this->documentMapper->insert($document);
+		if ($queueExtraction) {
+			$this->queueTextExtraction([$document]);
+		}
+		return $document;
+	}
+
+	/**
+	 * Queue one background job that extracts the text of these documents
+	 * and, with $intakeCandidateId, then schedules the AI intake analysis of
+	 * that candidate, so the analysis sees the CV text.
+	 *
+	 * @param Document[] $documents
+	 * @return bool whether a job was queued: false when none of the
+	 *              documents has extractable text
+	 */
+	public function queueTextExtraction(array $documents, ?int $intakeCandidateId = null): bool {
+		$ids = [];
+		foreach ($documents as $document) {
+			if ($document->getTextContent() === null && $this->textExtraction->supports($document->getMime())) {
+				$ids[] = $document->getId();
+			}
+		}
+		if ($ids === []) {
+			return false;
+		}
+		$this->jobList->add(ExtractTextJob::class, [
+			'documentIds' => $ids,
+			'intakeCandidateId' => $intakeCandidateId,
+		]);
+		return true;
+	}
+
+	/**
+	 * Extract and store the text of one stored document, unless it has text
+	 * already. A document deleted in the meantime is skipped.
+	 *
+	 * @return bool whether text was stored
+	 */
+	public function extractStoredText(int $documentId): bool {
+		try {
+			$document = $this->documentMapper->find($documentId);
+		} catch (DoesNotExistException) {
+			return false;
+		}
+		if ($document->getTextContent() !== null) {
+			return false;
+		}
+		return $this->fillText($document);
 	}
 
 	/**
@@ -147,19 +207,29 @@ class DocumentService {
 		foreach ($this->documentMapper->findWithoutText(TextExtractionService::EXTRACTABLE_MIMES, $afterId, $limit) as $document) {
 			$checked++;
 			$lastId = $document->getId();
-			try {
-				$content = $this->getFile($document)->getContent();
-			} catch (\Exception) {
-				continue;
-			}
-			$text = $this->extractText($document->getMime(), $content);
-			if ($text !== null) {
-				$document->setTextContent($text);
-				$this->documentMapper->update($document);
+			if ($this->fillText($document)) {
 				$extracted++;
 			}
 		}
 		return ['checked' => $checked, 'extracted' => $extracted, 'lastId' => $lastId];
+	}
+
+	private function fillText(Document $document): bool {
+		if (!$this->textExtraction->supports($document->getMime())) {
+			return false;
+		}
+		try {
+			$content = $this->getFile($document)->getContent();
+		} catch (\Exception) {
+			return false;
+		}
+		$text = $this->extractText($document->getMime(), $content);
+		if ($text === null) {
+			return false;
+		}
+		$document->setTextContent($text);
+		$this->documentMapper->update($document);
+		return true;
 	}
 
 	/**
@@ -167,9 +237,6 @@ class DocumentService {
 	 * document without text, it never blocks storing the file.
 	 */
 	private function extractText(string $mime, string $content): ?string {
-		if (!$this->textExtraction->supports($mime)) {
-			return null;
-		}
 		try {
 			return $this->textExtraction->extract($mime, $content);
 		} catch (\Throwable $e) {
@@ -182,24 +249,57 @@ class DocumentService {
 		return $this->folderFor($document->getCandidateId(), create: false)->getFile($document->getFileKey());
 	}
 
+	/**
+	 * Remove a document: the file first, then the row. Should the file stay
+	 * behind, the row is kept and an exception thrown, so a retry still
+	 * finds the file.
+	 *
+	 * @throws GenericFileException|\OCP\Files\NotPermittedException when the file could not be deleted
+	 */
 	public function delete(Document $document): void {
 		try {
-			$this->getFile($document)->delete();
+			$folder = $this->folderFor($document->getCandidateId(), create: false);
 		} catch (NotFoundException) {
-			// already gone — still remove the row
+			$folder = null;
+		}
+		if ($folder !== null && $folder->fileExists($document->getFileKey())) {
+			$folder->getFile($document->getFileKey())->delete();
+			$this->assertDeleted($folder, [$document]);
 		}
 		$this->documentMapper->delete($document);
 	}
 
 	/**
-	 * Remove every document (rows and files) of a candidate.
+	 * Remove every document of a candidate: the folder with all files
+	 * first, then the rows. Should a file stay behind, the rows are kept and
+	 * an exception thrown — never a stored CV without a row pointing at it.
+	 *
+	 * @throws GenericFileException|\OCP\Files\NotPermittedException when the files could not be deleted
 	 */
 	public function deleteAllFor(int $candidateId): void {
-		$this->documentMapper->deleteForCandidate($candidateId);
 		try {
-			$this->folderFor($candidateId, create: false)->delete();
+			$folder = $this->folderFor($candidateId, create: false);
 		} catch (NotFoundException) {
-			// nothing stored
+			$folder = null;
+		}
+		if ($folder !== null) {
+			$folder->delete();
+			$this->assertDeleted($folder, $this->documentMapper->findForCandidate($candidateId));
+		}
+		$this->documentMapper->deleteForCandidate($candidateId);
+	}
+
+	/**
+	 * The storage layer does not report every failed delete, so check.
+	 *
+	 * @param Document[] $documents
+	 * @throws GenericFileException
+	 */
+	private function assertDeleted(ISimpleFolder $folder, array $documents): void {
+		foreach ($documents as $document) {
+			if ($folder->fileExists($document->getFileKey())) {
+				throw new GenericFileException('The stored file of document ' . $document->getId() . ' could not be deleted');
+			}
 		}
 	}
 
@@ -241,7 +341,10 @@ class DocumentService {
 		}
 	}
 
-	private function sanitizeName(string $name): string {
+	/**
+	 * The name a document is stored under.
+	 */
+	public static function sanitizeName(string $name): string {
 		$name = trim(str_replace(['/', '\\', "\0"], '_', $name));
 		if ($name === '' || $name === '.' || $name === '..') {
 			$name = 'document';

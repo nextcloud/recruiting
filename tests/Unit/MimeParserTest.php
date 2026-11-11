@@ -212,4 +212,80 @@ class MimeParserTest extends TestCase {
 		$mail = $this->parser->parse("From: a@example.com\r\nList-Id: " . str_repeat('x', 5000) . "\r\n\r\nHello\r\n");
 		$this->assertSame(2000, strlen($mail->header('list-id')));
 	}
+
+	public function testRawLatin1HeadersAndBodyBecomeUtf8(): void {
+		$raw = "From: J\xF6rg M\xFCller <joerg@example.com>\r\n"
+			. "Subject: Bewerbung f\xFCr die Stelle\r\n"
+			. "Message-ID: <caf\xE9@example.com>\r\n"
+			. "\r\n"
+			. "Gr\xFC\xDFe\r\n";
+
+		$mail = $this->parser->parse($raw);
+
+		$this->assertSame('Jörg Müller', $mail->fromName);
+		$this->assertSame('Bewerbung für die Stelle', $mail->subject);
+		$this->assertSame('<café@example.com>', $mail->messageId);
+		$this->assertSame('Grüße', $mail->textBody);
+		$this->assertNotFalse(json_encode([$mail->fromName, $mail->subject, $mail->textBody], JSON_THROW_ON_ERROR));
+	}
+
+	public function testWindows1252CharactersAreKept(): void {
+		// 0x80 is the euro sign and 0x93/0x94 are curly quotes in Windows-1252
+		$mail = $this->parser->parse("Subject: \x93Salary\x94 \x80 50k\r\n\r\nx");
+
+		$this->assertSame('“Salary” € 50k', $mail->subject);
+	}
+
+	public function testEncodedWordsInLatin1AndQEncoding(): void {
+		$raw = "From: =?ISO-8859-1?Q?J=F6rg_M=FCller?= <joerg@example.com>\r\n"
+			. 'Subject: =?iso-8859-1?B?' . base64_encode("Bewerbung f\xFCr") . "?= Backend\r\n"
+			. "\r\nx";
+
+		$mail = $this->parser->parse($raw);
+
+		$this->assertSame('Jörg Müller', $mail->fromName);
+		$this->assertSame('Bewerbung für Backend', $mail->subject);
+	}
+
+	public function testAdjacentEncodedWordsJoinEvenWhenACharacterIsSplit(): void {
+		$bytes = 'Grüße';
+		// The UTF-8 bytes of "ü" end up in two encoded words
+		$first = base64_encode(substr($bytes, 0, 3));
+		$second = base64_encode(substr($bytes, 3));
+		$mail = $this->parser->parse("Subject: =?UTF-8?B?{$first}?=\r\n =?UTF-8?B?{$second}?=\r\n\r\nx");
+
+		$this->assertSame('Grüße', $mail->subject);
+	}
+
+	public function testRawUtf8HeadersStayAsTheyAre(): void {
+		$mail = $this->parser->parse("Subject: Bewerbung für Zoë\r\n\r\nx");
+
+		$this->assertSame('Bewerbung für Zoë', $mail->subject);
+	}
+
+	public function testDeclaredCharsetsAreHonoured(): void {
+		$raw = "Subject: x\r\n"
+			. "Content-Type: text/plain; charset=\"iso-8859-15\"\r\n"
+			. "\r\n"
+			. "Preis: 100 \xA4\r\n";
+
+		// 0xA4 is the euro sign in ISO-8859-15 (and ¤ in Latin-1)
+		$this->assertSame('Preis: 100 €', $this->parser->parse($raw)->textBody);
+	}
+
+	public function testInvalidBytesInADeclaredUtf8BodyAreScrubbed(): void {
+		$raw = "Subject: x\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nok \xFF\xFE done\r\n";
+
+		$body = $this->parser->parse($raw)->textBody;
+
+		$this->assertTrue(mb_check_encoding($body, 'UTF-8'));
+		$this->assertStringStartsWith('ok ', $body);
+		$this->assertStringEndsWith(' done', $body);
+	}
+
+	public function testAnUnknownCharsetFallsBackToAGuess(): void {
+		$raw = "Subject: x\r\nContent-Type: text/plain; charset=x-made-up\r\n\r\nM\xFCller\r\n";
+
+		$this->assertSame('Müller', $this->parser->parse($raw)->textBody);
+	}
 }

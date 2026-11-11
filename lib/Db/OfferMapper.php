@@ -31,6 +31,21 @@ class OfferMapper extends QBMapper {
 	}
 
 	/**
+	 * Change an offer's status only while it is still $from, so two
+	 * parallel requests never both act on the same transition.
+	 *
+	 * @return bool whether this caller won the claim
+	 */
+	public function claimStatus(int $id, string $from, string $to): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('status', $qb->createNamedParameter($to))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter($from)));
+		return $qb->executeStatement() === 1;
+	}
+
+	/**
 	 * @return Offer[]
 	 */
 	public function findForCandidate(int $candidateId): array {

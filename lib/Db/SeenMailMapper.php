@@ -13,16 +13,15 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /**
- * Ledger of ingested Message-IDs. IMAP "seen" flags are the primary
- * bookkeeping, but a crash between processing a mail and marking it seen
- * would re-ingest it on the next run — this table makes ingestion
- * idempotent. Recorded *after* successful processing on purpose: a crash
- * mid-processing retries the mail (at-least-once) instead of losing the
- * application silently.
+ * Ledger of incoming mails, keyed by Message-ID (or a hash of the raw
+ * content for mails without one). IMAP "seen" flags are the primary
+ * bookkeeping; this table makes ingestion idempotent and resumable.
  *
- * Failed attempts are tracked in the same table: such rows are `pending`
- * (not ingested yet) and count `attempts` until the mail is quarantined.
- * Mails without a Message-ID are keyed by a hash of their raw content.
+ * A row is written `pending` before a mail is processed and counts its
+ * `attempts` from that moment on, so even an attempt that dies with a
+ * fatal error is counted. The candidate created for the mail is stored on
+ * the row right after its insert, so a retry continues on that candidate.
+ * Only a fully processed mail is marked done (`pending` = 0).
  */
 class SeenMailMapper {
 	private const TABLE = 'recruiting_mail_seen';
@@ -33,84 +32,116 @@ class SeenMailMapper {
 	) {
 	}
 
-	public function hasSeen(string $messageId): bool {
-		if ($messageId === '') {
-			return false;
+	/**
+	 * Count one more attempt at a mail before it is processed.
+	 *
+	 * @return array{done: bool, attempts: int, candidateId: ?int} `done` when
+	 *                                                             the mail was ingested before; `attempts` includes this one
+	 */
+	public function beginAttempt(string $key): array {
+		$row = $this->row($key);
+		if ($row === null) {
+			$inserted = $this->db->insertIgnoreConflict(self::TABLE, [
+				'message_id' => $key,
+				'created_at' => $this->now(),
+				'pending' => 1,
+				'attempts' => 1,
+			]);
+			if ($inserted > 0) {
+				return ['done' => false, 'attempts' => 1, 'candidateId' => null];
+			}
+			// A parallel run inserted it first
+			$row = $this->row($key) ?? ['pending' => 1, 'attempts' => 0, 'candidate_id' => null];
 		}
+		$candidateId = $row['candidate_id'] !== null ? (int)$row['candidate_id'] : null;
+		if ((int)$row['pending'] === 0) {
+			return ['done' => true, 'attempts' => (int)$row['attempts'], 'candidateId' => $candidateId];
+		}
+
+		$attempts = (int)$row['attempts'] + 1;
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id')
-			->from(self::TABLE)
-			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($messageId)))
-			->andWhere($qb->expr()->eq('pending', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
-			->setMaxResults(1);
-		$result = $qb->executeQuery();
-		$row = $result->fetch();
-		$result->closeCursor();
-		return $row !== false;
+		$qb->update(self::TABLE)
+			->set('attempts', $qb->createNamedParameter($attempts, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)));
+		$qb->executeStatement();
+		return ['done' => false, 'attempts' => $attempts, 'candidateId' => $candidateId];
 	}
 
-	public function remember(string $messageId): void {
-		if ($messageId === '') {
-			return;
-		}
+	/**
+	 * Remember the candidate a mail created or continued.
+	 */
+	public function attachCandidate(string $key, int $candidateId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE)
+			->set('candidate_id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)));
+		$qb->executeStatement();
+	}
+
+	/**
+	 * Mark a mail as fully processed; its attempt count starts over.
+	 */
+	public function remember(string $key): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE)
 			->set('pending', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT))
-			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($messageId)));
+			->set('attempts', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT))
+			->set('last_error', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)));
 		if ($qb->executeStatement() > 0) {
 			return;
 		}
 		$this->db->insertIgnoreConflict(self::TABLE, [
-			'message_id' => $messageId,
+			'message_id' => $key,
 			'created_at' => $this->now(),
 		]);
 	}
 
 	/**
-	 * Count one more failed attempt for a mail.
-	 *
-	 * @return int the number of failed attempts including this one
+	 * Note why the current attempt failed.
 	 */
-	public function recordFailure(string $key, string $error): int {
-		$error = mb_substr($error, 0, 250);
-		$attempts = $this->attempts($key);
-		if ($attempts === null) {
-			$this->db->insertIgnoreConflict(self::TABLE, [
-				'message_id' => $key,
-				'created_at' => $this->now(),
-				'pending' => 1,
-				'attempts' => 1,
-				'last_error' => $error,
-			]);
-			return 1;
-		}
+	public function recordError(string $key, string $error): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE)
-			->set('attempts', $qb->createNamedParameter($attempts + 1, IQueryBuilder::PARAM_INT))
-			->set('last_error', $qb->createNamedParameter($error))
+			->set('last_error', $qb->createNamedParameter(mb_substr($error, 0, 250)))
 			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)));
 		$qb->executeStatement();
-		return $attempts + 1;
 	}
 
-	public function markQuarantined(string $key): void {
+	/**
+	 * Note that a mail went to the quarantine folder. The attempt count
+	 * starts over, so a mail moved back into the inbox is tried again.
+	 */
+	public function markQuarantined(string $key, ?string $error = null): void {
+		$this->db->insertIgnoreConflict(self::TABLE, [
+			'message_id' => $key,
+			'created_at' => $this->now(),
+			'pending' => 1,
+		]);
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE)
 			->set('quarantined_at', $qb->createNamedParameter($this->now()))
+			->set('attempts', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT))
 			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)));
+		if ($error !== null) {
+			$qb->set('last_error', $qb->createNamedParameter(mb_substr($error, 0, 250)));
+		}
 		$qb->executeStatement();
 	}
 
-	private function attempts(string $key): ?int {
+	/**
+	 * @return array{pending: int|string, attempts: int|string, candidate_id: int|string|null}|null
+	 */
+	private function row(string $key): ?array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('attempts')
+		$qb->select('pending', 'attempts', 'candidate_id')
 			->from(self::TABLE)
 			->where($qb->expr()->eq('message_id', $qb->createNamedParameter($key)))
 			->setMaxResults(1);
 		$result = $qb->executeQuery();
 		$row = $result->fetch();
 		$result->closeCursor();
-		return $row === false ? null : (int)$row['attempts'];
+		return $row === false ? null : $row;
 	}
 
 	private function now(): string {

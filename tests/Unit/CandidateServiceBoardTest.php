@@ -22,6 +22,7 @@ use OCA\Recruiting\Db\TimelineEventMapper;
 use OCA\Recruiting\Db\VoteMapper;
 use OCA\Recruiting\Exception\ConflictException;
 use OCA\Recruiting\Exception\NotPermittedException;
+use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
@@ -37,6 +38,7 @@ use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -52,6 +54,7 @@ class CandidateServiceBoardTest extends TestCase {
 	private PermissionService&MockObject $permissions;
 	private StageService&MockObject $stages;
 	private MailService&MockObject $mail;
+	private IDBConnection&MockObject $db;
 	private CandidateService $service;
 
 	protected function setUp(): void {
@@ -60,6 +63,7 @@ class CandidateServiceBoardTest extends TestCase {
 		$this->permissions = $this->createMock(PermissionService::class);
 		$this->stages = $this->createMock(StageService::class);
 		$this->mail = $this->createMock(MailService::class);
+		$this->db = $this->createMock(IDBConnection::class);
 
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(static fn (string $text, array $params = []) => vsprintf($text, $params));
@@ -93,6 +97,7 @@ class CandidateServiceBoardTest extends TestCase {
 			$time,
 			$l10n,
 			$this->createMock(PortalService::class),
+			$this->db,
 		);
 	}
 
@@ -218,24 +223,93 @@ class CandidateServiceBoardTest extends TestCase {
 		$this->service->rejectCandidate('observer', $this->candidate(5, Candidate::STAGE_NEW), 'other', 'Subject', 'Body');
 	}
 
-	public function testRejectCandidateMailsThenMovesToRejected(): void {
+	public function testRejectCandidateClaimsThenMailsThenMovesToRejected(): void {
 		$candidate = $this->candidate(5, Candidate::STAGE_NEW);
 		$order = [];
+		$this->candidateMapper->expects($this->once())->method('claimStage')
+			->with($candidate, Candidate::STAGE_NEW, Candidate::STAGE_REJECTED)
+			->willReturnCallback(function () use (&$order) {
+				$order[] = 'claim';
+				return true;
+			});
 		$this->mail->expects($this->once())->method('sendToCandidate')
 			->with($candidate, 'Subject', 'Body', 'hr')
 			->willReturnCallback(function () use (&$order) {
 				$order[] = 'mail';
 			});
+		$this->db->method('beginTransaction')->willReturnCallback(function () use (&$order) {
+			$order[] = 'begin';
+		});
 		$this->stages->expects($this->once())->method('apply')
 			->with($candidate, Candidate::STAGE_REJECTED, 'hr', ['reason' => 'position_filled'], true)
 			->willReturnCallback(function () use (&$order) {
 				$order[] = 'stage';
 				return true;
 			});
+		$this->db->method('commit')->willReturnCallback(function () use (&$order) {
+			$order[] = 'commit';
+		});
 
 		$this->service->rejectCandidate('hr', $candidate, 'position_filled', 'Subject', 'Body');
 
-		$this->assertSame(['mail', 'stage'], $order);
+		$this->assertSame(['claim', 'mail', 'begin', 'stage', 'commit'], $order);
 		$this->assertSame('position_filled', $candidate->getRejectionReason());
+	}
+
+	public function testASecondRejectionLosesTheClaimAndSendsNoMail(): void {
+		$candidate = $this->candidate(5, Candidate::STAGE_SCREENING);
+		$this->candidateMapper->method('claimStage')->willReturn(false);
+		$this->candidateMapper->method('find')->with(5)->willReturn($this->candidate(5, Candidate::STAGE_REJECTED));
+		$this->mail->expects($this->never())->method('sendToCandidate');
+		$this->stages->expects($this->never())->method('apply');
+
+		$this->expectException(ValidationException::class);
+		$this->expectExceptionMessage('This candidate is already rejected');
+		$this->service->rejectCandidate('hr', $candidate, 'other', 'Subject', 'Body');
+	}
+
+	public function testAClaimLostToAStageMoveSaysSo(): void {
+		$candidate = $this->candidate(5, Candidate::STAGE_SCREENING);
+		$this->candidateMapper->method('claimStage')->willReturn(false);
+		$this->candidateMapper->method('find')->willReturn($this->candidate(5, Candidate::STAGE_INTERVIEW));
+		$this->mail->expects($this->never())->method('sendToCandidate');
+
+		$this->expectException(ValidationException::class);
+		$this->expectExceptionMessage('Candidate 5 was moved to another stage by someone else in the meantime');
+		$this->service->rejectCandidate('hr', $candidate, 'other', 'Subject', 'Body');
+	}
+
+	public function testAFailedMailGivesTheClaimBack(): void {
+		$candidate = $this->candidate(5, Candidate::STAGE_INTERVIEW);
+		$claims = [];
+		$this->candidateMapper->method('claimStage')->willReturnCallback(function (Candidate $c, string $from, string $to) use (&$claims) {
+			$claims[] = [$from, $to];
+			return true;
+		});
+		$this->mail->method('sendToCandidate')->willThrowException(new ValidationException('SMTP down'));
+		$this->stages->expects($this->never())->method('apply');
+
+		try {
+			$this->service->rejectCandidate('hr', $candidate, 'other', 'Subject', 'Body');
+			$this->fail('expected the mail failure');
+		} catch (ValidationException $e) {
+			$this->assertSame('SMTP down', $e->getMessage());
+		}
+		$this->assertSame([
+			[Candidate::STAGE_INTERVIEW, Candidate::STAGE_REJECTED],
+			[Candidate::STAGE_REJECTED, Candidate::STAGE_INTERVIEW],
+		], $claims);
+	}
+
+	public function testAFailedStageChangeRollsBack(): void {
+		$candidate = $this->candidate(5, Candidate::STAGE_NEW);
+		$this->candidateMapper->method('claimStage')->willReturn(true);
+		$this->stages->method('apply')->willThrowException(new \RuntimeException('db down'));
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('rollBack');
+		$this->db->expects($this->never())->method('commit');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->rejectCandidate('hr', $candidate, 'other', null, null);
 	}
 }

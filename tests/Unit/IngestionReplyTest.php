@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\SeenMailMapper;
 use OCA\Recruiting\Db\TeamMemberMapper;
@@ -38,6 +39,8 @@ class IngestionReplyTest extends TestCase {
 	private ConfigService $config;
 	private CandidateMapper $candidateMapper;
 	private SeenMailMapper $seenMail;
+	/** @var array{done: bool, attempts: int, candidateId: ?int} what the ledger reports for the mail */
+	private array $attempt = ['done' => false, 'attempts' => 1, 'candidateId' => null];
 	private TeamMemberMapper $teamMapper;
 	private CandidateService $candidates;
 	private DocumentService $documents;
@@ -59,6 +62,7 @@ class IngestionReplyTest extends TestCase {
 
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
 		$this->seenMail = $this->createMock(SeenMailMapper::class);
+		$this->seenMail->method('beginAttempt')->willReturnCallback(fn () => $this->attempt);
 		$this->teamMapper = $this->createMock(TeamMemberMapper::class);
 		$this->candidates = $this->createMock(CandidateService::class);
 		$this->documents = $this->createMock(DocumentService::class);
@@ -130,7 +134,40 @@ class IngestionReplyTest extends TestCase {
 		// … and no new candidate is created
 		$this->candidates->expects($this->never())->method('insertCandidate');
 		// … and the mail is remembered for idempotency
+		$this->seenMail->expects($this->once())->method('attachCandidate')->with('<reply-1@example.com>', 42);
 		$this->seenMail->expects($this->once())->method('remember')->with('<reply-1@example.com>');
+
+		$this->service->fetchNow();
+	}
+
+	public function testAResumedReplyIsNotRecordedTwice(): void {
+		$this->primeMailbox(
+			"From: Jane Doe <jane@example.com>\r\n"
+			. "To: jobs+c42.abcdefgh12345678@company.com\r\n"
+			. "Message-ID: <reply-2@example.com>\r\n"
+			. "Subject: Re: Interview invitation\r\n"
+			. "MIME-Version: 1.0\r\n"
+			. "Content-Type: multipart/mixed; boundary=b\r\n"
+			. "\r\n"
+			. "--b\r\nContent-Type: text/plain\r\n\r\nSee the attached.\r\n"
+			. "--b\r\nContent-Type: application/pdf; name=a.pdf\r\nContent-Disposition: attachment; filename=a.pdf\r\n\r\n%PDF-A\r\n"
+			. "--b\r\nContent-Type: application/pdf; name=b.pdf\r\nContent-Disposition: attachment; filename=b.pdf\r\n\r\n%PDF-B\r\n"
+			. "--b--\r\n",
+		);
+		$candidate = $this->candidate(42, 'abcdefgh12345678');
+		$this->candidateMapper->method('find')->with(42)->willReturn($candidate);
+		// The first attempt recorded the reply and stored a.pdf, then failed
+		$this->attempt = ['done' => false, 'attempts' => 2, 'candidateId' => 42];
+		$stored = new Document();
+		$stored->setName('a.pdf');
+		$stored->setSize(strlen("%PDF-A\r\n"));
+		$this->documents->method('listFor')->with(42)->willReturn([$stored]);
+
+		$this->timeline->expects($this->never())->method('record');
+		$this->documents->expects($this->once())->method('add')
+			->with($candidate, 'b.pdf', 'application/pdf', $this->anything(), null, true);
+		$this->notifications->expects($this->once())->method('notify');
+		$this->seenMail->expects($this->once())->method('remember')->with('<reply-2@example.com>');
 
 		$this->service->fetchNow();
 	}
@@ -185,7 +222,8 @@ class IngestionReplyTest extends TestCase {
 			. "\r\n"
 			. "Hello.\r\n",
 		);
-		$this->seenMail->method('hasSeen')->with('<dup-1@example.com>')->willReturn(true);
+		$this->attempt = ['done' => true, 'attempts' => 0, 'candidateId' => 55];
+		$this->seenMail->expects($this->once())->method('beginAttempt')->with('<dup-1@example.com>');
 
 		$this->candidates->expects($this->never())->method('insertCandidate');
 		$this->timeline->expects($this->never())->method('record');

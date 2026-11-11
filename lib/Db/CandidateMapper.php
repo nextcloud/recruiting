@@ -78,6 +78,26 @@ class CandidateMapper extends QBMapper {
 		}
 	}
 
+	/**
+	 * Move a candidate to another stage only while it is still in $from —
+	 * the claim that keeps two parallel requests from both acting on the
+	 * same transition. Only the stage column changes.
+	 *
+	 * @return bool whether this caller won the claim
+	 */
+	public function claimStage(Candidate $candidate, string $from, string $to): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('stage', $qb->createNamedParameter($to))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($candidate->getId(), IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('stage', $qb->createNamedParameter($from)));
+		if ($qb->executeStatement() !== 1) {
+			return false;
+		}
+		$this->invalidateReports($candidate, false);
+		return true;
+	}
+
 	public function find(int $id): Candidate {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')

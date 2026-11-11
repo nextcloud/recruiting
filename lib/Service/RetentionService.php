@@ -14,8 +14,10 @@ use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Db\TimelineEventMapper;
 use OCA\Recruiting\Db\VoteMapper;
+use OCP\AppFramework\Db\TTransactional;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -32,6 +34,8 @@ use Psr\Log\LoggerInterface;
  * Anonymizing means the person disappears and the statistics stay.
  */
 class RetentionService {
+	use TTransactional;
+
 	public const ANONYMIZED_NAME = 'Anonymized candidate';
 
 	public const GROUP_ENDED = 'ended';
@@ -67,6 +71,7 @@ class RetentionService {
 		private ICommentsManager $commentsManager,
 		private ITimeFactory $timeFactory,
 		private LoggerInterface $logger,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -212,12 +217,57 @@ class RetentionService {
 	/**
 	 * Remove everything that identifies the person; keep stage, dates and
 	 * vote values as anonymous aggregates for statistics.
+	 *
+	 * Calendar events, Talk rooms and files go first: those steps are safe
+	 * to repeat, and until the candidate is marked anonymized a failed run is
+	 * picked up again by the next one. The rows then change in one
+	 * transaction; traces in other apps' tables are removed after it.
 	 */
 	public function anonymize(Candidate $candidate): void {
 		$id = $candidate->getId();
 
+		// Calendar events lose the name, upcoming ones are cancelled, and the
+		// public interview links stop working
+		$this->interviews->scrubForCandidate($candidate, revokeLinks: true);
 		$this->documents->deleteAllFor($id);
-		$this->voteMapper->stripCommentsForCandidate($id);
+
+		$this->atomic(function () use ($candidate, $id): void {
+			$this->voteMapper->stripCommentsForCandidate($id);
+
+			// Mail bodies, subjects and document names ("Jane_Doe_CV.pdf" identifies
+			// the very person we are anonymizing) are stripped from the timeline;
+			// the events themselves stay so the history remains readable.
+			foreach ($this->eventMapper->findForCandidate($id) as $event) {
+				if (in_array($event->getType(), self::PII_EVENT_TYPES, true)) {
+					$event->setData(null);
+					$this->eventMapper->update($event);
+				}
+			}
+
+			// Offer notes are free text about the person; the structured terms are
+			// company data and stay for the record.
+			foreach ($this->offerMapper->findForCandidate($id) as $offer) {
+				if (($offer->getNotes() ?? '') !== '') {
+					$offer->setNotes(null);
+					$this->offerMapper->update($offer);
+				}
+			}
+
+			$candidate->setDisplayName(self::ANONYMIZED_NAME);
+			$candidate->setEmail('');
+			$candidate->setPhone('');
+			$candidate->setAiSummary(null);
+			$candidate->setDuplicateOf(null);
+			$candidate->setPoolMember(false);
+			$candidate->setPoolConsentToken(null);
+			$candidate->setReplyToken(null);
+			$candidate->setPortalToken(null);
+			$candidate->setAnonymizedAt($this->timeFactory->getDateTime());
+			$this->candidateMapper->update($candidate);
+
+			$this->eventMapper->insert($this->anonymizedEvent($id));
+		}, $this->db);
+
 		try {
 			$this->commentsManager->deleteCommentsAtObject(CommentService::OBJECT_TYPE, (string)$id);
 		} catch (\Exception) {
@@ -225,42 +275,6 @@ class RetentionService {
 		}
 		$this->notifications->purgeForCandidate($id);
 		$this->activityPurge->purgeForCandidate($id);
-		// Calendar events lose the name, upcoming ones are cancelled, and the
-		// public interview links stop working
-		$this->interviews->scrubForCandidate($candidate, revokeLinks: true);
-
-		// Mail bodies, subjects and document names ("Jane_Doe_CV.pdf" identifies
-		// the very person we are anonymizing) are stripped from the timeline;
-		// the events themselves stay so the history remains readable.
-		foreach ($this->eventMapper->findForCandidate($id) as $event) {
-			if (in_array($event->getType(), self::PII_EVENT_TYPES, true)) {
-				$event->setData(null);
-				$this->eventMapper->update($event);
-			}
-		}
-
-		// Offer notes are free text about the person; the structured terms are
-		// company data and stay for the record.
-		foreach ($this->offerMapper->findForCandidate($id) as $offer) {
-			if (($offer->getNotes() ?? '') !== '') {
-				$offer->setNotes(null);
-				$this->offerMapper->update($offer);
-			}
-		}
-
-		$candidate->setDisplayName(self::ANONYMIZED_NAME);
-		$candidate->setEmail('');
-		$candidate->setPhone('');
-		$candidate->setAiSummary(null);
-		$candidate->setDuplicateOf(null);
-		$candidate->setPoolMember(false);
-		$candidate->setPoolConsentToken(null);
-		$candidate->setReplyToken(null);
-		$candidate->setPortalToken(null);
-		$candidate->setAnonymizedAt($this->timeFactory->getDateTime());
-		$this->candidateMapper->update($candidate);
-
-		$this->eventMapper->insert($this->anonymizedEvent($id));
 	}
 
 	private function anonymizedEvent(int $candidateId): TimelineEvent {

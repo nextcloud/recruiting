@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\MailTemplate;
 use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
@@ -39,14 +40,23 @@ use Psr\Log\LoggerInterface;
  * routes into the matching opening; everything else lands in triage.
  * Automatic mail (bounces, autoresponders, lists) never becomes a candidate.
  *
- * A run works through the unseen mails for a fixed time. A mail that fails
- * with an error that may pass (database, storage) stays unseen and ends the
- * run; any other failure is retried on the next runs and, after the third
- * failed attempt, the mail is moved to the quarantine folder.
+ * A run works through the unseen mails for a fixed time. Every attempt at
+ * a mail is counted in the ledger before the mail is processed, and the
+ * candidate it creates is noted there right after the insert, so a retry
+ * continues on that candidate instead of creating another one.
+ *
+ * A mail that fails with an error that may pass (database, storage) stays
+ * unseen and ends the run; after twelve such attempts it is quarantined. Any
+ * other failure is retried on the next runs and quarantined after the third
+ * attempt. Mails above the size limit are quarantined without downloading.
  */
 class IngestionService {
 	public const QUARANTINE_FOLDER = 'Recruiting-Failed';
 	public const MAX_ATTEMPTS = 3;
+	/** Attempts after which a mail that keeps failing temporarily (or crashing) is quarantined */
+	public const MAX_TRANSIENT_ATTEMPTS = 12;
+	/** Larger mails are quarantined without being downloaded */
+	public const MAX_MESSAGE_SIZE = 30 * 1024 * 1024;
 	private const TIME_BUDGET_SECONDS = 60;
 	private const MAX_MESSAGES_PER_RUN = 500;
 	private const BODY_SNIPPET_LENGTH = 20_000;
@@ -56,7 +66,7 @@ class IngestionService {
 	private const OUTCOME_DUPLICATE = 'duplicate';
 	private const OUTCOME_SKIPPED = 'skipped';
 
-	/** Failures that may pass by themselves: the mail is retried, not counted */
+	/** Failures that may pass by themselves: the mail is retried on the next run */
 	private const TRANSIENT_EXCEPTIONS = [
 		DbException::class,
 		'Doctrine\\DBAL\\Exception',
@@ -140,18 +150,33 @@ class IngestionService {
 				if ($this->timeFactory->getTime() - $startedAt >= self::TIME_BUDGET_SECONDS) {
 					break;
 				}
+				$size = $client->fetchSize($uid);
+				if ($size > self::MAX_MESSAGE_SIZE) {
+					$this->quarantineOversized($client, $uid, $size, $result);
+					continue;
+				}
 				$raw = $client->fetchMessage($uid);
 				$result['fetched']++;
+				$parsed = self::tryParse($raw);
+				$key = self::ledgerKey($parsed, $raw);
+				$attempt = null;
 				try {
-					$outcome = $this->processMessage($raw);
+					$attempt = $this->seenMail->beginAttempt($key);
+					if ($attempt['done']) {
+						$this->logger->info('Skipping already-ingested mail ' . $key);
+						$outcome = self::OUTCOME_DUPLICATE;
+					} elseif ($attempt['attempts'] > self::MAX_TRANSIENT_ATTEMPTS) {
+						// The earlier attempts ended without a result: crashes or timeouts
+						$this->logger->error('Giving up on application mail (UID ' . $uid . ') after ' . ($attempt['attempts'] - 1) . ' unfinished attempts');
+						$this->quarantine($client, $uid, $key, 'Gave up after ' . ($attempt['attempts'] - 1) . ' unfinished attempts', $result);
+						continue;
+					} else {
+						$outcome = $this->processMessage($parsed ?? (new MimeParser())->parse($raw), $key, $attempt['candidateId']);
+					}
 				} catch (\Exception $e) {
-					if (self::isTransient($e)) {
-						// Leave the mail unseen; the next run retries it
-						$this->logger->warning('Mail ingestion stopped by a temporary error (UID ' . $uid . '): ' . $e->getMessage(), ['exception' => $e]);
-						$result['error'] = $e->getMessage();
+					if (!$this->handleFailure($client, $uid, $key, $attempt['attempts'] ?? null, $e, $result)) {
 						break;
 					}
-					$this->handleFailure($client, $uid, $raw, $e, $result);
 					continue;
 				}
 				if ($outcome === self::OUTCOME_CREATED) {
@@ -168,23 +193,68 @@ class IngestionService {
 	}
 
 	/**
-	 * A failure that will not pass by itself: count the attempt and leave the
-	 * mail unseen for a retry, or quarantine it after the last attempt.
+	 * A failed attempt (already counted): leave the mail unseen for a retry,
+	 * or quarantine it once its attempts are used up — three for a permanent
+	 * failure, twelve for one that may pass.
+	 *
+	 * @param ?int $attempts the attempts so far, null when the ledger itself failed
+	 * @param array{fetched: int, created: int, skipped: int, quarantined: int, quarantineFolder: string, error: ?string} $result
+	 * @return bool whether the run goes on with the next mail
+	 * @throws ImapException
+	 */
+	private function handleFailure(ImapClient $client, int $uid, string $key, ?int $attempts, \Exception $e, array &$result): bool {
+		$transient = self::isTransient($e);
+		if ($attempts === null) {
+			// Nothing was counted or processed: the ledger itself is unreachable
+			$this->logger->warning('Mail ingestion stopped by a temporary error (UID ' . $uid . '): ' . $e->getMessage(), ['exception' => $e]);
+			$result['error'] = $e->getMessage();
+			return false;
+		}
+		try {
+			$this->seenMail->recordError($key, $e->getMessage());
+		} catch (\Exception) {
+			// The database may be what failed; the attempt is counted already
+		}
+
+		$limit = $transient ? self::MAX_TRANSIENT_ATTEMPTS : self::MAX_ATTEMPTS;
+		if ($attempts < $limit) {
+			if ($transient) {
+				$this->logger->warning('Mail ingestion stopped by a temporary error (UID ' . $uid . ', attempt ' . $attempts . ' of ' . $limit . '): ' . $e->getMessage(), ['exception' => $e]);
+				$result['error'] = $e->getMessage();
+				return false;
+			}
+			$this->logger->error('Failed to ingest application mail (UID ' . $uid . ', attempt ' . $attempts . ' of ' . $limit . '): ' . $e->getMessage(), ['exception' => $e]);
+			return true;
+		}
+
+		$this->logger->error('Failed to ingest application mail (UID ' . $uid . ', attempt ' . $attempts . ' of ' . $limit . ', giving up): ' . $e->getMessage(), ['exception' => $e]);
+		$this->quarantine($client, $uid, $key, $e->getMessage(), $result);
+		return true;
+	}
+
+	/**
+	 * A mail above the size limit is quarantined without downloading it;
+	 * only its header is read, for the ledger key.
 	 *
 	 * @param array{fetched: int, created: int, skipped: int, quarantined: int, quarantineFolder: string, error: ?string} $result
 	 * @throws ImapException
 	 */
-	private function handleFailure(ImapClient $client, int $uid, string $raw, \Exception $e, array &$result): void {
-		$key = $this->failureKey($raw);
-		$attempts = $this->seenMail->recordFailure($key, $e->getMessage());
-		$this->logger->error('Failed to ingest application mail (UID ' . $uid . ', attempt ' . $attempts . ' of ' . self::MAX_ATTEMPTS . '): ' . $e->getMessage(), ['exception' => $e]);
-		if ($attempts < self::MAX_ATTEMPTS) {
-			return;
-		}
+	private function quarantineOversized(ImapClient $client, int $uid, int $size, array &$result): void {
+		$header = $client->fetchHeader($uid);
+		$key = self::ledgerKey(self::tryParse(rtrim($header, "\r\n") . "\r\n\r\n"), $header);
+		$reason = sprintf('The mail is larger than %d MB (%d bytes)', intdiv(self::MAX_MESSAGE_SIZE, 1024 * 1024), $size);
+		$this->logger->warning('Application mail (UID ' . $uid . ') not ingested: ' . $reason);
+		$this->quarantine($client, $uid, $key, $reason, $result);
+	}
 
+	/**
+	 * @param array{fetched: int, created: int, skipped: int, quarantined: int, quarantineFolder: string, error: ?string} $result
+	 * @throws ImapException
+	 */
+	private function quarantine(ImapClient $client, int $uid, string $key, string $reason, array &$result): void {
 		// Seen first: should the move fail, the mail must not be retried forever
 		$client->markSeen($uid);
-		$this->seenMail->markQuarantined($key);
+		$this->seenMail->markQuarantined($key, $reason);
 		try {
 			$result['quarantineFolder'] = $client->ensureMailbox(self::QUARANTINE_FOLDER);
 			$client->moveMessage($uid, $result['quarantineFolder']);
@@ -193,16 +263,20 @@ class IngestionService {
 		}
 	}
 
+	private static function tryParse(string $raw): ?ParsedMail {
+		try {
+			return (new MimeParser())->parse($raw);
+		} catch (\Throwable) {
+			return null;
+		}
+	}
+
 	/**
 	 * The ledger key of a mail: its Message-ID, or a content hash for mails
 	 * without one.
 	 */
-	private function failureKey(string $raw): string {
-		try {
-			$messageId = (new MimeParser())->parse($raw)->messageId;
-		} catch (\Throwable) {
-			$messageId = '';
-		}
+	private static function ledgerKey(?ParsedMail $parsed, string $raw): string {
+		$messageId = $parsed?->messageId ?? '';
 		return $messageId !== '' ? $messageId : 'sha256:' . hash('sha256', $raw);
 	}
 
@@ -264,28 +338,22 @@ class IngestionService {
 	}
 
 	/**
+	 * Turn one mail into a candidate (or a reply on one). With
+	 * $resumeCandidateId an earlier attempt got as far as that candidate:
+	 * the work continues there, and steps already done are skipped.
+	 *
 	 * @return self::OUTCOME_* what became of the mail
 	 */
-	private function processMessage(string $raw): string {
-		$parsed = (new MimeParser())->parse($raw);
+	private function processMessage(ParsedMail $parsed, string $key, ?int $resumeCandidateId): string {
 		$classifier = new MailClassifier();
-
-		// Idempotency: a crash between processing and the IMAP seen-flag would
-		// re-deliver this mail on the next run. The Message-ID ledger is
-		// written after successful processing (at-least-once, never lost).
-		if ($this->seenMail->hasSeen($parsed->messageId)) {
-			$this->logger->info('Skipping already-ingested mail ' . $parsed->messageId);
-			return self::OUTCOME_DUPLICATE;
-		}
-
 		$automatic = $classifier->isAutoGenerated($parsed);
 
 		// A reply to one of our own mails (per-candidate Reply-To) belongs on
 		// the existing candidate's timeline, not in triage as a "new" application.
 		$existing = $this->matchReply($parsed);
 		if ($existing !== null) {
-			$this->appendReply($existing, $parsed, $automatic);
-			$this->seenMail->remember($parsed->messageId);
+			$this->appendReply($existing, $parsed, $automatic, $key, $resumeCandidateId === $existing->getId());
+			$this->seenMail->remember($key);
 			return self::OUTCOME_REPLY;
 		}
 
@@ -293,38 +361,39 @@ class IngestionService {
 			// Bounces and autoresponders are no applications, and acknowledging
 			// them would start a mail loop
 			$this->logger->info('Skipping automatic mail from ' . $parsed->fromEmail . ': ' . $parsed->subject);
-			$this->seenMail->remember($parsed->messageId);
+			$this->seenMail->remember($key);
 			return self::OUTCOME_SKIPPED;
 		}
 
 		$opening = $this->matchOpening($parsed);
 
-		$name = trim($parsed->fromName);
-		$candidate = $this->candidates->insertCandidate(
-			$opening?->getId(),
-			$name,
-			filter_var($parsed->fromEmail, FILTER_VALIDATE_EMAIL) !== false ? $parsed->fromEmail : '',
-			'',
-			Candidate::SOURCE_EMAIL,
-			null,
-		);
-
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_RECEIVED, null, [
-			'subject' => $parsed->subject,
-			'body' => mb_substr($parsed->textBody, 0, self::BODY_SNIPPET_LENGTH),
-		]);
-
-		foreach ($parsed->attachments as $attachment) {
-			try {
-				$this->documents->add($candidate, $attachment['name'], $attachment['mime'], $attachment['content'], null);
-			} catch (ValidationException $e) {
-				// Disallowed type or too large — skip just this attachment
-				$this->logger->info('Skipped attachment "' . $attachment['name'] . '": ' . $e->getMessage());
-			}
+		$candidate = $resumeCandidateId !== null ? $this->findCandidate($resumeCandidateId) : null;
+		$resumed = $candidate !== null;
+		if ($candidate !== null && $candidate->getAnonymizedAt() !== null) {
+			$this->seenMail->remember($key);
+			return self::OUTCOME_DUPLICATE;
+		}
+		if ($candidate === null) {
+			$candidate = $this->candidates->insertCandidate(
+				$opening?->getId(),
+				trim($parsed->fromName),
+				filter_var($parsed->fromEmail, FILTER_VALIDATE_EMAIL) !== false ? $parsed->fromEmail : '',
+				'',
+				Candidate::SOURCE_EMAIL,
+				null,
+			);
+			$this->seenMail->attachCandidate($key, $candidate->getId());
 		}
 
-		// Optional AI intake analysis: summary + contact extraction (spec §4.7)
-		$this->ai->scheduleIntakeAnalysis($candidate);
+		if (!$resumed || !$this->hasEvent($candidate, TimelineEvent::TYPE_MAIL_RECEIVED)) {
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_RECEIVED, null, [
+				'subject' => $parsed->subject,
+				'body' => mb_substr($parsed->textBody, 0, self::BODY_SNIPPET_LENGTH),
+			]);
+		}
+
+		$documents = $this->storeAttachments($candidate, $parsed->attachments, $resumed, false);
+		$this->scheduleIntake($candidate, $documents);
 
 		if ($opening !== null) {
 			if ($classifier->isForged($parsed)) {
@@ -335,8 +404,67 @@ class IngestionService {
 			}
 		}
 
-		$this->seenMail->remember($parsed->messageId);
+		$this->seenMail->remember($key);
 		return self::OUTCOME_CREATED;
+	}
+
+	/**
+	 * Optional AI intake analysis: summary + contact extraction (spec §4.7).
+	 * It needs the CV text, so with an extractable document it is scheduled
+	 * by the extraction job once the text is there.
+	 *
+	 * @param Document[] $documents
+	 */
+	private function scheduleIntake(Candidate $candidate, array $documents): void {
+		if (!$this->documents->queueTextExtraction($documents, $candidate->getId())) {
+			$this->ai->scheduleIntakeAnalysis($candidate);
+		}
+	}
+
+	/**
+	 * Store a mail's attachments. When resuming, an attachment stored by an
+	 * earlier attempt (same name and size) is not stored again.
+	 *
+	 * @param array<int, array{name: string, mime: string, content: string}> $attachments
+	 * @return Document[] the documents of these attachments
+	 */
+	private function storeAttachments(Candidate $candidate, array $attachments, bool $resumed, bool $queueExtraction): array {
+		$stored = $resumed ? $this->documents->listFor($candidate->getId()) : [];
+		$documents = [];
+		foreach ($attachments as $attachment) {
+			$name = DocumentService::sanitizeName($attachment['name']);
+			foreach ($stored as $index => $document) {
+				if ($document->getName() === $name && $document->getSize() === strlen($attachment['content'])) {
+					$documents[] = $document;
+					unset($stored[$index]);
+					continue 2;
+				}
+			}
+			try {
+				$documents[] = $this->documents->add($candidate, $attachment['name'], $attachment['mime'], $attachment['content'], null, $queueExtraction);
+			} catch (ValidationException $e) {
+				// Disallowed type or too large — skip just this attachment
+				$this->logger->info('Skipped attachment "' . $attachment['name'] . '": ' . $e->getMessage());
+			}
+		}
+		return $documents;
+	}
+
+	private function findCandidate(int $id): ?Candidate {
+		try {
+			return $this->candidateMapper->find($id);
+		} catch (DoesNotExistException) {
+			return null;
+		}
+	}
+
+	private function hasEvent(Candidate $candidate, string $type): bool {
+		foreach ($this->timeline->eventsFor($candidate->getId()) as $event) {
+			if ($event->getType() === $type) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -385,15 +513,16 @@ class IngestionService {
 			'body' => mb_substr(trim($coverLetter), 0, self::BODY_SNIPPET_LENGTH),
 		]);
 
+		$documents = [];
 		if ($cv !== null && (string)($cv['content'] ?? '') !== '') {
 			try {
-				$this->documents->add($candidate, (string)($cv['name'] ?? 'CV'), (string)($cv['mime'] ?? ''), (string)$cv['content'], null);
+				$documents[] = $this->documents->add($candidate, (string)($cv['name'] ?? 'CV'), (string)($cv['mime'] ?? ''), (string)$cv['content'], null, false);
 			} catch (ValidationException $e) {
 				$this->logger->info('Skipped web-application CV: ' . $e->getMessage());
 			}
 		}
 
-		$this->ai->scheduleIntakeAnalysis($candidate);
+		$this->scheduleIntake($candidate, $documents);
 		$this->sendAutoAck($opening, $candidate);
 
 		return $candidate;
@@ -430,28 +559,28 @@ class IngestionService {
 	 * Append a candidate's reply to their timeline, store its attachments,
 	 * and tell the hiring managers. An automatic reply (out-of-office,
 	 * bounce) is only noted on the timeline: no attachments, no notification.
+	 *
+	 * The ledger notes the candidate once the timeline entry exists; a
+	 * $resumed retry skips that entry and attachments already stored.
 	 */
-	private function appendReply(Candidate $candidate, ParsedMail $parsed, bool $automatic): void {
-		$data = [
-			'subject' => $parsed->subject,
-			'body' => mb_substr($parsed->textBody, 0, self::BODY_SNIPPET_LENGTH),
-			'reply' => true,
-		];
-		if ($automatic) {
-			$data['automatic'] = true;
+	private function appendReply(Candidate $candidate, ParsedMail $parsed, bool $automatic, string $key, bool $resumed): void {
+		if (!$resumed) {
+			$data = [
+				'subject' => $parsed->subject,
+				'body' => mb_substr($parsed->textBody, 0, self::BODY_SNIPPET_LENGTH),
+				'reply' => true,
+			];
+			if ($automatic) {
+				$data['automatic'] = true;
+			}
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_RECEIVED, null, $data);
+			$this->seenMail->attachCandidate($key, $candidate->getId());
 		}
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_RECEIVED, null, $data);
 		if ($automatic) {
 			return;
 		}
 
-		foreach ($parsed->attachments as $attachment) {
-			try {
-				$this->documents->add($candidate, $attachment['name'], $attachment['mime'], $attachment['content'], null);
-			} catch (ValidationException $e) {
-				$this->logger->info('Skipped attachment "' . $attachment['name'] . '": ' . $e->getMessage());
-			}
-		}
+		$this->storeAttachments($candidate, $parsed->attachments, $resumed, true);
 
 		$openingId = $candidate->getOpeningId();
 		if ($openingId === null) {

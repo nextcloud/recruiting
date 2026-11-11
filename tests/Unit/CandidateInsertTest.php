@@ -34,6 +34,7 @@ use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
@@ -81,6 +82,7 @@ class CandidateInsertTest extends TestCase {
 			$time,
 			$this->createMock(IL10N::class),
 			$portal,
+			$this->createMock(IDBConnection::class),
 		);
 
 		$candidate = $service->insertCandidate(3, 'Grace', 'grace@example.org', '', Candidate::SOURCE_REFERRAL, 'bob', 'bob');

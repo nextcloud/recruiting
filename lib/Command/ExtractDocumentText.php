@@ -17,7 +17,7 @@ use OCP\Console\IOutput;
 #[AsCommand(
 	name: 'recruiting:documents:extract-text',
 	description: 'Extract the text of stored candidate documents (CVs) for AI material and search',
-	help: 'New uploads are extracted automatically. This fills in documents stored before text extraction existed; documents without readable text are skipped.',
+	help: 'New uploads are extracted automatically by a background job. This fills in documents that have no text yet (stored before text extraction existed, or whose extraction failed); documents without readable text are skipped.',
 )]
 class ExtractDocumentText {
 	private const BATCH_SIZE = 100;

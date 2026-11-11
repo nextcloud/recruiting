@@ -38,6 +38,7 @@ use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\IComment;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -56,6 +57,7 @@ class CandidateMergeTest extends TestCase {
 	private TimelineEventMapper&MockObject $eventMapper;
 	private NotificationService&MockObject $notifications;
 	private ICommentsManager&MockObject $commentsManager;
+	private IDBConnection&MockObject $db;
 	private CandidateService $service;
 
 	/** @var array<int, Candidate> */
@@ -75,6 +77,7 @@ class CandidateMergeTest extends TestCase {
 		$this->eventMapper = $this->createMock(TimelineEventMapper::class);
 		$this->notifications = $this->createMock(NotificationService::class);
 		$this->commentsManager = $this->createMock(ICommentsManager::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$timeFactory = $this->createMock(ITimeFactory::class);
 		$timeFactory->method('getDateTime')->willReturnCallback(static fn () => new \DateTime('2026-08-16T12:00:00+00:00'));
 		$l10n = $this->createMock(IL10N::class);
@@ -107,6 +110,7 @@ class CandidateMergeTest extends TestCase {
 			$timeFactory,
 			$l10n,
 			$this->createMock(PortalService::class),
+			$this->db,
 		);
 	}
 
@@ -168,6 +172,56 @@ class CandidateMergeTest extends TestCase {
 		$this->assertSame(['from' => 'new', 'to' => 'screening', 'mergedFrom' => 2], $event->getDecodedData());
 		$this->assertNull($target->getDuplicateOf());
 		$this->assertSame('reply-token', $target->getReplyToken());
+	}
+
+	public function testFilesMoveFirstAndTheRowsInOneTransaction(): void {
+		$this->candidate(1, 5);
+		$this->candidate(2, 5);
+		$this->commentsManager->method('getForObject')->willReturn([]);
+		$this->permissions->method('canViewCandidate')->willReturn(true);
+		$order = [];
+		$this->documents->method('moveAll')->willReturnCallback(function () use (&$order) {
+			$order[] = 'move files';
+			return 1;
+		});
+		$this->documents->expects($this->once())->method('deleteAllFor')->with(2)->willReturnCallback(function () use (&$order): void {
+			$order[] = 'leftover files';
+		});
+		$this->db->method('beginTransaction')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'begin';
+		});
+		$this->voteMapper->method('moveToCandidate')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'votes';
+		});
+		$this->candidateMapper->method('delete')->willReturnCallback(function (Candidate $c) use (&$order) {
+			$order[] = 'delete duplicate';
+			return $c;
+		});
+		$this->db->method('commit')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'commit';
+		});
+		$this->notifications->method('purgeForCandidate')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'notifications';
+		});
+
+		$this->service->merge('hr', 2, 1);
+
+		$this->assertSame(['move files', 'leftover files', 'begin', 'votes', 'delete duplicate', 'commit', 'notifications'], $order);
+	}
+
+	public function testAFailingStepRollsTheWholeMergeBack(): void {
+		$this->candidate(1, 5);
+		$this->candidate(2, 5);
+		$this->commentsManager->method('getForObject')->willReturn([]);
+		$this->interviewMapper->method('moveToCandidate')->willThrowException(new \RuntimeException('deadlock'));
+		$this->db->expects($this->once())->method('beginTransaction');
+		$this->db->expects($this->once())->method('rollBack');
+		$this->db->expects($this->never())->method('commit');
+		$this->candidateMapper->expects($this->never())->method('delete');
+		$this->notifications->expects($this->never())->method('purgeForCandidate');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->merge('hr', 2, 1);
 	}
 
 	public function testDifferentOpeningsAreSeparateApplications(): void {

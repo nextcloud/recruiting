@@ -113,9 +113,11 @@ of candidates not assigned to them.
   (`jobs+c{id}.{token}@…`). A mail to that address (token checked, `hash_equals`)
   is appended to the existing candidate's timeline — attachments become documents,
   the hiring managers are notified — instead of becoming a "new" application in
-  triage. **Idempotency:** every processed Message-ID is recorded in
-  `recruiting_mail_seen` *after* successful processing; a crash between processing
-  and the IMAP seen-flag retries the mail instead of duplicating or losing it.
+  triage. **Idempotency:** every Message-ID is recorded in `recruiting_mail_seen`
+  *before* processing (attempt counted) together with the candidate it creates,
+  and marked done after successful processing; a crash or failure retries the
+  mail and continues on that candidate instead of duplicating or losing it
+  (§10.15).
 - Optional auto-acknowledgement: send the `receipt_confirmation` template to the
   candidate on ingestion (per-opening toggle).
 - Duplicate detection: same email address + same opening within 90 days → flagged as
@@ -627,8 +629,8 @@ A review pass acting on an external audit of the app:
 - **Failures.** The Message-ID ledger (`recruiting_mail_seen`) gained
   `pending`, `attempts`, `last_error`, `quarantined_at`. Mails without a
   Message-ID are tracked by `sha256:<hash of the raw mail>`. A transient
-  failure after the candidate row was written can create a duplicate on
-  retry (at-least-once, as before). The quarantine folder falls back to
+  failure after the candidate row was written could create a duplicate on
+  retry (at-least-once); since §10.15 the retry resumes on that candidate. The quarantine folder falls back to
   `INBOX<delimiter>Recruiting-Failed` on servers that refuse top-level folders;
   the triage count is the folder's `STATUS MESSAGES`, so it drops once HR
   empties the folder.
@@ -769,7 +771,7 @@ Beyond the §9 non-goals, which did not exclude these:
   PDF via `pdftotext` (argument vector, 20 s timeout) or a built-in
   FlateDecode/Tj/TJ reader whose result is dropped when a letters/whitespace
   heuristic says it is not text. Stored in `recruiting_documents.text_content`
-  (≤ 100 000 chars), filled on upload; `occ recruiting:documents:extract-text`
+  (≤ 100 000 chars), filled by a queued job after upload (§10.15); `occ recruiting:documents:extract-text`
   back-fills. The AI material includes the most recent extracted document,
   splitting `MATERIAL_LIMIT` between cover letter and CV. The talent pool
   searches it (`DocumentMapper::findCandidateIdsByText`); the unified search
@@ -790,7 +792,7 @@ Beyond the §9 non-goals, which did not exclude these:
   automatic cancellation. Candidate messages and referral notes are stripped
   on anonymization like other PII events.
 - **Interview reminder:** hourly `InterviewReminderJob` mails confirmed
-  interviews starting in 23–25 h once (`reminder_sent_at`, claimed atomically,
+  interviews starting in 2–25 h once (23–25 h before §10.15; `reminder_sent_at`, claimed atomically,
   released on a send failure). Template type `interview_reminder`; times are
   formatted in the organizer's timezone with the zone named, since the
   candidate's own is unknown server-side.
@@ -801,6 +803,63 @@ Beyond the §9 non-goals, which did not exclude these:
   Candidates get source `referral` and `referred_by`; `StageService` notifies
   the referrer when the coarse status changes. `PermissionService` is
   unchanged — referrers get no candidate access.
+
+### 10.15 Reliability: resumable intake, transactions, claims (fix wave 2026-11-11)
+
+- **Resumable intake.** `recruiting_mail_seen` gained `candidate_id`
+  (migration `Version0012`). `SeenMailMapper::beginAttempt()` upserts the
+  pending row and counts the attempt *before* processing (so fatals and
+  timeouts count too); the candidate id is stored right after its insert. A
+  retry with a stored candidate resumes on it: the `mail_received` entry is
+  written only if missing, an attachment with the same stored name and size
+  is not stored again, and the manager notification (part of the insert) is
+  never repeated. A candidate deleted in the meantime is created anew; an
+  anonymized one ends the mail as done. Replies note the candidate once their
+  timeline entry exists. Success resets the count. Remaining window: a crash
+  between the auto-ack and the final ledger update repeats the auto-ack.
+- **Attempt caps.** Permanent failures quarantine at 3 attempts, transient
+  ones at 12 (one hour at the 5-minute fetch interval). An attempt that finds
+  12 unfinished earlier attempts quarantines without processing. Quarantine
+  resets the count, so a mail moved back into the inbox gets a fresh start.
+  A failure of the ledger itself ends the run without counting.
+- **Size limit.** `UID FETCH (RFC822.SIZE)` before the body; above 30 MB
+  (`IngestionService::MAX_MESSAGE_SIZE`) only the header is fetched (for the
+  ledger key) and the mail is quarantined with the reason in `last_error`.
+- **UTF-8.** `MimeParser` decodes RFC 2047 words itself (adjacent words of one
+  charset as one byte run, so split characters survive), converts declared
+  charsets with mbstring (iconv for the rest), reads undeclared 8-bit text as
+  UTF-8 when valid, else Windows-1252, and `mb_scrub`s everything. The
+  Message-ID is made valid UTF-8 as well. `TimelineService` additionally
+  encodes with `JSON_INVALID_UTF8_SUBSTITUTE`.
+- **Text extraction** left the request: `DocumentService::add()` queues
+  `ExtractTextJob` (a `QueuedJob`). Mail and web-form intake store their
+  documents without queueing and call `queueTextExtraction($documents,
+  $candidateId)`: one job extracts them and then schedules the AI intake
+  analysis; without an extractable document the analysis is scheduled at
+  once. Referral, portal and manual uploads get the plain queued extraction
+  (they never had an intake analysis). New text is searchable only after the
+  job ran.
+- **Transactions** (`TTransactional::atomic()`): the row changes of
+  `CandidateService::merge/purge/assignToOpening`, `RetentionService::anonymize`,
+  the rejection's stage change and every offer transition. Calendar/Talk
+  scrubbing and file deletion run before the transaction (rows are what lets a
+  retry find them); merge moves files before it. Notifications, activity and
+  comments live in other apps' tables and are removed after the commit, as
+  best effort: a failing statement there must not abort the transaction on
+  PostgreSQL.
+- **Files before rows.** `DocumentService::delete/deleteAllFor` delete the
+  file or folder first, check with `fileExists()` that the files are gone
+  (the storage layer does not report every failed delete) and keep the rows
+  and throw otherwise.
+- **Claims against double sends.** `OfferService::send` claims
+  `approved → sent` and `rejectCandidate` claims `<stage> → rejected` with a
+  conditional update before the mail; a lost claim is a translated
+  validation error ("already sent" / "already rejected" / "moved in the
+  meantime"), a failed mail reverts the claim. The claimed stage is visible
+  before `rejected_at` is written; a crash between claim and mail leaves the
+  candidate rejected without the mail. `processExpiry` handles each offer in
+  its own try/catch.
+- **Reminder window** 2–25 h ahead, not yet sent (was 23–25 h).
 
 ### 10.3 Surface map (routes → screens)
 

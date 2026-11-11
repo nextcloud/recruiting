@@ -16,6 +16,7 @@ use OCA\Recruiting\Service\TextExtractionService;
 use OCA\Recruiting\Service\VirusScanService;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\IAppData;
 use OCP\Files\InvalidContentException;
 use OCP\Files\SimpleFS\ISimpleFile;
@@ -126,7 +127,7 @@ class DocumentSafetyTest extends TestCase {
 		$random->method('generate')->willReturn(str_repeat('k', 32));
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturn(new \DateTime());
-		return new DocumentService($mapper, $appData, $scan, $random, $time, $l10n, $this->createMock(TextExtractionService::class), new NullLogger());
+		return new DocumentService($mapper, $appData, $scan, $random, $time, $l10n, $this->createMock(TextExtractionService::class), new NullLogger(), $this->createMock(IJobList::class));
 	}
 
 	private function candidate(): Candidate {

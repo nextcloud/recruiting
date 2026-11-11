@@ -250,7 +250,9 @@ show the candidate's current name.
    interviewers — nothing is cancelled automatically.
 6. About 24 hours before a confirmed interview the candidate gets a reminder
    mail (template *Interview reminder*) with the time, the location or video
-   link, and their interview and self-service links.
+   link, and their interview and self-service links. An interview booked less
+   than a day ahead gets it within the hour (unless it starts in less than
+   two hours).
 
 | Picking a slot — no account required | After confirming: details + calendar file |
 |---|---|
@@ -340,10 +342,13 @@ becomes a candidate but gets no automatic confirmation.
 
 Each check works through new mail for up to a minute (at most 500 mails). A
 temporary problem such as a database or storage outage leaves the mail
-unread and ends the check; the next check retries it. A mail that fails three
-times is moved to the mailbox folder **Recruiting-Failed** (created when
-needed) and marked as read, and the triage inbox shows how many mails wait
-there.
+unread and ends the check; the next check retries it. A retry never creates a
+second candidate: it continues on the candidate the first attempt created. A
+mail that fails three times — or twelve times with a temporary problem — is
+moved to the mailbox folder **Recruiting-Failed** (created when needed) and
+marked as read, and the triage inbox shows how many mails wait there. Mails
+larger than 30 MB go there straight away, without being downloaded. Moving a
+mail back into the inbox and marking it unread tries it again.
 
 ![Triage inbox](screenshots/11-triage-inbox.png)
 
@@ -444,6 +449,8 @@ the name only for the intake extraction while it is still unknown (drafts
 still use it in the salutation). PDF text comes from `pdftotext`
 (poppler-utils) when it is installed, otherwise from a built-in reader that
 handles common PDFs and discards anything that does not look like text.
+The text is extracted by a background job shortly after the upload (cron
+must run); for a new application the AI intake analysis waits for it.
 
 ## occ commands
 
@@ -451,7 +458,7 @@ handles common PDFs and discards anything that does not look like text.
 |---|---|
 | `recruiting:fetch-mail` | Fetch the applications mailbox now |
 | `recruiting:retention:run [--dry-run]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason |
-| `recruiting:documents:extract-text [--limit=N]` | Extract the text of documents stored before text extraction existed |
+| `recruiting:documents:extract-text [--limit=N]` | Extract the text of documents that have none yet (stored before text extraction existed, or whose extraction failed) |
 
 ## Development
 

@@ -19,11 +19,13 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Reminder mail to the candidate about a day before a confirmed interview.
- * Run hourly: every interview starting 23–25 hours from now gets exactly one
- * reminder (claimed atomically, released again when sending fails).
+ * Run hourly: every interview starting 2–25 hours from now that has no
+ * reminder yet gets exactly one (claimed atomically, released again when
+ * sending fails). The wide window means an interview booked less than a
+ * day ahead, or a pause of cron, still gets its reminder.
  */
 class InterviewReminderService {
-	public const WINDOW_START_HOURS = 23;
+	public const WINDOW_START_HOURS = 2;
 	public const WINDOW_END_HOURS = 25;
 
 	public function __construct(

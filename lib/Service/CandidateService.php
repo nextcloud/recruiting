@@ -28,12 +28,16 @@ use OCA\Recruiting\Exception\ConflictException;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\TTransactional;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 
 class CandidateService {
+	use TTransactional;
+
 	private const DUPLICATE_WINDOW_DAYS = 90;
 
 	/**
@@ -71,6 +75,7 @@ class CandidateService {
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
 		private PortalService $portal,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -435,9 +440,10 @@ class CandidateService {
 		if ($duplicate !== null && $duplicate->getId() !== $candidate->getId()) {
 			$candidate->setDuplicateOf($duplicate->getId());
 		}
-		$this->candidateMapper->update($candidate);
-
-		$this->timeline->record($id, TimelineEvent::TYPE_OPENING_ASSIGNED, $uid, ['openingTitle' => $opening->getTitle()]);
+		$this->atomic(function () use ($candidate, $id, $uid, $opening): void {
+			$this->candidateMapper->update($candidate);
+			$this->timeline->record($id, TimelineEvent::TYPE_OPENING_ASSIGNED, $uid, ['openingTitle' => $opening->getTitle()]);
+		}, $this->db);
 		$this->activity->publish($candidate, 'application_created', $uid);
 		$this->notifyManagers($candidate, $uid);
 		return $this->get($uid, $id);
@@ -445,7 +451,7 @@ class CandidateService {
 
 	/**
 	 * Reject with a reason; optionally sends the (already previewed) mail
-	 * first so the candidate never ends up rejected-but-uninformed silently
+	 * so the candidate never ends up rejected-but-uninformed silently
 	 * failing (spec §4.5). With $askPool the mail carries a talent-pool
 	 * consent link (spec §4.8).
 	 *
@@ -460,6 +466,11 @@ class CandidateService {
 	 * The rejection itself for an already loaded candidate — shared by the
 	 * single and the bulk reject, without the detail serialization.
 	 *
+	 * The stage is claimed with a conditional update before the mail goes
+	 * out, so two parallel requests (a double click, two people) never both
+	 * send it. Should the mail fail, the claim is given back: the candidate
+	 * is never rejected without the mail.
+	 *
 	 * @throws NotPermittedException|ValidationException
 	 */
 	public function rejectCandidate(string $uid, Candidate $candidate, string $reason, ?string $mailSubject, ?string $mailBody, bool $askPool = false): void {
@@ -471,17 +482,34 @@ class CandidateService {
 			throw new ValidationException($this->l10n->t('This candidate is already rejected'));
 		}
 
-		if ($mailSubject !== null && $mailBody !== null) {
-			if ($askPool) {
-				$url = $this->pool->prepareConsentUrl($candidate, $uid);
-				$mailBody = rtrim($mailBody) . "\n\n"
-					. $this->l10n->t('PS: We would love to consider you for future openings. If you agree that we keep your application on file, just confirm here: %s', [$url]);
+		$from = $candidate->getStage();
+		if (!$this->candidateMapper->claimStage($candidate, $from, Candidate::STAGE_REJECTED)) {
+			$current = $this->candidateMapper->find($candidate->getId());
+			if ($current->getStage() === Candidate::STAGE_REJECTED) {
+				throw new ValidationException($this->l10n->t('This candidate is already rejected'));
 			}
-			$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
+			throw new ValidationException($this->l10n->t('%s was moved to another stage by someone else in the meantime', [$candidate->getDisplayName()]));
+		}
+
+		try {
+			if ($mailSubject !== null && $mailBody !== null) {
+				if ($askPool) {
+					$url = $this->pool->prepareConsentUrl($candidate, $uid);
+					$mailBody = rtrim($mailBody) . "\n\n"
+						. $this->l10n->t('PS: We would love to consider you for future openings. If you agree that we keep your application on file, just confirm here: %s', [$url]);
+				}
+				$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
+			}
+		} catch (\Throwable $e) {
+			$this->candidateMapper->claimStage($candidate, Candidate::STAGE_REJECTED, $from);
+			throw $e;
 		}
 
 		$candidate->setRejectionReason($reason);
-		$this->stages->apply($candidate, Candidate::STAGE_REJECTED, $uid, ['reason' => $reason], allowFromTerminal: true);
+		$this->atomic(
+			fn () => $this->stages->apply($candidate, Candidate::STAGE_REJECTED, $uid, ['reason' => $reason], allowFromTerminal: true),
+			$this->db,
+		);
 		$this->activity->publish($candidate, 'candidate_rejected', $uid);
 	}
 
@@ -557,55 +585,81 @@ class CandidateService {
 			throw new ValidationException($this->l10n->t('Anonymized candidates cannot be merged'));
 		}
 
+		// Files first, outside the transaction: each document is copied, then
+		// re-pointed, then removed, so a failure leaves it intact on one side
 		$documents = $this->documents->moveAll($sourceId, $target);
-		foreach ($this->eventMapper->findForCandidate($sourceId) as $event) {
-			$data = $event->getDecodedData();
-			$data[TimelineEvent::MERGED_FROM] = $sourceId;
-			$event->setData(json_encode($data, JSON_THROW_ON_ERROR));
-			$event->setCandidateId($targetId);
-			$this->eventMapper->update($event);
-		}
-		foreach ($this->commentsManager->getForObject(CommentService::OBJECT_TYPE, (string)$sourceId) as $comment) {
-			$comment->setObject(CommentService::OBJECT_TYPE, (string)$targetId);
-			$this->commentsManager->save($comment);
-		}
-		$this->assignmentMapper->moveToCandidate($sourceId, $targetId);
-		$this->voteMapper->moveToCandidate($sourceId, $targetId);
-		$this->interviewMapper->moveToCandidate($sourceId, $targetId);
-		$this->offerMapper->moveToCandidate($sourceId, $targetId);
-		$this->candidateMapper->repointDuplicates($sourceId, $targetId);
+		// What the move left behind: rows whose file was already gone
+		$this->documents->deleteAllFor($sourceId);
 
-		if ($target->getDuplicateOf() === $sourceId) {
-			$target->setDuplicateOf(null);
-		}
-		// Replies to mail sent from the duplicate must still find the person
-		if (($target->getReplyToken() ?? '') === '' && ($source->getReplyToken() ?? '') !== '') {
-			$target->setReplyToken($source->getReplyToken());
-		}
-		$this->candidateMapper->update($target);
+		$this->atomic(function () use ($uid, $source, $target, $sourceId, $targetId, $documents): void {
+			foreach ($this->eventMapper->findForCandidate($sourceId) as $event) {
+				$data = $event->getDecodedData();
+				$data[TimelineEvent::MERGED_FROM] = $sourceId;
+				$event->setData(json_encode($data, JSON_THROW_ON_ERROR));
+				$event->setCandidateId($targetId);
+				$this->eventMapper->update($event);
+			}
+			foreach ($this->commentsManager->getForObject(CommentService::OBJECT_TYPE, (string)$sourceId) as $comment) {
+				$comment->setObject(CommentService::OBJECT_TYPE, (string)$targetId);
+				$this->commentsManager->save($comment);
+			}
+			$this->assignmentMapper->moveToCandidate($sourceId, $targetId);
+			$this->voteMapper->moveToCandidate($sourceId, $targetId);
+			$this->interviewMapper->moveToCandidate($sourceId, $targetId);
+			$this->offerMapper->moveToCandidate($sourceId, $targetId);
+			$this->candidateMapper->repointDuplicates($sourceId, $targetId);
 
-		$this->timeline->record($targetId, TimelineEvent::TYPE_MERGED, $uid, [
-			'mergedId' => $sourceId,
-			'documents' => $documents,
-		]);
-		$this->purge($source);
+			if ($target->getDuplicateOf() === $sourceId) {
+				$target->setDuplicateOf(null);
+			}
+			// Replies to mail sent from the duplicate must still find the person
+			if (($target->getReplyToken() ?? '') === '' && ($source->getReplyToken() ?? '') !== '') {
+				$target->setReplyToken($source->getReplyToken());
+			}
+			$this->candidateMapper->update($target);
+
+			$this->timeline->record($targetId, TimelineEvent::TYPE_MERGED, $uid, [
+				'mergedId' => $sourceId,
+				'documents' => $documents,
+			]);
+			$this->deleteRows($source);
+		}, $this->db);
+		$this->purgeTraces($sourceId);
 		return $this->get($uid, $targetId);
 	}
 
 	/**
 	 * The deletion itself, without a permission check: for callers that
 	 * already decided, such as the retention automation.
+	 *
+	 * Calendar events, Talk rooms and files go first: those steps are safe
+	 * to repeat, and as long as the rows exist a failed purge can simply run
+	 * again. The rows then go in one transaction.
 	 */
 	public function purge(Candidate $candidate): void {
-		$id = $candidate->getId();
-
 		$this->interviews->scrubForCandidate($candidate, revokeLinks: false);
-		$this->documents->deleteAllFor($id);
+		$this->documents->deleteAllFor($candidate->getId());
+		$this->atomic(fn () => $this->deleteRows($candidate), $this->db);
+		$this->purgeTraces($candidate->getId());
+	}
+
+	private function deleteRows(Candidate $candidate): void {
+		$id = $candidate->getId();
 		$this->voteMapper->deleteForCandidate($id);
 		$this->assignmentMapper->deleteForCandidate($id);
 		// Slots and attendees hang off the interviews, so they must go first
 		$this->interviews->deleteAllFor($id);
 		$this->offerMapper->deleteForCandidate($id);
+		$this->eventMapper->deleteForCandidate($id);
+		$this->candidateMapper->delete($candidate);
+	}
+
+	/**
+	 * Notifications, activity and comments live in other apps' tables and are
+	 * removed outside the transaction: a failing statement there must not
+	 * abort it (PostgreSQL ends a transaction on the first error).
+	 */
+	private function purgeTraces(int $id): void {
 		$this->notifications->purgeForCandidate($id);
 		$this->activityPurge->purgeForCandidate($id);
 		try {
@@ -613,8 +667,6 @@ class CandidateService {
 		} catch (\Exception) {
 			// comments are best-effort
 		}
-		$this->eventMapper->deleteForCandidate($id);
-		$this->candidateMapper->delete($candidate);
 	}
 
 	private function notifyManagers(Candidate $candidate, ?string $actorUid): void {

@@ -35,6 +35,8 @@ class MimeParser {
 		'authentication-results',
 	];
 	private const MAX_HEADER_LENGTH = 2000;
+	/** One RFC 2047 encoded word: =?charset?B|Q?payload?= */
+	private const ENCODED_WORD = '=\?[^?\s]+\?[BbQq]\?[^?\s]*\?=';
 
 	private string $textBody = '';
 	private string $htmlBody = '';
@@ -62,7 +64,7 @@ class MimeParser {
 		}
 
 		// Message-IDs are attacker-controlled headers: clamp to the column size
-		$messageId = mb_substr(trim($headers['message-id'] ?? ''), 0, 250);
+		$messageId = mb_substr(trim($this->rawToUtf8($headers['message-id'] ?? '')), 0, 250);
 
 		$classification = [];
 		foreach (self::CLASSIFICATION_HEADERS as $name) {
@@ -114,7 +116,7 @@ class MimeParser {
 			return;
 		}
 
-		$charset = $params['charset'] ?? 'utf-8';
+		$charset = $params['charset'] ?? '';
 		if ($mime === 'text/plain' && $disposition !== 'attachment') {
 			if ($this->textBody === '') {
 				$this->textBody = $this->toUtf8($decoded, $charset);
@@ -272,18 +274,46 @@ class MimeParser {
 		return '';
 	}
 
+	/**
+	 * A header value as valid UTF-8: raw 8-bit bytes are read as UTF-8 or
+	 * Windows-1252, RFC 2047 encoded words are decoded from their charset.
+	 */
 	private function decodeHeader(string $value): string {
 		if ($value === '') {
 			return '';
 		}
-		// Only run the RFC 2047 decoder when an encoded word is present:
-		// iconv_mime_decode mangles plain non-ASCII input (e.g. RFC 2231
-		// file names that are already UTF-8).
-		if (!str_contains($value, '=?')) {
-			return trim($value);
+		$value = $this->rawToUtf8($value);
+		if (str_contains($value, '=?')) {
+			// Adjacent encoded words are decoded as one run, so a character
+			// split across two words survives; the whitespace between them
+			// is not part of the text (RFC 2047 §6.2)
+			$value = (string)preg_replace_callback(
+				'/' . self::ENCODED_WORD . '(?:\s*' . self::ENCODED_WORD . ')*/',
+				fn (array $run): string => $this->decodeEncodedWords($run[0]),
+				$value,
+			);
 		}
-		$decoded = @iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
-		return trim($decoded !== false ? $decoded : $value);
+		return trim(mb_scrub($value, 'UTF-8'));
+	}
+
+	private function decodeEncodedWords(string $run): string {
+		preg_match_all('/=\?([^?\s]+)\?([BbQq])\?([^?\s]*)\?=/', $run, $words, PREG_SET_ORDER);
+		$text = '';
+		$bytes = '';
+		$charset = null;
+		foreach ($words as [, $wordCharset, $encoding, $payload]) {
+			// RFC 2231 allows a language suffix: "utf-8*en"
+			$wordCharset = strtolower(explode('*', $wordCharset)[0]);
+			if ($charset !== null && $wordCharset !== $charset) {
+				$text .= $this->toUtf8($bytes, $charset);
+				$bytes = '';
+			}
+			$charset = $wordCharset;
+			$bytes .= strtoupper($encoding) === 'B'
+				? (string)base64_decode($payload, false)
+				: quoted_printable_decode(str_replace('_', ' ', $payload));
+		}
+		return $text . ($charset !== null ? $this->toUtf8($bytes, $charset) : '');
 	}
 
 	/**
@@ -311,17 +341,36 @@ class MimeParser {
 		return array_map('strtolower', $matches[0]);
 	}
 
+	/**
+	 * Convert text from its declared charset to valid UTF-8. Without a
+	 * declaration (or with plain ASCII declared), 8-bit bytes are guessed.
+	 */
 	private function toUtf8(string $text, string $charset): string {
-		$charset = strtoupper(trim($charset)) ?: 'UTF-8';
-		if ($charset === 'UTF-8' || $charset === 'US-ASCII') {
-			// Ensure valid UTF-8 either way
-			return (string)mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+		$charset = strtoupper(trim($charset, " \t\"'"));
+		if ($charset === '' || $charset === 'US-ASCII' || $charset === 'ASCII') {
+			return $this->rawToUtf8($text);
 		}
-		$converted = @iconv($charset, 'UTF-8//IGNORE', $text);
-		if ($converted === false) {
-			$converted = @mb_convert_encoding($text, 'UTF-8', 'ISO-8859-1');
+		if ($charset === 'UTF-8' || $charset === 'UTF8') {
+			return mb_scrub($text, 'UTF-8');
 		}
-		return (string)$converted;
+		try {
+			$converted = mb_convert_encoding($text, 'UTF-8', $charset);
+		} catch (\ValueError) {
+			// Not known to mbstring; iconv knows more charsets
+			$converted = @iconv($charset, 'UTF-8//IGNORE', $text);
+		}
+		return $converted === false ? $this->rawToUtf8($text) : mb_scrub($converted, 'UTF-8');
+	}
+
+	/**
+	 * Undeclared 8-bit text: kept when it is valid UTF-8, else read as
+	 * Windows-1252 (the superset of Latin-1 that mail clients really send).
+	 */
+	private function rawToUtf8(string $text): string {
+		if (mb_check_encoding($text, 'UTF-8')) {
+			return $text;
+		}
+		return mb_scrub((string)mb_convert_encoding($text, 'UTF-8', 'Windows-1252'), 'UTF-8');
 	}
 
 	private function htmlToText(string $html): string {

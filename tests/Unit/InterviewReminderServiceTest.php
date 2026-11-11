@@ -73,9 +73,9 @@ class InterviewReminderServiceTest extends TestCase {
 		return $interview;
 	}
 
-	public function testTheWindowIsTwentyThreeToTwentyFiveHoursAhead(): void {
+	public function testTheWindowIsTwoToTwentyFiveHoursAhead(): void {
 		$this->interviewMapper->expects($this->once())->method('findDueReminders')
-			->with(new \DateTime('2026-11-11T11:00:00Z'), new \DateTime('2026-11-11T13:00:00Z'))
+			->with(new \DateTime('2026-11-10T14:00:00Z'), new \DateTime('2026-11-11T13:00:00Z'))
 			->willReturn([]);
 		$this->assertSame(0, $this->service->sendDue());
 	}

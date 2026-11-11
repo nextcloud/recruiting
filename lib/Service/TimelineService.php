@@ -24,7 +24,7 @@ class TimelineService {
 		$event->setCandidateId($candidateId);
 		$event->setType($type);
 		$event->setActorUid($actorUid);
-		$event->setData($data === [] ? null : json_encode($data, JSON_THROW_ON_ERROR));
+		$event->setData($data === [] ? null : json_encode($data, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
 		$event->setCreatedAt($this->timeFactory->getDateTime());
 		return $this->mapper->insert($event);
 	}

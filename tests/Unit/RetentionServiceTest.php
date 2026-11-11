@@ -23,6 +23,8 @@ use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\RetentionService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Comments\ICommentsManager;
+use OCP\IDBConnection;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -37,6 +39,7 @@ class RetentionServiceTest extends TestCase {
 	private InterviewService $interviews;
 	private ActivityPurgeService $activityPurge;
 	private CandidateService $candidates;
+	private IDBConnection&MockObject $db;
 	private RetentionService $service;
 
 	protected function setUp(): void {
@@ -53,6 +56,7 @@ class RetentionServiceTest extends TestCase {
 		$this->interviews = $this->createMock(InterviewService::class);
 		$this->activityPurge = $this->createMock(ActivityPurgeService::class);
 		$this->candidates = $this->createMock(CandidateService::class);
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->service = $this->makeService($this->offerMapper);
 	}
 
@@ -71,6 +75,7 @@ class RetentionServiceTest extends TestCase {
 			$this->createMock(ICommentsManager::class),
 			$this->timeFactory,
 			new NullLogger(),
+			$this->db,
 		);
 	}
 
@@ -213,6 +218,58 @@ class RetentionServiceTest extends TestCase {
 		$this->activityPurge->expects($this->once())->method('purgeForCandidate')->with(5);
 		$this->interviews->expects($this->once())->method('scrubForCandidate')->with($candidate, true);
 
+		$this->service->anonymize($candidate);
+	}
+
+	public function testAnonymizeScrubsCalendarAndFilesBeforeTheRowsChangeInOneTransaction(): void {
+		$candidate = $this->candidate(5);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+		$order = [];
+		$this->interviews->method('scrubForCandidate')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'calendar';
+		});
+		$this->documents->method('deleteAllFor')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'files';
+		});
+		$this->db->method('beginTransaction')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'begin';
+		});
+		$this->candidateMapper->method('update')->willReturnCallback(function (Candidate $c) use (&$order) {
+			$order[] = 'candidate';
+			return $c;
+		});
+		$this->db->method('commit')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'commit';
+		});
+		$this->activityPurge->method('purgeForCandidate')->willReturnCallback(function () use (&$order): void {
+			$order[] = 'activity';
+		});
+
+		$this->service->anonymize($candidate);
+
+		$this->assertSame(['calendar', 'files', 'begin', 'candidate', 'commit', 'activity'], $order);
+	}
+
+	public function testAFailedFileDeleteLeavesTheCandidateForTheNextRun(): void {
+		$candidate = $this->candidate(5);
+		$this->documents->method('deleteAllFor')->willThrowException(new \RuntimeException('storage down'));
+		$this->db->expects($this->never())->method('beginTransaction');
+		$this->candidateMapper->expects($this->never())->method('update');
+
+		$this->expectException(\RuntimeException::class);
+		$this->service->anonymize($candidate);
+	}
+
+	public function testAFailingRowUpdateRollsTheAnonymizationBack(): void {
+		$candidate = $this->candidate(5);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+		$this->candidateMapper->method('update')->willThrowException(new \RuntimeException('deadlock'));
+		$this->db->expects($this->once())->method('rollBack');
+		$this->db->expects($this->never())->method('commit');
+		$this->eventMapper->expects($this->never())->method('insert');
+		$this->activityPurge->expects($this->never())->method('purgeForCandidate');
+
+		$this->expectException(\RuntimeException::class);
 		$this->service->anonymize($candidate);
 	}
 

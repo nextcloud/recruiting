@@ -455,9 +455,11 @@
 	<p>The heartbeat line <img class="ui" src="img/heartbeat.png" alt="Mailbox heartbeat">
 	shows when the mailbox was last checked. If a check fails, a warning appears here — so a
 	broken mailbox can never silently swallow applications. A mail that cannot be processed
-	is tried again; after three failed attempts it is moved to the mailbox folder
-	<code>Recruiting-Failed</code>, and the warning tells you how many are waiting there, so
-	someone can look at them by hand.</p>
+	is tried again — without creating the candidate twice; after three failed attempts
+	(twelve when the cause is temporary, such as a storage outage) it is moved to the
+	mailbox folder <code>Recruiting-Failed</code>, and the warning tells you how many are
+	waiting there, so someone can look at them by hand. Mails larger than 30 MB go there
+	straight away.</p>
 
 	<h3>Adding candidates by hand</h3>
 	<p>Somebody applied at a job fair or on paper? <img class="ui ui-lg" src="img/btn-add-candidate.png"
@@ -617,9 +619,10 @@
 	me</strong> and can add a short message; after confirming, <strong>I need to
 	reschedule</strong> does the same. Either way the organizer and the interviewers get a
 	notification and the message lands on the candidate's timeline — nothing is cancelled
-	automatically, you decide and propose new times. The day before a confirmed interview,
-	the candidate receives a <strong>reminder mail</strong> with date, time and place (the
-	"Interview reminder" template, chapter 10).</p>
+	automatically, you decide and propose new times. The day before a confirmed interview
+	(or within the hour, for one booked at shorter notice), the candidate receives a
+	<strong>reminder mail</strong> with date, time and place (the "Interview reminder"
+	template, chapter 10).</p>
 
 	<div class="callout privacy">Scheduling links stop working a week after the interview,
 	when the interview is cancelled, and when the candidate is rejected or withdraws — an old

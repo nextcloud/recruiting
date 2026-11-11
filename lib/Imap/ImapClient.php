@@ -10,7 +10,8 @@ namespace OCA\Recruiting\Imap;
 
 /**
  * Minimal, dependency-free IMAP4rev1 client — just what mail ingestion
- * needs: LOGIN, SELECT, UID SEARCH UNSEEN, UID FETCH BODY.PEEK[],
+ * needs: LOGIN, SELECT, UID SEARCH UNSEEN, UID FETCH (RFC822.SIZE,
+ * BODY.PEEK[HEADER], BODY.PEEK[]),
  * UID STORE \Seen, and moving a message into a quarantine folder
  * (CAPABILITY, LIST, CREATE, STATUS, UID MOVE or UID COPY + EXPUNGE).
  * Credentials are sent as literals, so any characters are safe.
@@ -201,24 +202,54 @@ class ImapClient {
 	 * @throws ImapException
 	 */
 	public function fetchMessage(int $uid): string {
-		$tag = $this->nextTag();
-		$this->write($tag . ' UID FETCH ' . $uid . " (BODY.PEEK[])\r\n");
+		return $this->fetchLiteral($uid, 'BODY.PEEK[]');
+	}
 
-		$message = null;
+	/**
+	 * Fetch only the header block of a message, without setting \Seen.
+	 *
+	 * @throws ImapException
+	 */
+	public function fetchHeader(int $uid): string {
+		return $this->fetchLiteral($uid, 'BODY.PEEK[HEADER]');
+	}
+
+	/**
+	 * The size of a message in bytes, known before downloading it.
+	 *
+	 * @throws ImapException
+	 */
+	public function fetchSize(int $uid): int {
+		foreach ($this->command('UID FETCH ' . $uid . ' (RFC822.SIZE)') as $line) {
+			if (preg_match('/\bRFC822\.SIZE\s+(\d+)/i', $line, $m)) {
+				return (int)$m[1];
+			}
+		}
+		throw new ImapException('FETCH returned no size for UID ' . $uid);
+	}
+
+	/**
+	 * @throws ImapException
+	 */
+	private function fetchLiteral(int $uid, string $item): string {
+		$tag = $this->nextTag();
+		$this->write($tag . ' UID FETCH ' . $uid . ' (' . $item . ")\r\n");
+
+		$literal = null;
 		while (true) {
 			$line = $this->readLine();
 			if (str_starts_with($line, $tag . ' ')) {
 				$this->assertOk($tag, $line);
 				break;
 			}
-			if ($message === null && preg_match('/\{(\d+)\}\s*$/', $line, $m)) {
-				$message = $this->readBytes((int)$m[1]);
+			if ($literal === null && preg_match('/\{(\d+)\}\s*$/', $line, $m)) {
+				$literal = $this->readBytes((int)$m[1]);
 			}
 		}
-		if ($message === null) {
+		if ($literal === null) {
 			throw new ImapException('FETCH returned no message body for UID ' . $uid);
 		}
-		return $message;
+		return $literal;
 	}
 
 	/**

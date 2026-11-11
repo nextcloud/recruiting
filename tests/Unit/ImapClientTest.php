@@ -141,4 +141,28 @@ class ImapClientTest extends TestCase {
 		$this->client->mailboxExists('A "quoted" \\ name');
 		$this->assertSame(['LIST "" "A \\"quoted\\" \\\\ name"'], FakeImapStream::$commands);
 	}
+
+	public function testTheSizeIsFetchedWithoutTheBody(): void {
+		FakeImapStream::$replies['UID FETCH 42 (RFC822.SIZE)'] = ['* 7 FETCH (UID 42 RFC822.SIZE 31457281)'];
+
+		$this->assertSame(31457281, $this->client->fetchSize(42));
+		$this->assertSame(['UID FETCH 42 (RFC822.SIZE)'], FakeImapStream::$commands);
+	}
+
+	public function testAMissingSizeThrows(): void {
+		$this->expectException(ImapException::class);
+		$this->client->fetchSize(42);
+	}
+
+	public function testOnlyTheHeaderIsFetched(): void {
+		$header = "Message-ID: <a@x>\r\nSubject: Hi\r\n\r\n";
+		FakeImapStream::$replies['UID FETCH 42 (BODY.PEEK[HEADER])'] = [
+			'* 7 FETCH (UID 42 BODY[HEADER] {' . strlen($header) . '}',
+			// the server ends each reply line with CRLF, which completes the literal
+			substr($header, 0, -2),
+			')',
+		];
+
+		$this->assertSame($header, $this->client->fetchHeader(42));
+	}
 }

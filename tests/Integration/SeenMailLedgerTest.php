@@ -14,7 +14,7 @@ use OCP\Server;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The Message-ID ledger with failure tracking against a real database.
+ * The Message-ID ledger with attempt tracking against a real database.
  */
 class SeenMailLedgerTest extends TestCase {
 	private SeenMailMapper $ledger;
@@ -35,24 +35,30 @@ class SeenMailLedgerTest extends TestCase {
 		parent::tearDown();
 	}
 
-	public function testFailuresCountUpWithoutMarkingTheMailIngested(): void {
-		$this->assertSame(1, $this->ledger->recordFailure($this->key, 'first'));
-		$this->assertSame(2, $this->ledger->recordFailure($this->key, 'second'));
-		$this->assertFalse($this->ledger->hasSeen($this->key));
-		$this->ledger->markQuarantined($this->key);
-		$this->assertFalse($this->ledger->hasSeen($this->key));
+	public function testAttemptsCountUpWithoutMarkingTheMailIngested(): void {
+		$this->assertSame(['done' => false, 'attempts' => 1, 'candidateId' => null], $this->ledger->beginAttempt($this->key));
+		$this->ledger->recordError($this->key, 'first');
+		$this->ledger->attachCandidate($this->key, 55);
+		$this->assertSame(['done' => false, 'attempts' => 2, 'candidateId' => 55], $this->ledger->beginAttempt($this->key));
+		$this->ledger->markQuarantined($this->key, 'gave up');
+		$this->assertSame(['done' => false, 'attempts' => 1, 'candidateId' => 55], $this->ledger->beginAttempt($this->key));
 	}
 
 	public function testRememberAfterFailuresMarksTheMailIngested(): void {
-		$this->ledger->recordFailure($this->key, 'transient');
+		$this->ledger->beginAttempt($this->key);
+		$this->ledger->recordError($this->key, 'transient');
 		$this->ledger->remember($this->key);
-		$this->assertTrue($this->ledger->hasSeen($this->key));
+		$this->assertTrue($this->ledger->beginAttempt($this->key)['done']);
 	}
 
-	public function testRememberWithoutFailures(): void {
-		$this->assertFalse($this->ledger->hasSeen($this->key));
+	public function testRememberWithoutAnAttempt(): void {
 		$this->ledger->remember($this->key);
 		$this->ledger->remember($this->key);
-		$this->assertTrue($this->ledger->hasSeen($this->key));
+		$this->assertTrue($this->ledger->beginAttempt($this->key)['done']);
+	}
+
+	public function testAnOversizedMailIsQuarantinedWithoutAnAttempt(): void {
+		$this->ledger->markQuarantined($this->key, 'The mail is larger than 30 MB');
+		$this->assertSame(1, $this->ledger->beginAttempt($this->key)['attempts']);
 	}
 }

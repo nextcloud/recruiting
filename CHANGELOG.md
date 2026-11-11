@@ -10,6 +10,45 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Text extraction of uploaded documents (for AI material and search) runs in a
+  queued background job instead of during the upload or the mail intake. For a
+  new application the AI intake analysis is scheduled once the CV text is
+  there, so it still sees it. `occ recruiting:documents:extract-text` keeps
+  working for older documents.
+- The interview reminder goes out for every confirmed interview starting 2 to
+  25 hours ahead that has not had one yet, so an interview booked less than a
+  day ahead, or a pause of cron, still gets its reminder.
+- Merging, deleting and anonymizing candidates, assigning a triage candidate
+  to an opening and every offer transition now write the database in one
+  transaction. Calendar events, Talk rooms and stored files are handled
+  outside it, before the rows go, so a failed run can simply be repeated.
+
+### Fixed
+
+- Mail intake no longer creates a second candidate when a mail is retried
+  after a failure: the ledger remembers the candidate created for a mail, and
+  the retry continues there without repeating the timeline entry, documents
+  already stored, the manager notification or the confirmation.
+- Every attempt at a mail is counted before it is processed, so one mail can
+  no longer block the mailbox: a mail that keeps failing with a temporary
+  error (or keeps crashing the run) is moved to `Recruiting-Failed` after
+  twelve attempts, as other failures are after three.
+- Mails larger than 30 MB are moved to `Recruiting-Failed` without being
+  downloaded.
+- Subjects, sender names, file names and bodies always become valid UTF-8:
+  declared charsets are honoured, undeclared 8-bit text is read as UTF-8 or
+  Windows-1252. A Latin-1 subject no longer makes the intake fail.
+- Deleting a document or all documents of a candidate removes the files
+  first and keeps the rows when a file cannot be deleted, so no CV is left on
+  disk without a record pointing at it.
+- A double click (or two people at once) can no longer send an offer or a
+  rejection mail twice: the transition is claimed before the mail goes out,
+  the second request gets "already sent" / "already rejected", and a failed
+  mail gives the claim back.
+- One failing offer no longer stops the daily expiry handling of the others.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

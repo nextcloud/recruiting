@@ -15,6 +15,7 @@ use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\TextExtractionService;
 use OCA\Recruiting\Service\VirusScanService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\IJobList;
 use OCP\Files\IAppData;
 use OCP\Files\NotFoundException;
 use OCP\Files\SimpleFS\ISimpleFile;
@@ -68,6 +69,7 @@ class DocumentMoveTest extends TestCase {
 			$this->createMock(IL10N::class),
 			$this->createMock(TextExtractionService::class),
 			$this->createMock(LoggerInterface::class),
+			$this->createMock(IJobList::class),
 		);
 		$target = new Candidate();
 		$target->setId(1);

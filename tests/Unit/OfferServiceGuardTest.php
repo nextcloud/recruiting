@@ -21,9 +21,11 @@ use OCA\Recruiting\Service\PermissionService;
 use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * The permission matrix around offers: every mutating entry point must be
@@ -57,6 +59,8 @@ class OfferServiceGuardTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$this->createMock(ITimeFactory::class),
 			$l10n,
+			$this->createMock(IDBConnection::class),
+			new NullLogger(),
 		);
 	}
 

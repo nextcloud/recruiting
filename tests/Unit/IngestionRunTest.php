@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\SeenMailMapper;
@@ -27,6 +28,7 @@ use OCA\Recruiting\Service\IngestionService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\TimelineService;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\DB\Exception as DbException;
 use OCP\Files\GenericFileException;
@@ -61,6 +63,9 @@ class IngestionRunTest extends TestCase {
 	private ?array $storedStatus = null;
 	/** @var array<int, string> uid => raw message */
 	private array $mailbox = [];
+	/** @var array<string, array{done: bool, attempts: int, candidateId: ?int, error: ?string, quarantined: bool}> a fake ledger, by key */
+	private array $ledger = [];
+	private AiService&MockObject $ai;
 
 	protected function setUp(): void {
 		$this->config = $this->createMock(ConfigService::class);
@@ -80,6 +85,7 @@ class IngestionRunTest extends TestCase {
 		$this->openingMapper = $this->createMock(OpeningMapper::class);
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
 		$this->seenMail = $this->createMock(SeenMailMapper::class);
+		$this->fakeLedger();
 		$this->teamMapper = $this->createMock(TeamMemberMapper::class);
 		$this->candidates = $this->createMock(CandidateService::class);
 		$this->documents = $this->createMock(DocumentService::class);
@@ -89,6 +95,7 @@ class IngestionRunTest extends TestCase {
 		$this->notifications = $this->createMock(NotificationService::class);
 		$this->guard = $this->createMock(AutoAckGuard::class);
 		$this->guard->method('tryAcquire')->willReturn(true);
+		$this->ai = $this->createMock(AiService::class);
 
 		$this->client = $this->createMock(ImapClient::class);
 		$this->client->method('searchUnseen')->willReturnCallback(fn () => array_keys($this->mailbox));
@@ -102,7 +109,7 @@ class IngestionRunTest extends TestCase {
 	}
 
 	private function serviceWith(AutoAckGuard $guard, ITimeFactory $time): IngestionService {
-		return new class($this->client, $this->config, $this->openingMapper, $this->candidateMapper, $this->seenMail, $this->teamMapper, $this->candidates, $this->documents, $this->mail, $this->timeline, $this->notifications, $this->createMock(AiService::class), $time, new NullLogger(), $guard) extends IngestionService {
+		return new class($this->client, $this->config, $this->openingMapper, $this->candidateMapper, $this->seenMail, $this->teamMapper, $this->candidates, $this->documents, $this->mail, $this->timeline, $this->notifications, $this->ai, $time, new NullLogger(), $guard) extends IngestionService {
 			public function __construct(
 				private ImapClient $testClient,
 				...$args,
@@ -115,6 +122,38 @@ class IngestionRunTest extends TestCase {
 				return $this->testClient;
 			}
 		};
+	}
+
+	/**
+	 * The ledger as SeenMailMapper keeps it: attempts are counted when an
+	 * attempt begins and start over on success or quarantine.
+	 */
+	private function fakeLedger(): void {
+		$row = fn (string $key): array => $this->ledger[$key] ?? ['done' => false, 'attempts' => 0, 'candidateId' => null, 'error' => null, 'quarantined' => false];
+		$this->seenMail->method('beginAttempt')->willReturnCallback(function (string $key) use ($row): array {
+			$entry = $row($key);
+			if (!$entry['done']) {
+				$entry['attempts']++;
+			}
+			$this->ledger[$key] = $entry;
+			return ['done' => $entry['done'], 'attempts' => $entry['attempts'], 'candidateId' => $entry['candidateId']];
+		});
+		$this->seenMail->method('attachCandidate')->willReturnCallback(function (string $key, int $candidateId) use ($row): void {
+			$this->ledger[$key] = array_merge($row($key), ['candidateId' => $candidateId]);
+		});
+		$this->seenMail->method('remember')->willReturnCallback(function (string $key) use ($row): void {
+			$this->ledger[$key] = array_merge($row($key), ['done' => true, 'attempts' => 0, 'error' => null]);
+		});
+		$this->seenMail->method('recordError')->willReturnCallback(function (string $key, string $error) use ($row): void {
+			$this->ledger[$key] = array_merge($row($key), ['error' => $error]);
+		});
+		$this->seenMail->method('markQuarantined')->willReturnCallback(function (string $key, ?string $error = null) use ($row): void {
+			$this->ledger[$key] = array_merge($row($key), ['attempts' => 0, 'quarantined' => true, 'error' => $error]);
+		});
+	}
+
+	private function priorAttempts(string $key, int $attempts, ?int $candidateId = null): void {
+		$this->ledger[$key] = ['done' => false, 'attempts' => $attempts, 'candidateId' => $candidateId, 'error' => 'earlier', 'quarantined' => false];
 	}
 
 	private static function raw(string $from = 'Jane Doe <jane@example.com>', string $extraHeaders = '', string $to = 'jobs+backend-dev@company.com', string $messageId = '<m1@example.com>'): string {
@@ -177,12 +216,22 @@ class IngestionRunTest extends TestCase {
 	}
 
 	public function testAtMost500MailsPerRun(): void {
-		$this->mailbox = array_fill_keys(range(1, 501), self::raw(messageId: ''));
-		$this->seenMail->method('hasSeen')->willReturn(false);
+		$this->mailbox = [];
+		foreach (range(1, 501) as $uid) {
+			$this->mailbox[$uid] = self::raw(messageId: '<m' . $uid . '@example.com>');
+		}
 		$this->candidates->method('insertCandidate')->willReturn($this->candidate());
 		$this->client->expects($this->exactly(500))->method('fetchMessage');
 
 		$this->assertSame(500, $this->service->fetchNow()['fetched']);
+	}
+
+	public function testIdenticalMailsWithoutMessageIdAreIngestedOnce(): void {
+		$this->mailbox = [1 => self::raw(messageId: ''), 2 => self::raw(messageId: '')];
+		$this->candidates->expects($this->once())->method('insertCandidate')->willReturn($this->candidate());
+		$this->client->expects($this->exactly(2))->method('markSeen');
+
+		$this->assertSame(1, $this->service->fetchNow()['created']);
 	}
 
 	public static function transientFailures(): array {
@@ -203,7 +252,6 @@ class IngestionRunTest extends TestCase {
 		$this->candidates->method('insertCandidate')->willThrowException($failure);
 		$this->client->expects($this->never())->method('markSeen');
 		$this->client->expects($this->once())->method('fetchMessage');
-		$this->seenMail->expects($this->never())->method('recordFailure');
 		$this->client->expects($this->never())->method('moveMessage');
 
 		$result = $this->service->fetchNow();
@@ -211,6 +259,76 @@ class IngestionRunTest extends TestCase {
 		$this->assertSame($failure->getMessage(), $result['error']);
 		$this->assertSame($failure->getMessage(), $this->storedStatus['error']);
 		$this->assertSame(1, $result['fetched']);
+		// The attempt counts, so a mail that always fails cannot block the mailbox forever
+		$this->assertSame(1, $this->ledger['<a@x>']['attempts']);
+		$this->assertSame($failure->getMessage(), $this->ledger['<a@x>']['error']);
+	}
+
+	public function testTheTwelfthTransientFailureQuarantinesTheMailAndTheRunGoesOn(): void {
+		$this->mailbox = [1 => self::raw(messageId: '<stuck@x>'), 2 => self::raw(messageId: '<ok@x>')];
+		$this->priorAttempts('<stuck@x>', 11);
+		$calls = 0;
+		$this->candidates->method('insertCandidate')->willReturnCallback(function () use (&$calls) {
+			if ($calls++ === 0) {
+				throw new DbException('deadlock');
+			}
+			return $this->candidate(56);
+		});
+		$this->client->method('ensureMailbox')->willReturn('Recruiting-Failed');
+		$this->client->expects($this->once())->method('moveMessage')->with(1, 'Recruiting-Failed');
+
+		$result = $this->service->fetchNow();
+
+		$this->assertTrue($this->ledger['<stuck@x>']['quarantined']);
+		$this->assertSame(1, $result['created']);
+		$this->assertNull($result['error']);
+	}
+
+	public function testAMailWhoseAttemptsNeverFinishedIsQuarantinedWithoutProcessing(): void {
+		// Twelve attempts began and none recorded a result: crashes or timeouts
+		$this->mailbox = [1 => self::raw(messageId: '<crash@x>')];
+		$this->priorAttempts('<crash@x>', 12);
+		$this->candidates->expects($this->never())->method('insertCandidate');
+		$this->client->expects($this->once())->method('markSeen')->with(1);
+		$this->client->method('ensureMailbox')->willReturn('Recruiting-Failed');
+		$this->client->expects($this->once())->method('moveMessage');
+
+		$this->service->fetchNow();
+
+		$this->assertTrue($this->ledger['<crash@x>']['quarantined']);
+		$this->assertSame(0, $this->ledger['<crash@x>']['attempts']);
+	}
+
+	public function testTheAttemptIsCountedBeforeTheCandidateIsCreated(): void {
+		$this->mailbox = [1 => self::raw()];
+		$order = [];
+		$this->candidates->method('insertCandidate')->willReturnCallback(function () use (&$order) {
+			$order[] = 'insert:' . $this->ledger['<m1@example.com>']['attempts'];
+			return $this->candidate();
+		});
+
+		$this->service->fetchNow();
+
+		$this->assertSame(['insert:1'], $order);
+		// Success starts the count over
+		$this->assertSame(0, $this->ledger['<m1@example.com>']['attempts']);
+		$this->assertTrue($this->ledger['<m1@example.com>']['done']);
+		$this->assertSame(55, $this->ledger['<m1@example.com>']['candidateId']);
+	}
+
+	public function testALedgerFailureStopsTheRunWithoutProcessing(): void {
+		$this->mailbox = [1 => self::raw()];
+		$seenMail = $this->createMock(SeenMailMapper::class);
+		$seenMail->method('beginAttempt')->willThrowException(new DbException('database gone'));
+		$this->seenMail = $seenMail;
+		$this->candidates->expects($this->never())->method('insertCandidate');
+		$this->client->expects($this->never())->method('markSeen');
+		$time = $this->createMock(ITimeFactory::class);
+		$time->method('getDateTime')->willReturn(new \DateTime('2026-11-10T12:00:00+00:00'));
+
+		$result = $this->serviceWith($this->guard, $time)->fetchNow();
+
+		$this->assertSame('database gone', $result['error']);
 	}
 
 	public function testTransientClassificationRecognisesDoctrineByName(): void {
@@ -221,6 +339,7 @@ class IngestionRunTest extends TestCase {
 
 	public function testAPermanentFailureIsRetriedUnseenBeforeTheThirdAttempt(): void {
 		$this->mailbox = [1 => self::raw(messageId: '<poison@x>'), 2 => self::raw(messageId: '<ok@x>')];
+		$this->priorAttempts('<poison@x>', 1);
 		$calls = 0;
 		$this->candidates->method('insertCandidate')->willReturnCallback(function () use (&$calls) {
 			if ($calls++ === 0) {
@@ -228,11 +347,13 @@ class IngestionRunTest extends TestCase {
 			}
 			return $this->candidate();
 		});
-		$this->seenMail->expects($this->once())->method('recordFailure')->with('<poison@x>', 'broken mail')->willReturn(2);
 		$this->client->expects($this->once())->method('markSeen')->with(2);
 		$this->client->expects($this->never())->method('moveMessage');
 
 		$result = $this->service->fetchNow();
+
+		$this->assertSame(2, $this->ledger['<poison@x>']['attempts']);
+		$this->assertSame('broken mail', $this->ledger['<poison@x>']['error']);
 
 		$this->assertSame(2, $result['fetched']);
 		$this->assertSame(1, $result['created']);
@@ -241,9 +362,9 @@ class IngestionRunTest extends TestCase {
 
 	public function testTheThirdFailureQuarantinesTheMail(): void {
 		$this->mailbox = [9 => self::raw(messageId: '<poison@x>')];
+		$this->priorAttempts('<poison@x>', 2);
 		$this->candidates->method('insertCandidate')->willThrowException(new \RuntimeException('broken mail'));
-		$this->seenMail->method('recordFailure')->willReturn(3);
-		$this->seenMail->expects($this->once())->method('markQuarantined')->with('<poison@x>');
+		$this->seenMail->expects($this->once())->method('markQuarantined')->with('<poison@x>', 'broken mail');
 		$this->client->expects($this->once())->method('markSeen')->with(9);
 		$this->client->expects($this->once())->method('ensureMailbox')->with('Recruiting-Failed')->willReturn('INBOX.Recruiting-Failed');
 		$this->client->expects($this->once())->method('moveMessage')->with(9, 'INBOX.Recruiting-Failed');
@@ -259,8 +380,8 @@ class IngestionRunTest extends TestCase {
 
 	public function testAFailedMoveStillMarksTheMailSeen(): void {
 		$this->mailbox = [9 => self::raw(messageId: '<poison@x>')];
+		$this->priorAttempts('<poison@x>', 2);
 		$this->candidates->method('insertCandidate')->willThrowException(new \RuntimeException('broken mail'));
-		$this->seenMail->method('recordFailure')->willReturn(3);
 		$this->client->expects($this->once())->method('markSeen')->with(9);
 		$this->client->method('ensureMailbox')->willThrowException(new ImapException('NO permission denied'));
 
@@ -273,9 +394,10 @@ class IngestionRunTest extends TestCase {
 		$raw = self::raw(messageId: '');
 		$this->mailbox = [1 => $raw];
 		$this->candidates->method('insertCandidate')->willThrowException(new \RuntimeException('broken'));
-		$this->seenMail->expects($this->once())->method('recordFailure')->with('sha256:' . hash('sha256', $raw))->willReturn(1);
 
 		$this->service->fetchNow();
+
+		$this->assertSame(1, $this->ledger['sha256:' . hash('sha256', $raw)]['attempts']);
 	}
 
 	public function testTheQuarantineCountComesFromTheFolderAndRemembersItsName(): void {
@@ -406,7 +528,8 @@ class IngestionRunTest extends TestCase {
 
 	public function testDuplicatesAreNeitherCreatedNorSkipped(): void {
 		$this->mailbox = [1 => self::raw()];
-		$this->seenMail->method('hasSeen')->willReturn(true);
+		$this->ledger['<m1@example.com>'] = ['done' => true, 'attempts' => 0, 'candidateId' => 55, 'error' => null, 'quarantined' => false];
+		$this->candidates->expects($this->never())->method('insertCandidate');
 		$this->client->expects($this->once())->method('markSeen');
 
 		$result = $this->service->fetchNow();
@@ -424,5 +547,158 @@ class IngestionRunTest extends TestCase {
 
 		$this->assertSame(0, $result['fetched']);
 		$this->assertSame('Recruiting-Failed', $result['quarantineFolder']);
+	}
+
+	private static function rawWithAttachments(): string {
+		return "From: Jane Doe <jane@example.com>\r\n"
+			. "To: jobs+backend-dev@company.com\r\n"
+			. "Message-ID: <cv@example.com>\r\n"
+			. "Subject: Application\r\n"
+			. "MIME-Version: 1.0\r\n"
+			. "Content-Type: multipart/mixed; boundary=b\r\n"
+			. "\r\n"
+			. "--b\r\nContent-Type: text/plain\r\n\r\nHello.\r\n"
+			. "--b\r\nContent-Type: application/pdf; name=cv.pdf\r\nContent-Disposition: attachment; filename=cv.pdf\r\n\r\n%PDF-CV\r\n"
+			. "--b\r\nContent-Type: application/pdf; name=refs.pdf\r\nContent-Disposition: attachment; filename=refs.pdf\r\n\r\n%PDF-REFS\r\n"
+			. "--b--\r\n";
+	}
+
+	private function document(int $id, string $name, string $content): Document {
+		$document = new Document();
+		$document->setId($id);
+		$document->setName($name);
+		$document->setMime('application/pdf');
+		$document->setSize(strlen($content));
+		return $document;
+	}
+
+	public function testARetryAfterAFailureBetweenInsertAndLedgerResumesOnTheSameCandidate(): void {
+		$this->mailbox = [1 => self::raw()];
+		$this->openOpening();
+		$candidate = $this->candidate();
+		$this->candidates->expects($this->once())->method('insertCandidate')->willReturn($candidate);
+		$this->candidateMapper->method('find')->with(55)->willReturn($candidate);
+		$timelineCalls = 0;
+		$this->timeline->method('record')->willReturnCallback(function () use (&$timelineCalls) {
+			if ($timelineCalls++ === 0) {
+				throw new DbException('connection lost');
+			}
+			return new TimelineEvent();
+		});
+		$this->timeline->method('eventsFor')->willReturn([]);
+		// One acknowledgement, on the run that completes
+		$this->mail->expects($this->once())->method('sendToCandidate');
+
+		$first = $this->service->fetchNow();
+		$this->assertSame('connection lost', $first['error']);
+		$this->assertSame(55, $this->ledger['<m1@example.com>']['candidateId']);
+		$this->assertFalse($this->ledger['<m1@example.com>']['done']);
+
+		$second = $this->service->fetchNow();
+
+		$this->assertSame(1, $second['created']);
+		$this->assertNull($second['error']);
+		$this->assertSame(2, $timelineCalls);
+		$this->assertTrue($this->ledger['<m1@example.com>']['done']);
+	}
+
+	public function testAResumedApplicationSkipsTheStepsAlreadyDone(): void {
+		$this->mailbox = [1 => self::rawWithAttachments()];
+		$candidate = $this->candidate();
+		$this->priorAttempts('<cv@example.com>', 1, 55);
+		$this->candidateMapper->method('find')->with(55)->willReturn($candidate);
+		$event = new TimelineEvent();
+		$event->setType(TimelineEvent::TYPE_MAIL_RECEIVED);
+		$this->timeline->method('eventsFor')->with(55)->willReturn([$event]);
+		$stored = $this->document(1, 'cv.pdf', "%PDF-CV\r\n");
+		$this->documents->method('listFor')->with(55)->willReturn([$stored]);
+		$refs = $this->document(2, 'refs.pdf', "%PDF-REFS\r\n");
+
+		$this->candidates->expects($this->never())->method('insertCandidate');
+		$this->timeline->expects($this->never())->method('record');
+		$this->documents->expects($this->once())->method('add')
+			->with($candidate, 'refs.pdf', 'application/pdf', "%PDF-REFS\r\n", null, false)->willReturn($refs);
+		// The extraction (and the AI intake after it) covers both documents
+		$this->documents->expects($this->once())->method('queueTextExtraction')->with([$stored, $refs], 55)->willReturn(true);
+		$this->ai->expects($this->never())->method('scheduleIntakeAnalysis');
+
+		$this->assertSame(1, $this->service->fetchNow()['created']);
+	}
+
+	public function testAResumeOntoADeletedCandidateCreatesANewOne(): void {
+		$this->mailbox = [1 => self::raw()];
+		$this->priorAttempts('<m1@example.com>', 1, 55);
+		$this->candidateMapper->method('find')->willThrowException(new DoesNotExistException('purged'));
+		$this->candidates->expects($this->once())->method('insertCandidate')->willReturn($this->candidate(60));
+
+		$this->service->fetchNow();
+
+		$this->assertSame(60, $this->ledger['<m1@example.com>']['candidateId']);
+	}
+
+	public function testWithoutExtractableDocumentsTheIntakeAnalysisIsScheduledAtOnce(): void {
+		$this->mailbox = [1 => self::raw()];
+		$candidate = $this->candidate();
+		$this->candidates->method('insertCandidate')->willReturn($candidate);
+		$this->documents->method('queueTextExtraction')->willReturn(false);
+		$this->ai->expects($this->once())->method('scheduleIntakeAnalysis')->with($candidate);
+
+		$this->service->fetchNow();
+	}
+
+	public function testAttachmentsAreStoredWithoutInlineExtraction(): void {
+		$this->mailbox = [1 => self::rawWithAttachments()];
+		$this->candidates->method('insertCandidate')->willReturn($this->candidate());
+		$this->documents->expects($this->exactly(2))->method('add')
+			->with($this->anything(), $this->anything(), 'application/pdf', $this->anything(), null, false)
+			->willReturnOnConsecutiveCalls($this->document(1, 'cv.pdf', 'x'), $this->document(2, 'refs.pdf', 'y'));
+		$this->documents->expects($this->once())->method('queueTextExtraction')->with($this->countOf(2), 55)->willReturn(true);
+		$this->ai->expects($this->never())->method('scheduleIntakeAnalysis');
+
+		$this->service->fetchNow();
+	}
+
+	public function testAnOversizedMailIsQuarantinedWithoutDownloadingIt(): void {
+		$this->mailbox = [4 => 'never fetched'];
+		$this->client->method('fetchSize')->with(4)->willReturn(IngestionService::MAX_MESSAGE_SIZE + 1);
+		$this->client->expects($this->never())->method('fetchMessage');
+		$this->client->expects($this->once())->method('fetchHeader')->with(4)
+			->willReturn("From: Jane <jane@example.com>\r\nMessage-ID: <huge@example.com>\r\nSubject: Portfolio\r\n\r\n");
+		$this->client->expects($this->once())->method('markSeen')->with(4);
+		$this->client->method('ensureMailbox')->willReturn('Recruiting-Failed');
+		$this->client->expects($this->once())->method('moveMessage')->with(4, 'Recruiting-Failed');
+		$this->candidates->expects($this->never())->method('insertCandidate');
+
+		$result = $this->service->fetchNow();
+
+		$this->assertSame(0, $result['fetched']);
+		$this->assertTrue($this->ledger['<huge@example.com>']['quarantined']);
+		$this->assertStringContainsString('larger than 30 MB', (string)$this->ledger['<huge@example.com>']['error']);
+	}
+
+	public function testAMailAtTheSizeLimitIsIngested(): void {
+		$this->mailbox = [1 => self::raw()];
+		$this->client->method('fetchSize')->willReturn(IngestionService::MAX_MESSAGE_SIZE);
+		$this->candidates->expects($this->once())->method('insertCandidate')->willReturn($this->candidate());
+
+		$this->assertSame(1, $this->service->fetchNow()['created']);
+	}
+
+	public function testLatin1HeadersBecomeValidUtf8BeforeAnythingIsStored(): void {
+		$this->mailbox = [1 => "From: J\xF6rg M\xFCller <joerg@example.com>\r\n"
+			. "To: jobs@company.com\r\n"
+			. "Message-ID: <latin1@example.com>\r\n"
+			. "Subject: Bewerbung f\xFCr die Stelle\r\n"
+			. "Content-Type: text/plain\r\n"
+			. "\r\n"
+			. "Gr\xFC\xDFe\r\n"];
+		$this->candidates->expects($this->once())->method('insertCandidate')
+			->with(null, 'Jörg Müller', 'joerg@example.com')->willReturn($this->candidate());
+		$this->timeline->expects($this->once())->method('record')->with(55, TimelineEvent::TYPE_MAIL_RECEIVED, null, [
+			'subject' => 'Bewerbung für die Stelle',
+			'body' => 'Grüße',
+		]);
+
+		$this->assertSame(1, $this->service->fetchNow()['created']);
 	}
 }

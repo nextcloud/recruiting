@@ -15,17 +15,26 @@ use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TimelineEvent;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
+use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\TTransactional;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
+use Psr\Log\LoggerInterface;
 
 /**
  * The offer process (spec §4.6): structured record, mandatory approval by a
  * designated approver, response tracking and expiry handling. Offer data is
  * only ever visible to recruiters, the opening's hiring managers and the
  * offer's approver — never to interviewers or observers.
+ *
+ * Each transition writes the offer, its timeline entry and any stage
+ * change in one transaction; mails, activity and notifications follow it.
  */
 class OfferService {
+	use TTransactional;
+
 	public function __construct(
 		private OfferMapper $offerMapper,
 		private CandidateMapper $candidateMapper,
@@ -38,6 +47,8 @@ class OfferService {
 		private IUserManager $userManager,
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
+		private IDBConnection $db,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -117,9 +128,10 @@ class OfferService {
 
 		$offer->setApproverUid($approverUid);
 		$offer->setStatus(Offer::STATUS_PENDING_APPROVAL);
-		$this->offerMapper->update($offer);
-
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_SUBMITTED, $uid, ['approver' => $approverUid]);
+		$this->atomic(function () use ($offer, $candidate, $uid, $approverUid): void {
+			$this->offerMapper->update($offer);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_SUBMITTED, $uid, ['approver' => $approverUid]);
+		}, $this->db);
 		$this->notifications->notify([$approverUid], NotificationService::SUBJECT_OFFER_APPROVAL_REQUESTED, $candidate, $uid);
 		return $this->serialize($offer);
 	}
@@ -137,9 +149,10 @@ class OfferService {
 
 		$offer->setStatus(Offer::STATUS_APPROVED);
 		$offer->setApprovedAt($this->timeFactory->getDateTime());
-		$this->offerMapper->update($offer);
-
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_APPROVED, $uid);
+		$this->atomic(function () use ($offer, $candidate, $uid): void {
+			$this->offerMapper->update($offer);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_APPROVED, $uid);
+		}, $this->db);
 		$this->activity->publish($candidate, 'offer_approved', $uid);
 		$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_APPROVED, $candidate, $uid);
 		return $this->serialize($offer);
@@ -160,9 +173,10 @@ class OfferService {
 
 		$offer->setStatus(Offer::STATUS_DRAFT);
 		$offer->setApproverUid(null);
-		$this->offerMapper->update($offer);
-
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_APPROVAL_DECLINED, $uid, ['note' => trim($note)]);
+		$this->atomic(function () use ($offer, $candidate, $uid, $note): void {
+			$this->offerMapper->update($offer);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_APPROVAL_DECLINED, $uid, ['note' => trim($note)]);
+		}, $this->db);
 		$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_APPROVAL_DECLINED, $candidate, $uid);
 		return $this->serialize($offer);
 	}
@@ -171,22 +185,41 @@ class OfferService {
 	 * Approved → sent, optionally mailing the (previewed) offer to the
 	 * candidate. The pipeline follows: the card moves to the Offer column.
 	 *
+	 * The status is claimed with a conditional update before the mail goes
+	 * out, so two parallel requests never both send it; should the mail
+	 * fail, the claim is given back.
+	 *
 	 * @throws NotPermittedException|ValidationException
 	 */
 	public function send(string $uid, int $offerId, ?string $mailSubject, ?string $mailBody): array {
 		[$offer, $candidate] = $this->loadForManage($uid, $offerId);
 		$this->assertTransition($offer, Offer::STATUS_SENT);
 
-		if ($mailSubject !== null && $mailBody !== null) {
-			$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
+		$from = $offer->getStatus();
+		if (!$this->offerMapper->claimStatus($offerId, $from, Offer::STATUS_SENT)) {
+			$current = $this->offerMapper->find($offerId);
+			if ($current->getStatus() === Offer::STATUS_SENT) {
+				throw new ValidationException($this->l10n->t('This offer has already been sent'));
+			}
+			$this->assertTransition($current, Offer::STATUS_SENT);
+			throw new ValidationException($this->l10n->t('This offer was changed by someone else in the meantime'));
+		}
+
+		try {
+			if ($mailSubject !== null && $mailBody !== null) {
+				$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
+			}
+		} catch (\Throwable $e) {
+			$this->offerMapper->claimStatus($offerId, Offer::STATUS_SENT, $from);
+			throw $e;
 		}
 
 		$offer->setStatus(Offer::STATUS_SENT);
-		$this->offerMapper->update($offer);
-
-		// No-op when the candidate is already in Offer or has finished
-		$this->stages->apply($candidate, Candidate::STAGE_OFFER, $uid);
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_SENT, $uid);
+		$this->atomic(function () use ($candidate, $uid): void {
+			// No-op when the candidate is already in Offer or has finished
+			$this->stages->apply($candidate, Candidate::STAGE_OFFER, $uid);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_SENT, $uid);
+		}, $this->db);
 		$this->activity->publish($candidate, 'offer_sent', $uid);
 		return $this->serialize($offer);
 	}
@@ -210,11 +243,14 @@ class OfferService {
 
 		$offer->setStatus($response);
 		$offer->setRespondedAt($this->timeFactory->getDateTime());
-		$this->offerMapper->update($offer);
-
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_RESPONSE, $uid, ['response' => $response]);
+		$this->atomic(function () use ($offer, $candidate, $uid, $response): void {
+			$this->offerMapper->update($offer);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_RESPONSE, $uid, ['response' => $response]);
+			if ($response === Offer::STATUS_ACCEPTED) {
+				$this->stages->apply($candidate, Candidate::STAGE_HIRED, $uid);
+			}
+		}, $this->db);
 		if ($response === Offer::STATUS_ACCEPTED) {
-			$this->stages->apply($candidate, Candidate::STAGE_HIRED, $uid);
 			$this->activity->publish($candidate, 'offer_accepted', $uid);
 		} elseif ($response === Offer::STATUS_DECLINED) {
 			$this->activity->publish($candidate, 'offer_declined', $uid);
@@ -229,14 +265,17 @@ class OfferService {
 		[$offer, $candidate] = $this->loadForManage($uid, $offerId);
 		$this->assertTransition($offer, Offer::STATUS_WITHDRAWN);
 		$offer->setStatus(Offer::STATUS_WITHDRAWN);
-		$this->offerMapper->update($offer);
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_WITHDRAWN, $uid);
+		$this->atomic(function () use ($offer, $candidate, $uid): void {
+			$this->offerMapper->update($offer);
+			$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_WITHDRAWN, $uid);
+		}, $this->db);
 		return $this->serialize($offer);
 	}
 
 	/**
 	 * Daily housekeeping (spec §4.6): notify creators of offers expiring
-	 * within three days, mark overdue offers expired.
+	 * within three days, mark overdue offers expired. A failing offer is
+	 * logged and does not stop the others.
 	 *
 	 * @return array{expired: int, notified: int}
 	 */
@@ -247,34 +286,55 @@ class OfferService {
 		$notified = 0;
 
 		foreach ($this->offerMapper->findOpen() as $offer) {
-			$validUntil = $offer->getValidUntil();
-			if ($validUntil === null) {
-				continue;
-			}
-			$validDay = \DateTimeImmutable::createFromInterface($validUntil)->setTime(0, 0);
 			try {
-				$candidate = $this->candidateMapper->find($offer->getCandidateId());
-			} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+				$outcome = $this->processOfferExpiry($offer, $today, $soon);
+			} catch (\Exception $e) {
+				$this->logger->error('Recruiting: expiry handling failed for offer ' . $offer->getId() . ': ' . $e->getMessage(), ['exception' => $e]);
 				continue;
 			}
-
-			if ($validDay < $today) {
-				$offer->setStatus(Offer::STATUS_EXPIRED);
-				$this->offerMapper->update($offer);
-				$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_EXPIRED, null);
-				$this->activity->publish($candidate, 'offer_expired', null);
-				$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_EXPIRED, $candidate, null);
+			if ($outcome === 'expired') {
 				$expired++;
-			} elseif ($validDay <= $soon && !$offer->getExpiryNotified()) {
-				$offer->setExpiryNotified(true);
-				$this->offerMapper->update($offer);
-				$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_EXPIRING, $candidate, null, [
-					'validUntil' => $validDay->format('Y-m-d'),
-				]);
+			} elseif ($outcome === 'notified') {
 				$notified++;
 			}
 		}
 		return ['expired' => $expired, 'notified' => $notified];
+	}
+
+	/**
+	 * @return 'expired'|'notified'|null what happened to the offer
+	 */
+	private function processOfferExpiry(Offer $offer, \DateTimeImmutable $today, \DateTimeImmutable $soon): ?string {
+		$validUntil = $offer->getValidUntil();
+		if ($validUntil === null) {
+			return null;
+		}
+		$validDay = \DateTimeImmutable::createFromInterface($validUntil)->setTime(0, 0);
+		try {
+			$candidate = $this->candidateMapper->find($offer->getCandidateId());
+		} catch (DoesNotExistException) {
+			return null;
+		}
+
+		if ($validDay < $today) {
+			$offer->setStatus(Offer::STATUS_EXPIRED);
+			$this->atomic(function () use ($offer, $candidate): void {
+				$this->offerMapper->update($offer);
+				$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_OFFER_EXPIRED, null);
+			}, $this->db);
+			$this->activity->publish($candidate, 'offer_expired', null);
+			$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_EXPIRED, $candidate, null);
+			return 'expired';
+		}
+		if ($validDay <= $soon && !$offer->getExpiryNotified()) {
+			$offer->setExpiryNotified(true);
+			$this->offerMapper->update($offer);
+			$this->notifications->notify([$offer->getCreatedBy()], NotificationService::SUBJECT_OFFER_EXPIRING, $candidate, null, [
+				'validUntil' => $validDay->format('Y-m-d'),
+			]);
+			return 'notified';
+		}
+		return null;
 	}
 
 	public function serialize(Offer $offer): array {

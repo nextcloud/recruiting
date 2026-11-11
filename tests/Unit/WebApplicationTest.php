@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\Document;
 use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\SeenMailMapper;
@@ -99,9 +100,13 @@ class WebApplicationTest extends TestCase {
 			->with(55, TimelineEvent::TYPE_WEB_APPLICATION, null, $this->callback(
 				static fn (array $d) => str_contains((string)$d['body'], 'I build APIs'),
 			));
+		$document = new Document();
+		$document->setMime('application/pdf');
 		$this->documents->expects($this->once())->method('add')
-			->with($candidate, 'cv.pdf', 'application/pdf', 'PDFBYTES', null);
-		$this->ai->expects($this->once())->method('scheduleIntakeAnalysis')->with($candidate);
+			->with($candidate, 'cv.pdf', 'application/pdf', 'PDFBYTES', null, false)->willReturn($document);
+		// The analysis needs the CV text: the extraction job schedules it
+		$this->documents->expects($this->once())->method('queueTextExtraction')->with([$document], 55)->willReturn(true);
+		$this->ai->expects($this->never())->method('scheduleIntakeAnalysis');
 
 		$result = $this->service->ingestWebApplication(
 			$this->opening(),
@@ -117,6 +122,7 @@ class WebApplicationTest extends TestCase {
 	public function testNoDocumentWhenNoCvProvided(): void {
 		$this->candidates->method('insertCandidate')->willReturn($this->candidateFor('x@example.org'));
 		$this->documents->expects($this->never())->method('add');
+		$this->ai->expects($this->once())->method('scheduleIntakeAnalysis');
 
 		$this->service->ingestWebApplication($this->opening(), 'X', 'x@example.org', '', null);
 	}
