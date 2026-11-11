@@ -182,7 +182,7 @@ export default {
 				await api.updateCandidate(this.candidate.id, this.form)
 				this.editing = false
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not save the changes')))
 			} finally {
@@ -195,7 +195,7 @@ export default {
 				await api.assignOpening(this.candidate.id, this.assignTarget.id)
 				showSuccess(this.t('recruiting', 'Candidate assigned to "{title}"', { title: this.assignTarget.label }))
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 				this.session.refresh()
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not assign the candidate')))

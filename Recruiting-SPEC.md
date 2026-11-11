@@ -205,8 +205,8 @@ AI never acts autonomously; every output is a suggestion a human reviews.
 
 ### 4.8 GDPR & data lifecycle
 
-- **Retention:** admin-configured retention period (default 180 days). A daily job
-  anonymizes candidates rejected/withdrawn longer ago than that (unless pool member):
+- **Retention:** admin-configured retention period (default 180 days). A background job
+  (hourly, at most 200 candidates per run) anonymizes candidates rejected/withdrawn longer ago than that (unless pool member):
   name → "Anonymized candidate", email/phone nulled, documents deleted, mail bodies and
   comments purged, votes kept as anonymous aggregates for statistics, `anonymized_at` set.
 - **Delete on request:** recruiters can hard-delete a candidate (confirmation dialog);
@@ -323,9 +323,9 @@ Follows the standard NC app layout (`NcAppNavigation` / `NcAppContent` / `NcAppS
   `@nextcloud/vite-config`. `@nextcloud/axios`, `@nextcloud/router`, `@nextcloud/l10n`,
   `@nextcloud/moment` for dates. No custom CSS colors — NC CSS variables only
   (dark mode for free). Icons from `vue-material-design-icons`.
-- **Background jobs:** `MailFetchJob` (5 min), `RetentionJob` (daily), `OfferExpiryJob`
+- **Background jobs:** `MailFetchJob` (5 min), `RetentionJob` (hourly, 200 per run), `OfferExpiryJob`
   (daily), `DigestJob` (hourly, sends when a user's slot is due).
-- **occ commands:** `recruiting:fetch-mail`, `recruiting:retention:run [--dry-run]`
+- **occ commands:** `recruiting:fetch-mail`, `recruiting:retention:run [--dry-run] [--limit=N]`
   — same services as the jobs, for ops/debugging. (The GDPR export is a
   permission-checked HTTP endpoint only; see §10.2.)
 - **Security:** CSRF default-on, rate limiting (`#[BruteForceProtection]`,
@@ -660,12 +660,10 @@ A review pass acting on an external audit of the app:
 - **Delete opening (§4.1):** recruiters only, only with zero candidates in any
   stage (anonymized included); removes the team rows and the Talk room. No
   other table references an opening.
-- **Live board:** `GET /api/openings/{id}/revision` = one aggregate query
-  (candidate count, max id, max `stage_changed_at`, max timeline event id via
-  a join on `recruiting_events`). Polled every 30 s while the page is visible;
+- **Live board:** `GET /api/openings/{id}/revision` returns the opening's
+  change counter (§10.15). Polled every 30 s while the page is visible;
   a change triggers an in-place reload that refills every stage to what was
-  loaded before. Edits that leave no timeline entry (e.g. renaming a
-  candidate) do not change the marker. `notify_push` is not used.
+  loaded before. `notify_push` is not used.
 - **Stage conflicts:** `setStage` takes `expectedStage`; a mismatch throws
   `ConflictException` → HTTP 409 `{message, stage, displayName}`, nothing
   changes.
@@ -773,7 +771,7 @@ Beyond the §9 non-goals, which did not exclude these:
   back-fills. The AI material includes the most recent extracted document,
   splitting `MATERIAL_LIMIT` between cover letter and CV. The talent pool
   searches it (`DocumentMapper::findCandidateIdsByText`); the unified search
-  provider does not (yet). The text goes with the document on deletion and
+  matches it inside its scoped candidate query (§10.15). The text goes with the document on deletion and
   anonymization; the GDPR export ships the documents themselves.
 - **Self-service page** `/portal/{token}` (`portal_token`, 48 alnum, unique,
   set on insert and lazily for older candidates by `{{portal_link}}`; cleared
@@ -802,6 +800,46 @@ Beyond the §9 non-goals, which did not exclude these:
   the referrer when the coarse status changes. `PermissionService` is
   unchanged — referrers get no candidate access.
 
+### 10.15 Performance: search, board and retention (fix wave 2, 2026-11-11)
+
+- **Unified search** returns nothing, without a query, for users who cannot
+  see any candidate (`PermissionService::hasAnyCandidateScope`: recruiter,
+  a role in some opening, or the approver of an offer; assignments and
+  interview attendance only count inside an opening the user has a role in).
+  CV text is matched inside `CandidateMapper::search` as a correlated
+  `EXISTS` on `recruiting_documents.text_content`, so the role scope, the
+  page limit and the cursor apply to text matches too; nothing is pre-capped.
+  Terms of three or more characters only. The talent pool keeps
+  `DocumentMapper::findCandidateIdsByText`. A full-text index is still open.
+- **Board revision:** `recruiting_openings.revision` (BIGINT, default 0) is
+  incremented in SQL (`revision = revision + 1`) by `CandidateMapper` on every
+  insert, update with changes and delete of a candidate of the opening — a
+  move to another opening counts up both — and by `TimelineEventMapper` on
+  every recorded event (`UPDATE … WHERE id IN (SELECT opening_id …)`). The
+  revision endpoint reads that one row and answers `{revision: int}`. Writes
+  that neither touch the candidate row nor record an event (e.g. removing a
+  document) do not change it, as before.
+- **Opening detail** counts stages for that opening only
+  (`countByOpeningAndStage($id)`).
+- **Single-card refresh:** `GET /api/candidates/{id}/card` returns one board
+  card (`serializeCards`, after `assertCanViewCandidate`). Sidebar changes
+  report the candidate (`sidebar.touch(id)`); the board then fetches the
+  revision, that card and the opening's counts, puts the card in place (or
+  removes it when it left the opening, went into a collapsed stage, or is no
+  longer visible) and takes over the revision. Moves on the board do the
+  same. A card that moved into a stage with unloaded pages, merges and bulk
+  rejections still reload the board. Trade-off: a change someone else made
+  between the last poll and the refresh is shown with the next revision
+  change rather than at once.
+- **Retention batches:** `RetentionService::run` handles at most
+  `BATCH_SIZE` = 200 candidates (triage first, then the other groups, each in
+  id order); when a group fills the rest of the batch, later groups wait, so a
+  candidate is always handled by the first group it belongs to. `RetentionJob`
+  runs hourly and is `TIME_INSENSITIVE`. `--dry-run` lists everyone due;
+  `occ recruiting:retention:run --limit=N` defaults to 0 (everyone) for
+  manual runs. Known limit: a candidate whose processing keeps failing stays
+  first in line and takes one slot of every batch.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |
@@ -823,6 +861,7 @@ Beyond the §9 non-goals, which did not exclude these:
 | Admin settings | Administration → Recruiting | admins |
 | Digest setting | Personal settings → Groupware | everyone |
 
-Background jobs: mail fetch (5 min), offer expiry (daily), retention (daily),
-digest (hourly), interview reminders (hourly). occ: `recruiting:fetch-mail`,
-`recruiting:retention:run [--dry-run]`, `recruiting:documents:extract-text`.
+Background jobs: mail fetch (5 min), offer expiry (daily), retention (hourly,
+200 per run), digest (hourly), interview reminders (hourly). occ:
+`recruiting:fetch-mail`, `recruiting:retention:run [--dry-run] [--limit=N]`,
+`recruiting:documents:extract-text`.

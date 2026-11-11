@@ -74,6 +74,22 @@ class OfferMapper extends QBMapper {
 	}
 
 	/**
+	 * Is this user the approver of any offer at all? The offer side of
+	 * "can this user see any candidate".
+	 */
+	public function isApproverOfAny(string $uid): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('approver_uid', $qb->createNamedParameter($uid)))
+			->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$row = $result->fetch();
+		$result->closeCursor();
+		return $row !== false;
+	}
+
+	/**
 	 * Open offers (sent/negotiating) for the expiry job.
 	 *
 	 * @return Offer[]

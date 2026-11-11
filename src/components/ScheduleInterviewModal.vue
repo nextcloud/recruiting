@@ -344,7 +344,7 @@ export default {
 		},
 
 		finish() {
-			this.sidebar.touch()
+			this.sidebar.touch(this.candidate.id)
 			this.$emit('saved')
 		},
 	},

@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Db;
 
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -75,7 +76,7 @@ class OpeningMapper extends QBMapper {
 		}
 		try {
 			return $this->find($id)->getTitle();
-		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
+		} catch (DoesNotExistException) {
 			return null;
 		}
 	}
@@ -91,5 +92,52 @@ class OpeningMapper extends QBMapper {
 
 	public function mailSlugExists(string $slug): bool {
 		return $this->findByMailSlug($slug) !== null;
+	}
+
+	/**
+	 * The board change counter of an opening (see bumpRevision).
+	 *
+	 * @throws DoesNotExistException
+	 */
+	public function findRevision(int $id): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('revision')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+		$result = $qb->executeQuery();
+		$revision = $result->fetchOne();
+		$result->closeCursor();
+		if ($revision === false) {
+			throw new DoesNotExistException('Opening ' . $id . ' not found');
+		}
+		return (int)$revision;
+	}
+
+	/**
+	 * Count a change on the board of an opening. Incremented in SQL, so
+	 * concurrent changes never get lost in a read-modify-write.
+	 */
+	public function bumpRevision(int $id): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('revision', $qb->createFunction($qb->getColumnName('revision') . ' + 1'))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	/**
+	 * bumpRevision for the opening a candidate currently belongs to, in one
+	 * statement; a triage candidate (no opening) changes nothing.
+	 */
+	public function bumpRevisionForCandidate(int $candidateId): void {
+		$qb = $this->db->getQueryBuilder();
+		$opening = $this->db->getQueryBuilder();
+		$opening->select('rc.opening_id')
+			->from('recruiting_candidates', 'rc')
+			->where($opening->expr()->eq('rc.id', $qb->createNamedParameter($candidateId, IQueryBuilder::PARAM_INT)));
+		$qb->update($this->getTableName())
+			->set('revision', $qb->createFunction($qb->getColumnName('revision') . ' + 1'))
+			->where($qb->expr()->in('id', $qb->createFunction($opening->getSQL())));
+		$qb->executeStatement();
 	}
 }

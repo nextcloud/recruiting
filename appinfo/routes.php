@@ -35,6 +35,7 @@ return [
 		['name' => 'candidate#myReviews', 'url' => '/api/my-reviews', 'verb' => 'GET'],
 		['name' => 'candidate#myInterviews', 'url' => '/api/my-interviews', 'verb' => 'GET'],
 		['name' => 'candidate#show', 'url' => '/api/candidates/{id}', 'verb' => 'GET'],
+		['name' => 'candidate#card', 'url' => '/api/candidates/{id}/card', 'verb' => 'GET'],
 		['name' => 'candidate#create', 'url' => '/api/candidates', 'verb' => 'POST'],
 		['name' => 'candidate#bulkReject', 'url' => '/api/candidates/bulk-reject', 'verb' => 'POST'],
 		['name' => 'candidate#update', 'url' => '/api/candidates/{id}', 'verb' => 'PUT'],

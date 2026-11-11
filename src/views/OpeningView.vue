@@ -578,9 +578,15 @@ export default {
 			},
 		},
 
-		// Sidebar mutations (votes, stage moves, mails …) refresh the list
+		// Sidebar mutations (votes, stage moves, mails …): a change to one
+		// candidate refreshes that card, anything else the whole board
 		'sidebar.version': function() {
-			this.load(true)
+			const candidateId = this.sidebar.changedCandidateId
+			if (candidateId === null) {
+				this.load(true)
+			} else {
+				this.patchCard(candidateId)
+			}
 		},
 	},
 
@@ -678,6 +684,77 @@ export default {
 			const fresh = data.cards.filter((candidate) => !known.has(candidate.id))
 			list.push(...fresh)
 			return fresh.length
+		},
+
+		/**
+		 * Refresh the one card a change of our own touched, plus the stage
+		 * counts, instead of reloading the board. The board takes over the
+		 * revision read here, so our own change causes no full reload; a
+		 * change someone else made since the last poll shows up with the
+		 * next revision change instead. A card that moved into a stage whose
+		 * cards are only partly loaded cannot be placed in order; the board
+		 * is reloaded instead.
+		 *
+		 * @param {number} candidateId the changed candidate
+		 * @param {string|null} shownStage the stage the card was loaded in, when it was moved optimistically since
+		 */
+		async patchCard(candidateId, shownStage = null) {
+			const known = this.candidates.find((candidate) => candidate.id === candidateId)
+			if (this.loading || !known) {
+				return
+			}
+			const fromStage = shownStage ?? known.stage
+			const token = this.loadToken
+			try {
+				// Read before the card, as in load()
+				const revision = await this.fetchRevision()
+				const [card] = await Promise.all([
+					this.fetchCard(candidateId),
+					this.refreshOpening(),
+				])
+				if (token !== this.loadToken) {
+					return
+				}
+				const others = this.candidates.filter((candidate) => candidate.id !== candidateId)
+				if (card === null || card.openingId !== Number(this.id)) {
+					this.candidates = others
+				} else if (card.stage === fromStage || this.complete) {
+					this.candidates = this.candidates.map((candidate) => candidate.id === candidateId ? card : candidate)
+				} else if (!this.boardStages.includes(card.stage)) {
+					// a collapsed stage loads its cards when it is expanded
+					this.candidates = others
+				} else if (countInStage(others, card.stage) + 1 >= this.stageTotal(card.stage)) {
+					const next = others.findIndex((candidate) => candidate.stage === card.stage
+						&& (candidate.createdAt > card.createdAt || (candidate.createdAt === card.createdAt && candidate.id > card.id)))
+					others.splice(next === -1 ? others.length : next, 0, card)
+					this.candidates = others
+				} else {
+					this.load(true)
+					return
+				}
+				if (revision !== null && this.revision !== null) {
+					this.revision = revision
+				}
+				this.pruneSelection()
+			} catch {
+				this.load(true)
+			}
+		},
+
+		/**
+		 * @param {number} candidateId the candidate
+		 * @return {Promise<object|null>} the card, or null when it is gone or no longer visible
+		 */
+		async fetchCard(candidateId) {
+			try {
+				const { data } = await api.getCandidateCard(candidateId)
+				return data
+			} catch (error) {
+				if ([403, 404].includes(error?.response?.status)) {
+					return null
+				}
+				throw error
+			}
 		},
 
 		async fetchRevision() {
@@ -914,7 +991,7 @@ export default {
 			candidate.stage = stage // optimistic
 			try {
 				await api.setStage(candidate.id, stage, previous)
-				this.load(true)
+				this.patchCard(candidate.id, previous)
 			} catch (error) {
 				candidate.stage = previous
 				if (handleStageConflict(error, candidate.displayName)) {
@@ -1040,9 +1117,9 @@ export default {
 			this.openingsStore.upsert(opening)
 		},
 
+		// RejectModal reports the change through the sidebar store
 		onRejected() {
 			this.rejectTarget = null
-			this.load(true)
 		},
 	},
 }

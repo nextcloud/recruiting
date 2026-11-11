@@ -142,7 +142,7 @@ export default {
 				}
 				await api.rejectCandidate(this.candidate.id, payload)
 				showSuccess(this.t('recruiting', 'Candidate rejected'))
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 				this.$emit('rejected')
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not reject the candidate')))

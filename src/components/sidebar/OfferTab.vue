@@ -376,7 +376,7 @@ export default {
 					showSuccess(successMessage)
 				}
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'The offer action failed')))
 			} finally {

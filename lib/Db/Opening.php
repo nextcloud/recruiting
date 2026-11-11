@@ -39,6 +39,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(\DateTime $createdAt)
  * @method ?\DateTime getClosedAt()
  * @method void setClosedAt(?\DateTime $closedAt)
+ * @method int getRevision()
+ * @method void setRevision(int $revision)
  */
 class Opening extends Entity implements \JsonSerializable {
 	public const STATUS_OPEN = 'open';
@@ -59,12 +61,15 @@ class Opening extends Entity implements \JsonSerializable {
 	protected string $createdBy = '';
 	protected ?\DateTime $createdAt = null;
 	protected ?\DateTime $closedAt = null;
+	/** Written only by OpeningMapper::bumpRevision, never through update() */
+	protected int $revision = 0;
 
 	public function __construct() {
 		$this->addType('autoAck', 'boolean');
 		$this->addType('publicApply', 'boolean');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('closedAt', 'datetime');
+		$this->addType('revision', 'integer');
 	}
 
 	#[\Override]

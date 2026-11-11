@@ -11,7 +11,6 @@ namespace OCA\Recruiting\Tests\Unit;
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\CandidateScope;
-use OCA\Recruiting\Db\DocumentMapper;
 use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Search\RecruitingSearchProvider;
@@ -26,20 +25,20 @@ use PHPUnit\Framework\TestCase;
 class RecruitingSearchProviderTest extends TestCase {
 	private CandidateMapper&MockObject $candidateMapper;
 	private OpeningMapper&MockObject $openingMapper;
-	private DocumentMapper&MockObject $documentMapper;
 	private PermissionService&MockObject $permissions;
 	private RecruitingSearchProvider $provider;
+	private bool $hasScope = true;
 
 	protected function setUp(): void {
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
 		$this->openingMapper = $this->createMock(OpeningMapper::class);
-		$this->documentMapper = $this->createMock(DocumentMapper::class);
 		$this->permissions = $this->createMock(PermissionService::class);
+		$this->permissions->method('hasAnyCandidateScope')->willReturnCallback(fn () => $this->hasScope);
 		$urlGenerator = $this->createMock(IURLGenerator::class);
 		$urlGenerator->method('linkToRouteAbsolute')->willReturn('https://cloud/apps/recruiting/');
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnArgument(0);
-		$this->provider = new RecruitingSearchProvider($this->candidateMapper, $this->openingMapper, $this->documentMapper, $this->permissions, $urlGenerator, $l10n);
+		$this->provider = new RecruitingSearchProvider($this->candidateMapper, $this->openingMapper, $this->permissions, $urlGenerator, $l10n);
 	}
 
 	private function user(string $uid): IUser {
@@ -133,15 +132,12 @@ class RecruitingSearchProviderTest extends TestCase {
 		$this->assertSame([], $result['entries']);
 	}
 
-	public function testDocumentTextMatchesAreSearchedFromThreeCharacters(): void {
+	public function testDocumentTextIsSearchedFromThreeCharacters(): void {
 		$scope = new CandidateScope('hr', true);
 		$this->permissions->method('candidateScope')->willReturn($scope);
 		$this->permissions->method('canViewCandidate')->willReturn(true);
-		$this->documentMapper->expects($this->once())->method('findCandidateIdsByText')
-			->with('kubernetes', 200)
-			->willReturn([4, 9]);
 		$this->candidateMapper->expects($this->once())->method('search')
-			->with('kubernetes', $scope, $this->anything(), 0, [4, 9])
+			->with('kubernetes', $scope, $this->anything(), 0, true)
 			->willReturn([$this->candidate(4)]);
 
 		$result = $this->provider->search($this->user('hr'), $this->query('kubernetes', 5))->jsonSerialize();
@@ -151,11 +147,23 @@ class RecruitingSearchProviderTest extends TestCase {
 
 	public function testShortTermsDoNotSearchDocumentText(): void {
 		$this->permissions->method('candidateScope')->willReturn(new CandidateScope('hr', true));
-		$this->documentMapper->expects($this->never())->method('findCandidateIdsByText');
 		$this->candidateMapper->expects($this->once())->method('search')
-			->with('go', $this->anything(), $this->anything(), 0, [])
+			->with('go', $this->anything(), $this->anything(), 0, false)
 			->willReturn([]);
 
-		$this->provider->search($this->user('hr'), $this->query('go', 5));
+		$this->provider->search($this->user('hr'), $this->query(' go ', 5));
+	}
+
+	public function testUsersWithoutAnyScopeSearchNothing(): void {
+		$scope = new CandidateScope('bob', false);
+		$this->hasScope = false;
+		$this->permissions->method('candidateScope')->with('bob')->willReturn($scope);
+		$this->candidateMapper->expects($this->never())->method('search');
+		$this->openingMapper->expects($this->never())->method('searchByTitle');
+
+		$result = $this->provider->search($this->user('bob'), $this->query('kubernetes', 5))->jsonSerialize();
+
+		$this->assertSame([], $result['entries']);
+		$this->assertFalse($result['isPaginated']);
 	}
 }

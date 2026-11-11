@@ -25,8 +25,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Deleting openings (recruiters only, never with candidates) and the
- * board's change marker.
+ * Deleting openings (recruiters only, never with candidates), the
+ * board's change marker and the stage counts of one opening.
  */
 class OpeningServiceTest extends TestCase {
 	private OpeningMapper&MockObject $openingMapper;
@@ -110,18 +110,34 @@ class OpeningServiceTest extends TestCase {
 		$this->service->destroy('hr', 7);
 	}
 
-	public function testRevisionComesFromTheCandidateMarker(): void {
+	public function testRevisionIsTheOpeningCounter(): void {
 		$this->permissions->expects($this->once())->method('assertCanViewOpening')->with('hr', 7);
-		$this->candidateMapper->method('revisionForOpening')->with(7)->willReturn('3-12-2026-11-10 10:00:00-40');
+		$this->openingMapper->method('findRevision')->with(7)->willReturn(42);
+		$this->candidateMapper->expects($this->never())->method('countByOpeningAndStage');
 
-		$this->assertSame(['revision' => '3-12-2026-11-10 10:00:00-40'], $this->service->revision('hr', 7));
+		$this->assertSame(['revision' => 42], $this->service->revision('hr', 7));
 	}
 
 	public function testRevisionRequiresViewPermission(): void {
 		$this->permissions->method('assertCanViewOpening')->willThrowException(new NotPermittedException('no'));
-		$this->candidateMapper->expects($this->never())->method('revisionForOpening');
+		$this->openingMapper->expects($this->never())->method('findRevision');
 
 		$this->expectException(NotPermittedException::class);
 		$this->service->revision('stranger', 7);
+	}
+
+	public function testGetCountsOnlyThatOpening(): void {
+		$this->permissions->method('roleForOpening')->willReturn(PermissionService::ROLE_RECRUITER);
+		$this->openingMapper->method('find')->with(7)->willReturn($this->opening());
+		$this->teamMapper->method('findForOpening')->willReturn([]);
+		$this->candidateMapper->expects($this->once())->method('countByOpeningAndStage')
+			->with(7)
+			->willReturn([7 => ['new' => 2, 'screening' => 1, 'rejected' => 4]]);
+
+		$opening = $this->service->get('hr', 7);
+
+		$this->assertSame(2, $opening['stageCounts']['new']);
+		$this->assertSame(4, $opening['stageCounts']['rejected']);
+		$this->assertSame(3, $opening['activeCount']);
 	}
 }

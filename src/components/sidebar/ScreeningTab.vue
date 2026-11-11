@@ -210,7 +210,7 @@ export default {
 				await api.vote(this.candidate.id, this.voteValue, this.voteComment)
 				showSuccess(this.t('recruiting', 'Vote saved'))
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not save the vote')))
 			} finally {
@@ -223,7 +223,7 @@ export default {
 				await api.assignScreeners(this.candidate.id, this.newScreeners.map((screener) => screener.id))
 				this.newScreeners = []
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not assign the screeners')))
 			}

@@ -326,6 +326,97 @@ class RetentionServiceTest extends TestCase {
 		$this->assertSame(RetentionService::ANONYMIZED_NAME, $closed->getDisplayName());
 	}
 
+	public function testRunHandlesOneBatchTriageFirst(): void {
+		$this->config->method('getRetentionDays')->willReturn(180);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+		$this->candidateMapper->expects($this->once())->method('findTriageCreatedBefore')
+			->with($this->anything(), 3)
+			->willReturn([$this->named(1, 'Spam'), $this->named(2, 'More spam')]);
+		$this->candidateMapper->expects($this->once())->method('findRetentionEligible')
+			->with($this->anything(), 1)
+			->willReturn([$this->named(5, 'Rita Rejected')]);
+		// The batch is full: later groups wait for the next run
+		$this->candidateMapper->expects($this->never())->method('findLeftInClosedOpenings');
+		$this->candidateMapper->expects($this->never())->method('findExpiredPoolMembers');
+		$this->candidates->expects($this->exactly(2))->method('purge');
+		$this->candidateMapper->expects($this->once())->method('update');
+
+		$result = $this->service->run(limit: 3);
+
+		$this->assertSame(2, $result['deleted']);
+		$this->assertSame(1, $result['anonymized']);
+		$this->assertFalse($result['complete']);
+		$this->assertSame([], $result['groups'][RetentionService::GROUP_CLOSED_OPENING]['names']);
+	}
+
+	public function testRunIsCompleteWhenEveryGroupFits(): void {
+		$this->config->method('getRetentionDays')->willReturn(180);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+		$spam = $this->named(1, 'Spam');
+		$asked = [];
+		$this->candidateMapper->method('findTriageCreatedBefore')->willReturnCallback(function ($cutoff, int $limit) use (&$asked, $spam) {
+			$asked[] = $limit;
+			return [$spam];
+		});
+		// A rejected triage candidate is in both lists and counts once
+		$this->candidateMapper->method('findRetentionEligible')->willReturnCallback(function ($cutoff, int $limit) use (&$asked, $spam) {
+			$asked[] = $limit;
+			return [$spam];
+		});
+		$this->candidateMapper->method('findLeftInClosedOpenings')->willReturnCallback(function ($cutoff, int $limit) use (&$asked) {
+			$asked[] = $limit;
+			return [$this->named(3, 'Carl Closed')];
+		});
+		$this->candidateMapper->method('findExpiredPoolMembers')->willReturnCallback(function ($cutoff, int $limit) use (&$asked) {
+			$asked[] = $limit;
+			return [];
+		});
+
+		$result = $this->service->run();
+
+		$this->assertSame([200, 199, 199, 198], $asked);
+		$this->assertTrue($result['complete']);
+		$this->assertSame(1, $result['deleted']);
+		$this->assertSame(1, $result['anonymized']);
+	}
+
+	public function testDryRunReportsEveryoneWhateverTheLimit(): void {
+		$this->config->method('getRetentionDays')->willReturn(180);
+		$this->config->method('getTriageRetentionDays')->willReturn(90);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->candidateMapper->expects($this->once())->method('findTriageCreatedBefore')->with($this->anything(), 0)
+			->willReturn([$this->named(1, 'Spam'), $this->named(2, 'More spam')]);
+		$this->candidateMapper->expects($this->once())->method('findRetentionEligible')->with($this->anything(), 0)
+			->willReturn([$this->named(5, 'Rita Rejected')]);
+		$this->candidateMapper->expects($this->once())->method('findLeftInClosedOpenings')->with($this->anything(), 0)->willReturn([]);
+		$this->candidateMapper->expects($this->once())->method('findExpiredPoolMembers')->with($this->anything(), 0)->willReturn([]);
+
+		$result = $this->service->run(dryRun: true, limit: 1);
+
+		$this->assertSame(2, $result['deleted']);
+		$this->assertSame(1, $result['anonymized']);
+		$this->assertTrue($result['complete']);
+	}
+
+	public function testLimitZeroHandlesEveryone(): void {
+		$this->config->method('getRetentionDays')->willReturn(0);
+		$this->config->method('getTriageRetentionDays')->willReturn(0);
+		$this->config->method('getPoolRetentionMonths')->willReturn(12);
+		$this->eventMapper->method('findForCandidate')->willReturn([]);
+		$this->candidateMapper->expects($this->once())->method('findExpiredPoolMembers')->with($this->anything(), 0)
+			->willReturn([$this->candidate(8), $this->candidate(9)]);
+		$this->candidateMapper->expects($this->exactly(2))->method('update');
+
+		$result = $this->service->run(limit: 0);
+
+		$this->assertSame(2, $result['anonymized']);
+		$this->assertTrue($result['complete']);
+	}
+
 	private function named(int $id, string $name): Candidate {
 		$candidate = new Candidate();
 		$candidate->setId($id);

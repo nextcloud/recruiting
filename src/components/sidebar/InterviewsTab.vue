@@ -164,7 +164,7 @@ export default {
 			try {
 				await api.cancelInterview(interview.id)
 				this.sidebar.reload()
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not cancel the interview')))
 			}

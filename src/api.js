@@ -27,6 +27,7 @@ export default {
 	getMyReviews: () => axios.get(url('/api/my-reviews')),
 	getMyInterviews: () => axios.get(url('/api/my-interviews')),
 	getCandidate: (id) => axios.get(url(`/api/candidates/${id}`)),
+	getCandidateCard: (id) => axios.get(url(`/api/candidates/${id}/card`)),
 	createCandidate: (data) => axios.post(url('/api/candidates'), data),
 	updateCandidate: (id, data) => axios.put(url(`/api/candidates/${id}`), data),
 	// expectedStage: the stage the client saw; the server answers 409 if it changed since

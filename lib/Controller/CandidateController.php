@@ -63,6 +63,11 @@ class CandidateController extends Controller {
 	}
 
 	#[NoAdminRequired]
+	public function card(int $id): DataResponse {
+		return $this->handle(fn () => $this->candidates->card($this->uid(), $id));
+	}
+
+	#[NoAdminRequired]
 	public function create(): DataResponse {
 		return $this->handle(fn () => $this->candidates->createManual($this->uid(), $this->request->getParams()));
 	}

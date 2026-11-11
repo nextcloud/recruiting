@@ -10,6 +10,31 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `occ recruiting:retention:run --limit=N` stops after N candidates (default
+  0 = all); `--dry-run` still lists everyone due.
+
+### Changed
+
+- The retention job runs hourly and handles at most 200 candidates per run,
+  working through a backlog over several runs instead of one long cron run.
+  It no longer counts as time-sensitive, so it does not hold up the mail
+  fetch.
+- Your own changes in the candidate sidebar (votes, stage moves, edits,
+  interviews, offers) and moves on the board refresh just that card and the
+  stage counts instead of reloading the whole board.
+
+### Fixed
+
+- Unified search no longer scans the text of every CV for each search:
+  users without any recruiting role get an empty result at once, and CV
+  text is matched inside the role-scoped candidate query, so a manager also
+  finds their own text matches that a global 200-hit cap used to cut off.
+- The board's change check reads one counter on the opening instead of
+  aggregating all of the opening's candidates and timeline events every 30
+  seconds, and opening the board counts the stages of that opening only.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

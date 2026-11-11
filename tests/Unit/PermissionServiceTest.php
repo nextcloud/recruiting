@@ -11,6 +11,7 @@ namespace OCA\Recruiting\Tests\Unit;
 use OCA\Recruiting\Db\Assignment;
 use OCA\Recruiting\Db\AssignmentMapper;
 use OCA\Recruiting\Db\Candidate;
+use OCA\Recruiting\Db\CandidateScope;
 use OCA\Recruiting\Db\InterviewAttendeeMapper;
 use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TeamMember;
@@ -193,5 +194,22 @@ class PermissionServiceTest extends TestCase {
 		$this->setRecruiter('nobody', false);
 		$this->expectException(NotPermittedException::class);
 		$this->service->assertRecruiter('nobody');
+	}
+
+	public function testRecruitersAndTeamMembersHaveACandidateScopeWithoutAnOfferQuery(): void {
+		$this->offerMapper->expects($this->never())->method('isApproverOfAny');
+		$this->assertTrue($this->service->hasAnyCandidateScope(new CandidateScope('hr', true)));
+		$this->assertTrue($this->service->hasAnyCandidateScope(new CandidateScope('m', false, [3])));
+		$this->assertTrue($this->service->hasAnyCandidateScope(new CandidateScope('i', false, [], [4])));
+	}
+
+	public function testOfferApproversHaveACandidateScope(): void {
+		$this->offerMapper->expects($this->once())->method('isApproverOfAny')->with('cfo')->willReturn(true);
+		$this->assertTrue($this->service->hasAnyCandidateScope(new CandidateScope('cfo', false)));
+	}
+
+	public function testEveryoneElseHasNoCandidateScope(): void {
+		$this->offerMapper->method('isApproverOfAny')->willReturn(false);
+		$this->assertFalse($this->service->hasAnyCandidateScope(new CandidateScope('bob', false)));
 	}
 }

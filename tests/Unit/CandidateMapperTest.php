@@ -11,6 +11,7 @@ namespace OCA\Recruiting\Tests\Unit;
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\CandidateScope;
+use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Service\ReportCache;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\ICompositeExpression;
@@ -31,7 +32,10 @@ use PHPUnit\Framework\TestCase;
 class CandidateMapperTest extends TestCase {
 	private IDBConnection&MockObject $db;
 	private ReportCache&MockObject $reportCache;
+	private OpeningMapper&MockObject $openingMapper;
 	private CandidateMapper $mapper;
+	/** @var list<string> order of statements and revision bumps */
+	private array $log = [];
 
 	/** @var list<string> conditions passed to where()/andWhere() of the main query */
 	private array $conditions = [];
@@ -44,12 +48,19 @@ class CandidateMapperTest extends TestCase {
 		$this->db->method('escapeLikeParameter')->willReturnArgument(0);
 		$this->db->method('getQueryBuilder')->willReturnCallback(fn () => $this->recordingBuilder($this->builders++ === 0));
 		$this->reportCache = $this->createMock(ReportCache::class);
-		$this->mapper = new CandidateMapper($this->db, $this->reportCache);
+		$this->openingMapper = $this->createMock(OpeningMapper::class);
+		$this->openingMapper->method('bumpRevision')->willReturnCallback(function (int $id): void {
+			$this->log[] = 'bump ' . $id;
+		});
+		$this->openingMapper->method('bumpRevisionForCandidate')->willReturnCallback(function (int $id): void {
+			$this->log[] = 'bump of candidate ' . $id;
+		});
+		$this->mapper = new CandidateMapper($this->db, $this->reportCache, $this->openingMapper);
 	}
 
 	private function recordingBuilder(bool $main): IQueryBuilder {
 		$qb = $this->createMock(IQueryBuilder::class);
-		foreach (['select', 'orderBy', 'addOrderBy', 'delete', 'update', 'insert', 'set', 'setValue'] as $method) {
+		foreach (['select', 'addSelect', 'groupBy', 'orderBy', 'addOrderBy', 'delete', 'update', 'insert', 'set', 'setValue'] as $method) {
 			$qb->method($method)->willReturnSelf();
 		}
 		$tables = [];
@@ -93,6 +104,10 @@ class CandidateMapperTest extends TestCase {
 		$result = $this->createMock(IResult::class);
 		$result->method('fetch')->willReturn(false);
 		$qb->method('executeQuery')->willReturn($result);
+		$qb->method('executeStatement')->willReturnCallback(function () {
+			$this->log[] = 'statement';
+			return 1;
+		});
 		return $qb;
 	}
 
@@ -173,13 +188,29 @@ class CandidateMapperTest extends TestCase {
 		$this->assertSame(0, $this->calls['first']);
 	}
 
-	public function testSearchIncludesCandidatesWithMatchingDocuments(): void {
-		$this->mapper->search('kubernetes', new CandidateScope('hr', true), 11, 0, [4, 9]);
+	public function testSearchMatchesDocumentTextPerCandidate(): void {
+		$this->mapper->search('Kubernetes', new CandidateScope('hr', true), 11, 0, true);
 
 		$this->assertSame(
-			'(c.display_name ILIKE "%kubernetes%" OR c.email ILIKE "%kubernetes%" OR c.id IN [4,9])',
+			'(c.display_name ILIKE "%kubernetes%" OR c.email ILIKE "%kubernetes%"'
+			. ' OR (EXISTS (SELECT FROM recruiting_documents WHERE sd.candidate_id = c.id AND sd.text_content ILIKE "%kubernetes%")))',
 			$this->conditions[0],
 		);
+	}
+
+	public function testDocumentTextMatchesStayInsideTheRoleScopeAndLimit(): void {
+		$this->mapper->search('kubernetes', new CandidateScope('alice', false, [3]), 6, 0, true);
+
+		$this->assertCount(3, $this->conditions);
+		$this->assertStringContainsString('EXISTS (SELECT FROM recruiting_documents', $this->conditions[0]);
+		$this->assertStringStartsWith('(c.opening_id IN [3] OR ', $this->conditions[2]);
+		$this->assertSame(6, $this->calls['max']);
+	}
+
+	public function testSearchWithoutDocumentsLeavesDocumentTextAlone(): void {
+		$this->mapper->search('go', new CandidateScope('hr', true), 11);
+
+		$this->assertStringNotContainsString('recruiting_documents', $this->conditions[0]);
 	}
 
 	public function testSearchAppliesTheRoleScopeInSql(): void {
@@ -260,5 +291,53 @@ class CandidateMapperTest extends TestCase {
 		$candidate->setDisplayName('Jane');
 		$this->mapper->insert($candidate);
 		$this->mapper->delete($this->candidate(9));
+	}
+
+	public function testInsertAndDeleteCountUpTheOpeningRevision(): void {
+		$candidate = new Candidate();
+		$candidate->setOpeningId(9);
+		$candidate->setDisplayName('Jane');
+		$this->mapper->insert($candidate);
+		$this->mapper->delete($this->candidate(9));
+
+		$this->assertSame(['statement', 'bump 9', 'statement', 'bump 9'], $this->log);
+	}
+
+	public function testUpdateCountsUpTheOpeningRevision(): void {
+		$candidate = $this->candidate(5);
+		$candidate->setStage(Candidate::STAGE_SCREENING);
+		$this->mapper->update($candidate);
+
+		$this->assertSame(['statement', 'bump 5'], $this->log);
+	}
+
+	public function testMoveCountsUpTheOldOpeningBeforeAndTheNewOneAfter(): void {
+		$candidate = $this->candidate(5);
+		$candidate->setOpeningId(6);
+		$this->mapper->update($candidate);
+
+		$this->assertSame(['bump of candidate 7', 'statement', 'bump 6'], $this->log);
+	}
+
+	public function testUnchangedUpdateAndTriageCandidatesCountNothing(): void {
+		$this->mapper->update($this->candidate(5));
+		$triage = $this->candidate(null);
+		$triage->setStage(Candidate::STAGE_SCREENING);
+		$this->mapper->update($triage);
+		$inserted = new Candidate();
+		$inserted->setDisplayName('Spam');
+		$this->mapper->insert($inserted);
+
+		$this->assertSame([], array_values(array_filter($this->log, static fn (string $entry) => str_starts_with($entry, 'bump'))));
+	}
+
+	public function testStageCountsOfOneOpeningFilterInSql(): void {
+		$this->mapper->countByOpeningAndStage(7);
+		$this->assertSame(['opening_id = 7'], $this->conditions);
+	}
+
+	public function testStageCountsOfAllOpeningsSkipTriage(): void {
+		$this->mapper->countByOpeningAndStage();
+		$this->assertSame(['opening_id IS NOT NULL'], $this->conditions);
 	}
 }

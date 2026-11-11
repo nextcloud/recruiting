@@ -66,7 +66,7 @@ class OpeningService {
 	public function get(string $uid, int $id): array {
 		$this->permissions->assertCanViewOpening($uid, $id);
 		$opening = $this->openingMapper->find($id);
-		$counts = $this->candidateMapper->countByOpeningAndStage();
+		$counts = $this->candidateMapper->countByOpeningAndStage($id);
 		return $this->serialize($opening, $this->permissions->roleForOpening($uid, $id), $counts[$id] ?? []);
 	}
 
@@ -176,15 +176,16 @@ class OpeningService {
 	}
 
 	/**
-	 * Marker for "has the board changed?" polling: cheap enough to ask for
-	 * every few seconds by every open board.
+	 * Marker for "has the board changed?" polling: the opening's change
+	 * counter, a one-row read that every open board can ask for every few
+	 * seconds.
 	 *
-	 * @return array{revision: string}
+	 * @return array{revision: int}
 	 * @throws NotPermittedException
 	 */
 	public function revision(string $uid, int $id): array {
 		$this->permissions->assertCanViewOpening($uid, $id);
-		return ['revision' => $this->candidateMapper->revisionForOpening($id)];
+		return ['revision' => $this->openingMapper->findRevision($id)];
 	}
 
 	/**

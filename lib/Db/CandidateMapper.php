@@ -18,7 +18,8 @@ use OCP\IDBConnection;
 /**
  * Every write of a candidate row goes through insert/update/delete here,
  * so this is where the cached report statistics of its opening are
- * dropped — whichever feature created, moved, anonymized or removed it.
+ * dropped and the board revision of its opening is counted up —
+ * whichever feature created, moved, anonymized or removed it.
  *
  * @extends QBMapper<Candidate>
  */
@@ -28,6 +29,7 @@ class CandidateMapper extends QBMapper {
 	public function __construct(
 		IDBConnection $db,
 		private ReportCache $reportCache,
+		private OpeningMapper $openingMapper,
 	) {
 		parent::__construct($db, 'recruiting_candidates', Candidate::class);
 	}
@@ -40,18 +42,29 @@ class CandidateMapper extends QBMapper {
 	public function insert(Entity $entity): Entity {
 		$entity = parent::insert($entity);
 		$this->invalidateReports($entity, false);
+		$this->bumpRevision($entity->getOpeningId());
 		return $entity;
 	}
 
 	/**
+	 * A move to another opening changes two boards: the old opening is
+	 * counted up from the row as it still is, the new one afterwards.
+	 *
 	 * @param Candidate $entity
 	 * @return Candidate
 	 */
 	#[\Override]
 	public function update(Entity $entity): Entity {
+		$changed = array_diff(array_keys($entity->getUpdatedFields()), ['id']) !== [];
 		$movedOpening = array_key_exists('openingId', $entity->getUpdatedFields());
+		if ($movedOpening) {
+			$this->openingMapper->bumpRevisionForCandidate($entity->getId());
+		}
 		$entity = parent::update($entity);
 		$this->invalidateReports($entity, $movedOpening);
+		if ($changed) {
+			$this->bumpRevision($entity->getOpeningId());
+		}
 		return $entity;
 	}
 
@@ -63,6 +76,7 @@ class CandidateMapper extends QBMapper {
 	public function delete(Entity $entity): Entity {
 		$entity = parent::delete($entity);
 		$this->invalidateReports($entity, false);
+		$this->bumpRevision($entity->getOpeningId());
 		return $entity;
 	}
 
@@ -75,6 +89,12 @@ class CandidateMapper extends QBMapper {
 			$this->reportCache->invalidate(null);
 		} elseif ($candidate->getOpeningId() !== null) {
 			$this->reportCache->invalidate($candidate->getOpeningId());
+		}
+	}
+
+	private function bumpRevision(?int $openingId): void {
+		if ($openingId !== null) {
+			$this->openingMapper->bumpRevision($openingId);
 		}
 	}
 
@@ -118,27 +138,6 @@ class CandidateMapper extends QBMapper {
 		$count = (int)$result->fetchOne();
 		$result->closeCursor();
 		return $count;
-	}
-
-	/**
-	 * A cheap marker that changes whenever the board of an opening changes:
-	 * candidates added or removed (count, highest id), moved (latest stage
-	 * change) or touched in any way that leaves a timeline entry (votes,
-	 * screeners, interviews, mail — highest event id). One aggregate query.
-	 */
-	public function revisionForOpening(int $openingId): string {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->createFunction('COUNT(DISTINCT ' . $qb->getColumnName('id', 'c') . ')'))
-			->addSelect($qb->func()->max('c.id'))
-			->addSelect($qb->func()->max('c.stage_changed_at'))
-			->addSelect($qb->func()->max('e.id'))
-			->from($this->getTableName(), 'c')
-			->leftJoin('c', 'recruiting_events', 'e', $qb->expr()->eq('e.candidate_id', 'c.id'))
-			->where($qb->expr()->eq('c.opening_id', $qb->createNamedParameter($openingId, IQueryBuilder::PARAM_INT)));
-		$result = $qb->executeQuery();
-		$row = $result->fetchNumeric();
-		$result->closeCursor();
-		return implode('-', array_map(static fn ($value) => (string)($value ?? '0'), $row === false ? [] : $row));
 	}
 
 	/**
@@ -319,15 +318,18 @@ class CandidateMapper extends QBMapper {
 	/**
 	 * Pool members whose membership expired (consent older than cutoff).
 	 *
+	 * In id order; $limit > 0 returns only the first $limit.
+	 *
 	 * @return Candidate[]
 	 */
-	public function findExpiredPoolMembers(\DateTimeInterface $cutoff): array {
+	public function findExpiredPoolMembers(\DateTimeInterface $cutoff, int $limit = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('pool_member', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNull('anonymized_at'))
 			->andWhere($qb->expr()->lt('pool_consent_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
+		$this->limitById($qb, $limit, 'id');
 		return $this->findEntities($qb);
 	}
 
@@ -335,9 +337,11 @@ class CandidateMapper extends QBMapper {
 	 * Candidates whose retention period is over: rejected or withdrawn
 	 * before the cutoff, not in the talent pool, not yet anonymized.
 	 *
+	 * In id order; $limit > 0 returns only the first $limit.
+	 *
 	 * @return Candidate[]
 	 */
-	public function findRetentionEligible(\DateTimeInterface $cutoff): array {
+	public function findRetentionEligible(\DateTimeInterface $cutoff, int $limit = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$cutoffParam = $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE);
 		$qb->select('*')
@@ -354,6 +358,7 @@ class CandidateMapper extends QBMapper {
 					$qb->expr()->lt('withdrawn_at', $cutoffParam),
 				),
 			));
+		$this->limitById($qb, $limit, 'id');
 		return $this->findEntities($qb);
 	}
 
@@ -364,9 +369,11 @@ class CandidateMapper extends QBMapper {
 	 * and withdrawn candidates follow their own clock
 	 * (findRetentionEligible).
 	 *
+	 * In id order; $limit > 0 returns only the first $limit.
+	 *
 	 * @return Candidate[]
 	 */
-	public function findLeftInClosedOpenings(\DateTimeInterface $cutoff): array {
+	public function findLeftInClosedOpenings(\DateTimeInterface $cutoff, int $limit = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('c.*')
 			->from($this->getTableName(), 'c')
@@ -376,6 +383,7 @@ class CandidateMapper extends QBMapper {
 			->andWhere($qb->expr()->in('c.stage', $qb->createNamedParameter(Candidate::ACTIVE_STAGES, IQueryBuilder::PARAM_STR_ARRAY)))
 			->andWhere($qb->expr()->eq('c.pool_member', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNull('c.anonymized_at'));
+		$this->limitById($qb, $limit, 'c.id');
 		return $this->findEntities($qb);
 	}
 
@@ -383,16 +391,30 @@ class CandidateMapper extends QBMapper {
 	 * Triage candidates (no opening) that arrived before the cutoff and
 	 * never moved on. Talent-pool members are kept on their own clock.
 	 *
+	 * In id order; $limit > 0 returns only the first $limit.
+	 *
 	 * @return Candidate[]
 	 */
-	public function findTriageCreatedBefore(\DateTimeInterface $cutoff): array {
+	public function findTriageCreatedBefore(\DateTimeInterface $cutoff, int $limit = 0): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->isNull('opening_id'))
 			->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
 			->andWhere($qb->expr()->eq('pool_member', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+		$this->limitById($qb, $limit, 'id');
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Id order, so a batch that stops at $limit continues where it left off
+	 * on the next run.
+	 */
+	private function limitById(IQueryBuilder $qb, int $limit, string $idColumn): void {
+		$qb->orderBy($idColumn, 'ASC');
+		if ($limit > 0) {
+			$qb->setMaxResults($limit);
+		}
 	}
 
 	/**
@@ -433,21 +455,27 @@ class CandidateMapper extends QBMapper {
 	/**
 	 * Name/email search for the unified search provider, restricted in SQL
 	 * to what the scope allows and never returning anonymized rows. Newest
-	 * first; $offset pages through the matches. $textMatchIds are
-	 * candidates whose documents contain the term.
+	 * first; $offset pages through the matches. With $searchDocuments a
+	 * candidate also matches when the extracted text of one of their
+	 * documents contains the term — checked per candidate inside the same
+	 * query, so the scope and the limit apply to text matches as well.
 	 *
-	 * @param int[] $textMatchIds
 	 * @return Candidate[]
 	 */
-	public function search(string $term, CandidateScope $scope, int $limit, int $offset = 0, array $textMatchIds = []): array {
+	public function search(string $term, CandidateScope $scope, int $limit, int $offset = 0, bool $searchDocuments = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$like = '%' . $this->db->escapeLikeParameter(mb_strtolower($term)) . '%';
 		$matches = $qb->expr()->orX(
 			$qb->expr()->iLike('c.display_name', $qb->createNamedParameter($like)),
 			$qb->expr()->iLike('c.email', $qb->createNamedParameter($like)),
 		);
-		if ($textMatchIds !== []) {
-			$matches->add($qb->expr()->in('c.id', $qb->createNamedParameter(array_slice($textMatchIds, 0, 1000), IQueryBuilder::PARAM_INT_ARRAY)));
+		if ($searchDocuments) {
+			$documents = $this->db->getQueryBuilder();
+			$documents->select('sd.id')
+				->from('recruiting_documents', 'sd')
+				->where($documents->expr()->eq('sd.candidate_id', 'c.id'))
+				->andWhere($documents->expr()->iLike('sd.text_content', $qb->createNamedParameter($like)));
+			$matches->add($qb->createFunction('EXISTS (' . $documents->getSQL() . ')'));
 		}
 		$qb->select('c.*')
 			->from($this->getTableName(), 'c')
@@ -519,16 +547,19 @@ class CandidateMapper extends QBMapper {
 	}
 
 	/**
-	 * Stage counts per opening for the navigation and board headers.
+	 * Stage counts per opening for the navigation and board headers; with
+	 * $openingId only that opening is counted.
 	 *
 	 * @return array<int, array<string, int>> openingId => stage => count
 	 */
-	public function countByOpeningAndStage(): array {
+	public function countByOpeningAndStage(?int $openingId = null): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('opening_id', 'stage')
 			->addSelect($qb->func()->count('id', 'cnt'))
 			->from($this->getTableName())
-			->where($qb->expr()->isNotNull('opening_id'))
+			->where($openingId === null
+				? $qb->expr()->isNotNull('opening_id')
+				: $qb->expr()->eq('opening_id', $qb->createNamedParameter($openingId, IQueryBuilder::PARAM_INT)))
 			->groupBy('opening_id', 'stage');
 		$result = $qb->executeQuery();
 		$counts = [];

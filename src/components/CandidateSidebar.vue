@@ -247,7 +247,7 @@ export default {
 			try {
 				await api.deleteCandidate(this.candidate.id)
 				showSuccess(this.t('recruiting', 'Candidate deleted'))
-				this.sidebar.touch()
+				this.sidebar.touch(this.candidate.id)
 				this.sidebar.close()
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not delete the candidate')))
@@ -258,7 +258,7 @@ export default {
 			this.showSchedule = false
 			this.showReject = false
 			this.sidebar.reload()
-			this.sidebar.touch()
+			this.sidebar.touch(this.candidate.id)
 		},
 	},
 }

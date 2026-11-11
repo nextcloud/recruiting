@@ -198,6 +198,18 @@ class CandidateService {
 	}
 
 	/**
+	 * One board card, as listForOpening serializes it — lets the board
+	 * refresh the single card a sidebar change touched.
+	 *
+	 * @throws NotPermittedException
+	 */
+	public function card(string $uid, int $id): array {
+		$candidate = $this->candidateMapper->find($id);
+		$this->permissions->assertCanViewCandidate($uid, $candidate);
+		return $this->serializeCards([$candidate], $uid)[0];
+	}
+
+	/**
 	 * Full detail for the sidebar.
 	 *
 	 * @throws NotPermittedException

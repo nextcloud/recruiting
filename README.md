@@ -109,9 +109,10 @@ old opening with hundreds of rejections still opens fast.
 
 The board keeps itself current: while it is visible it checks every 30 seconds
 whether someone else changed the opening and reloads in place (scroll position,
-selection and the open sidebar stay). A move carries the stage you saw — if a
-colleague moved the candidate in the meantime, nothing is changed and you get
-"<name> was moved to <stage> by someone else".
+selection and the open sidebar stay). Your own changes in the sidebar (a vote,
+a stage move, an edit) only refresh that one card. A move carries the stage you
+saw — if a colleague moved the candidate in the meantime, nothing is changed
+and you get "<name> was moved to <stage> by someone else".
 
 The same candidates as a sortable table (click a column header). Managers can
 select several candidates and move or reject them in bulk. The bulk rejection
@@ -422,8 +423,9 @@ confirmations, candidate replies, offer approvals, @-mentions, expiring
 offers), Activity stream entries per candidate, unified search over candidates
 and openings (permission-scoped in the database query, anonymized candidates
 excluded, paged; terms of three or more characters also match the text of
-candidates' documents), and deep links from every notification
-straight to the right candidate. The interface ships in English and German.
+candidates' documents, inside the same scoped query; people without any
+recruiting role get an empty result without any candidate search), and deep
+links from every notification straight to the right candidate. The interface ships in English and German.
 
 ## Setup
 
@@ -450,7 +452,7 @@ handles common PDFs and discards anything that does not look like text.
 | Command | Purpose |
 |---|---|
 | `recruiting:fetch-mail` | Fetch the applications mailbox now |
-| `recruiting:retention:run [--dry-run]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason |
+| `recruiting:retention:run [--dry-run] [--limit=N]` | Anonymize or delete candidates whose retention period is over; lists each group (triage, rejected/withdrawn, closed openings, expired pool consent) with count and reason. `--limit` stops after N candidates (default 0 = all); `--dry-run` always lists everyone due. The background job runs hourly and handles 200 candidates per run |
 | `recruiting:documents:extract-text [--limit=N]` | Extract the text of documents stored before text extraction existed |
 
 ## Development

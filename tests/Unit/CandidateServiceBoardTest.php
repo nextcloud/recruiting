@@ -238,4 +238,28 @@ class CandidateServiceBoardTest extends TestCase {
 		$this->assertSame(['mail', 'stage'], $order);
 		$this->assertSame('position_filled', $candidate->getRejectionReason());
 	}
+
+	public function testCardIsTheBoardSerializationOfOneCandidate(): void {
+		$this->candidateMapper->method('find')->with(5)->willReturn($this->candidate(5, Candidate::STAGE_SCREENING));
+		$this->permissions->expects($this->once())->method('assertCanViewCandidate')->with('hr');
+		$this->permissions->method('canManageCandidate')->willReturn(true);
+		$this->assignmentMapper->method('countFor')->with([5])->willReturn([5 => 2]);
+
+		$card = $this->service->card('hr', 5);
+
+		$this->assertSame(5, $card['id']);
+		$this->assertSame(Candidate::STAGE_SCREENING, $card['stage']);
+		$this->assertSame(2, $card['screenerCount']);
+		$this->assertSame(['yes' => 0, 'maybe' => 0, 'no' => 0], $card['voteTally']);
+		$this->assertArrayHasKey('attention', $card);
+	}
+
+	public function testCardChecksVisibilityBeforeSerializing(): void {
+		$this->candidateMapper->method('find')->willReturn($this->candidate(5, Candidate::STAGE_NEW));
+		$this->permissions->method('assertCanViewCandidate')->willThrowException(new NotPermittedException('no'));
+		$this->assignmentMapper->expects($this->never())->method('countFor');
+
+		$this->expectException(NotPermittedException::class);
+		$this->service->card('stranger', 5);
+	}
 }

@@ -91,6 +91,8 @@ export const useSidebarStore = defineStore('sidebar', {
 		loading: false,
 		/** bumped by mutations elsewhere so list views know to refresh */
 		version: 0,
+		/** the one candidate the latest change touched, or null for "anything" */
+		changedCandidateId: null,
 		/** guards against out-of-order responses (see reload) */
 		requestToken: 0,
 	}),
@@ -136,7 +138,7 @@ export const useSidebarStore = defineStore('sidebar', {
 					? t('recruiting', 'You no longer have access to this candidate.')
 					: errorMessage(error, t('recruiting', 'This candidate could not be loaded — it may have been deleted.')))
 				this.close()
-				this.version++
+				this.touch()
 			} finally {
 				if (this.requestToken === token) {
 					this.loading = false
@@ -147,7 +149,14 @@ export const useSidebarStore = defineStore('sidebar', {
 			this.candidateId = null
 			this.candidate = null
 		},
-		touch() {
+		/**
+		 * Tell list views that something changed. With the id of the one
+		 * candidate a change touched, the board refreshes only that card.
+		 *
+		 * @param {number|null} candidateId the changed candidate, if only one
+		 */
+		touch(candidateId = null) {
+			this.changedCandidateId = candidateId
 			this.version++
 		},
 	},

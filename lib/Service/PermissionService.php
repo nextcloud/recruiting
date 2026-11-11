@@ -104,6 +104,18 @@ class PermissionService {
 		return new CandidateScope($uid, false, $full, $assigned);
 	}
 
+	/**
+	 * Whether a scope can contain any candidate at all: a recruiter, a role
+	 * in some opening, or an offer to approve. Interviewer assignments and
+	 * interview attendance only count inside an opening the user holds a
+	 * role in, so they need no check of their own.
+	 */
+	public function hasAnyCandidateScope(CandidateScope $scope): bool {
+		return $scope->everything
+			|| $scope->visibleOpeningIds() !== []
+			|| $this->offerMapper->isApproverOfAny($scope->uid);
+	}
+
 	public function canViewOpening(string $uid, int $openingId): bool {
 		return $this->roleForOpening($uid, $openingId) !== null;
 	}

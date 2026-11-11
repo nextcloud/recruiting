@@ -29,7 +29,9 @@ use Psr\Log\LoggerInterface;
  *   triage holds spam and unassigned mail, and anonymized rows there would
  *   only clutter the inbox
  *
- * Anonymizing means the person disappears and the statistics stay.
+ * Anonymizing means the person disappears and the statistics stay. Each
+ * candidate costs a few dozen queries plus file, calendar and Talk calls,
+ * so a run handles a batch and the next run continues the backlog.
  */
 class RetentionService {
 	public const ANONYMIZED_NAME = 'Anonymized candidate';
@@ -41,6 +43,9 @@ class RetentionService {
 
 	public const ACTION_ANONYMIZE = 'anonymize';
 	public const ACTION_DELETE = 'delete';
+
+	/** Candidates handled per background run */
+	public const BATCH_SIZE = 200;
 
 	/** Timeline event types whose payload can identify the candidate */
 	public const PII_EVENT_TYPES = [
@@ -71,41 +76,45 @@ class RetentionService {
 	}
 
 	/**
+	 * @param int $limit only the first $limit by id; 0 for all
 	 * @return Candidate[] rejected or withdrawn candidates whose retention
 	 *                     period is over
 	 */
-	public function findEligible(): array {
+	public function findEligible(int $limit = 0): array {
 		$cutoff = $this->daysAgo($this->config->getRetentionDays());
-		return $cutoff === null ? [] : $this->candidateMapper->findRetentionEligible($cutoff);
+		return $cutoff === null ? [] : $this->candidateMapper->findRetentionEligible($cutoff, $limit);
 	}
 
 	/**
+	 * @param int $limit only the first $limit by id; 0 for all
 	 * @return Candidate[] candidates left in openings closed longer ago than
 	 *                     the retention period
 	 */
-	public function findLeftInClosedOpenings(): array {
+	public function findLeftInClosedOpenings(int $limit = 0): array {
 		$cutoff = $this->daysAgo($this->config->getRetentionDays());
-		return $cutoff === null ? [] : $this->candidateMapper->findLeftInClosedOpenings($cutoff);
+		return $cutoff === null ? [] : $this->candidateMapper->findLeftInClosedOpenings($cutoff, $limit);
 	}
 
 	/**
+	 * @param int $limit only the first $limit by id; 0 for all
 	 * @return Candidate[] triage candidates older than the triage period
 	 */
-	public function findExpiredTriage(): array {
+	public function findExpiredTriage(int $limit = 0): array {
 		$cutoff = $this->daysAgo($this->config->getTriageRetentionDays());
-		return $cutoff === null ? [] : $this->candidateMapper->findTriageCreatedBefore($cutoff);
+		return $cutoff === null ? [] : $this->candidateMapper->findTriageCreatedBefore($cutoff, $limit);
 	}
 
 	/**
 	 * Pool memberships expire on their own clock (spec §4.8).
 	 *
+	 * @param int $limit only the first $limit by id; 0 for all
 	 * @return Candidate[]
 	 */
-	public function findExpiredPoolMembers(): array {
+	public function findExpiredPoolMembers(int $limit = 0): array {
 		$months = $this->config->getPoolRetentionMonths();
 		$cutoff = \DateTimeImmutable::createFromInterface($this->timeFactory->getDateTime())
 			->modify('-' . $months . ' months');
-		return $this->candidateMapper->findExpiredPoolMembers($cutoff);
+		return $this->candidateMapper->findExpiredPoolMembers($cutoff, $limit);
 	}
 
 	/**
@@ -116,6 +125,18 @@ class RetentionService {
 	 * @return array<string, array{label: string, enabled: bool, action: string, reason: string, candidates: Candidate[]}>
 	 */
 	public function plan(): array {
+		return $this->batch(0)['groups'];
+	}
+
+	/**
+	 * The plan, cut to at most $limit candidates (0 = all): groups in plan
+	 * order, each in id order. A group that fills the rest of the batch
+	 * may hold more, so later groups wait for the next run — that keeps a
+	 * candidate in the group it belongs to first.
+	 *
+	 * @return array{groups: array<string, array{label: string, enabled: bool, action: string, reason: string, candidates: Candidate[]}>, complete: bool}
+	 */
+	private function batch(int $limit): array {
 		$retentionDays = $this->config->getRetentionDays();
 		$triageDays = $this->config->getTriageRetentionDays();
 		$groups = [
@@ -124,53 +145,72 @@ class RetentionService {
 				'enabled' => $triageDays > 0,
 				'action' => self::ACTION_DELETE,
 				'reason' => sprintf('in the triage inbox for more than %d days', $triageDays),
-				'candidates' => $this->findExpiredTriage(),
+				'find' => $this->findExpiredTriage(...),
 			],
 			self::GROUP_ENDED => [
 				'label' => 'Rejected or withdrawn',
 				'enabled' => $retentionDays > 0,
 				'action' => self::ACTION_ANONYMIZE,
 				'reason' => sprintf('rejected or withdrawn more than %d days ago', $retentionDays),
-				'candidates' => $this->findEligible(),
+				'find' => $this->findEligible(...),
 			],
 			self::GROUP_CLOSED_OPENING => [
 				'label' => 'Left in closed openings',
 				'enabled' => $retentionDays > 0,
 				'action' => self::ACTION_ANONYMIZE,
 				'reason' => sprintf('opening closed more than %d days ago, not hired', $retentionDays),
-				'candidates' => $this->findLeftInClosedOpenings(),
+				'find' => $this->findLeftInClosedOpenings(...),
 			],
 			self::GROUP_POOL_EXPIRED => [
 				'label' => 'Expired talent-pool consent',
 				'enabled' => true,
 				'action' => self::ACTION_ANONYMIZE,
 				'reason' => sprintf('talent-pool consent older than %d months', $this->config->getPoolRetentionMonths()),
-				'candidates' => $this->findExpiredPoolMembers(),
+				'find' => $this->findExpiredPoolMembers(...),
 			],
 		];
 
 		$seen = [];
+		$complete = true;
+		$result = [];
 		foreach ($groups as $key => $group) {
-			$unique = [];
-			foreach ($group['candidates'] as $candidate) {
+			$find = $group['find'];
+			unset($group['find']);
+			$group['candidates'] = [];
+			$remaining = $limit - count($seen);
+			if ($limit > 0 && (!$complete || $remaining <= 0)) {
+				$complete = false;
+				$result[$key] = $group;
+				continue;
+			}
+			$found = $find($limit > 0 ? $remaining : 0);
+			if ($limit > 0 && count($found) >= $remaining) {
+				$complete = false;
+			}
+			foreach ($found as $candidate) {
 				if (!isset($seen[$candidate->getId()])) {
 					$seen[$candidate->getId()] = true;
-					$unique[] = $candidate;
+					$group['candidates'][] = $candidate;
 				}
 			}
-			$groups[$key]['candidates'] = $unique;
+			$result[$key] = $group;
 		}
-		return $groups;
+		return ['groups' => $result, 'complete' => $complete];
 	}
 
 	/**
-	 * @return array{anonymized: int, deleted: int, groups: array<string, array{label: string, enabled: bool, action: string, reason: string, names: string[]}>}
+	 * A dry run always reports everyone who is due. A real run handles at
+	 * most $limit candidates (0 = all); `complete` is false when more may
+	 * be left for the next run.
+	 *
+	 * @return array{anonymized: int, deleted: int, complete: bool, groups: array<string, array{label: string, enabled: bool, action: string, reason: string, names: string[]}>}
 	 */
-	public function run(bool $dryRun = false): array {
+	public function run(bool $dryRun = false, int $limit = self::BATCH_SIZE): array {
 		$anonymized = 0;
 		$deleted = 0;
 		$report = [];
-		foreach ($this->plan() as $key => $group) {
+		$batch = $this->batch($dryRun ? 0 : max(0, $limit));
+		foreach ($batch['groups'] as $key => $group) {
 			$report[$key] = [
 				'label' => $group['label'],
 				'enabled' => $group['enabled'],
@@ -198,7 +238,7 @@ class RetentionService {
 				}
 			}
 		}
-		return ['anonymized' => $anonymized, 'deleted' => $deleted, 'groups' => $report];
+		return ['anonymized' => $anonymized, 'deleted' => $deleted, 'complete' => $batch['complete'], 'groups' => $report];
 	}
 
 	private function daysAgo(int $days): ?\DateTimeImmutable {
