@@ -12,6 +12,8 @@ use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\Interview;
 use OCA\Recruiting\Db\InterviewMapper;
+use OCA\Recruiting\Db\InterviewSlot;
+use OCA\Recruiting\Db\InterviewSlotMapper;
 use OCA\Recruiting\Db\MailTemplate;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Exception\ValidationException;
@@ -28,6 +30,7 @@ class InterviewReminderServiceTest extends TestCase {
 	private InterviewMapper&MockObject $interviewMapper;
 	private CandidateMapper&MockObject $candidateMapper;
 	private MailService&MockObject $mail;
+	private InterviewSlotMapper&MockObject $slotMapper;
 	private InterviewReminderService $service;
 	private Candidate $candidate;
 
@@ -48,6 +51,7 @@ class InterviewReminderServiceTest extends TestCase {
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturnCallback(static fn () => new \DateTime('2026-11-10T12:00:00Z'));
 
+		$this->slotMapper = $this->createMock(InterviewSlotMapper::class);
 		$this->service = new InterviewReminderService(
 			$this->interviewMapper,
 			$this->candidateMapper,
@@ -57,6 +61,7 @@ class InterviewReminderServiceTest extends TestCase {
 			$formatter,
 			$time,
 			new NullLogger(),
+			$this->slotMapper,
 		);
 	}
 
@@ -121,5 +126,83 @@ class InterviewReminderServiceTest extends TestCase {
 		$this->candidate->setStage(Candidate::STAGE_INTERVIEW);
 		$this->candidate->setEmail('');
 		$this->assertSame(0, $this->service->sendDue());
+	}
+
+	private function proposed(): Interview {
+		$interview = $this->interview();
+		$interview->setStatus(Interview::STATUS_PROPOSED);
+		$interview->setStartAt(null);
+		$interview->setInvitedAt(new \DateTime('2026-11-06T12:00:00Z'));
+		return $interview;
+	}
+
+	private function slotAt(string $start, bool $unavailable = false): InterviewSlot {
+		$slot = new InterviewSlot();
+		$slot->setStartAt(new \DateTime($start));
+		$slot->setEndAt((new \DateTime($start))->modify('+1 hour'));
+		$slot->setUnavailable($unavailable);
+		return $slot;
+	}
+
+	public function testNudgesGoOutThreeDaysAfterTheInvitation(): void {
+		$this->interviewMapper->expects($this->once())->method('findDueNudges')
+			->with(new \DateTime('2026-11-07T12:00:00Z'))
+			->willReturn([$this->proposed()]);
+		$this->slotMapper->method('findForInterview')->willReturn([$this->slotAt('2026-11-12T09:00:00Z')]);
+		$this->interviewMapper->expects($this->once())->method('claimNudge')->with(8)->willReturn(true);
+		$this->mail->expects($this->once())->method('preview')->with(
+			$this->candidate, $this->anything(), MailTemplate::TYPE_INTERVIEW_NUDGE, null, null,
+			['interview_title' => 'Tech talk', 'interview_link' => 'https://cloud.example/i/tok'],
+		);
+		$this->mail->expects($this->once())->method('sendToCandidate')->with($this->candidate, 'Reminder', 'See you', null);
+		$this->assertSame(1, $this->service->sendNudges());
+	}
+
+	public function testNoNudgeWithoutAPickableTime(): void {
+		$this->interviewMapper->method('findDueNudges')->willReturn([$this->proposed()]);
+		$this->slotMapper->method('findForInterview')->willReturn([
+			$this->slotAt('2026-11-09T09:00:00Z'),
+			$this->slotAt('2026-11-12T09:00:00Z', true),
+		]);
+		$this->interviewMapper->expects($this->never())->method('claimNudge');
+		$this->assertSame(0, $this->service->sendNudges());
+	}
+
+	/**
+	 * @return array<string, array{0: \Closure(Candidate): void}>
+	 */
+	public static function unnudgeable(): array {
+		return [
+			'anonymized' => [static fn (Candidate $c) => $c->setAnonymizedAt(new \DateTime('2026-11-01'))],
+			'withdrawn' => [static fn (Candidate $c) => $c->setStage(Candidate::STAGE_WITHDRAWN)],
+			'rejected' => [static fn (Candidate $c) => $c->setStage(Candidate::STAGE_REJECTED)],
+			'no address' => [static fn (Candidate $c) => $c->setEmail('')],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('unnudgeable')]
+	public function testClosedOrUnreachableCandidatesAreNotNudged(\Closure $change): void {
+		$change($this->candidate);
+		$this->interviewMapper->method('findDueNudges')->willReturn([$this->proposed()]);
+		$this->slotMapper->method('findForInterview')->willReturn([$this->slotAt('2026-11-12T09:00:00Z')]);
+		$this->mail->expects($this->never())->method('sendToCandidate');
+		$this->assertSame(0, $this->service->sendNudges());
+	}
+
+	public function testAClaimedNudgeIsNotSentTwice(): void {
+		$this->interviewMapper->method('findDueNudges')->willReturn([$this->proposed()]);
+		$this->slotMapper->method('findForInterview')->willReturn([$this->slotAt('2026-11-12T09:00:00Z')]);
+		$this->interviewMapper->method('claimNudge')->willReturn(false);
+		$this->mail->expects($this->never())->method('sendToCandidate');
+		$this->assertSame(0, $this->service->sendNudges());
+	}
+
+	public function testAFailedNudgeIsReleased(): void {
+		$this->interviewMapper->method('findDueNudges')->willReturn([$this->proposed()]);
+		$this->slotMapper->method('findForInterview')->willReturn([$this->slotAt('2026-11-12T09:00:00Z')]);
+		$this->interviewMapper->method('claimNudge')->willReturn(true);
+		$this->mail->method('sendToCandidate')->willThrowException(new ValidationException('SMTP down'));
+		$this->interviewMapper->expects($this->once())->method('releaseNudge')->with(8);
+		$this->assertSame(0, $this->service->sendNudges());
 	}
 }

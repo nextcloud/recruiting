@@ -135,6 +135,9 @@ export default {
 				{ id: 'offer', label: this.t('recruiting', 'Offer') },
 				{ id: 'rejection', label: this.t('recruiting', 'Rejection') },
 				{ id: 'interview_reminder', label: this.t('recruiting', 'Interview reminder') },
+				{ id: 'interview_reschedule', label: this.t('recruiting', 'New interview times') },
+				{ id: 'interview_nudge', label: this.t('recruiting', 'Interview time not picked yet') },
+				{ id: 'interview_cancelled', label: this.t('recruiting', 'Interview cancelled') },
 			]
 		},
 	},
@@ -151,11 +154,14 @@ export default {
 		// Only the placeholders this mail type can actually resolve
 		placeholdersFor(type) {
 			const common = ['candidate_name', 'opening_title', 'company', 'sender_name', 'portal_link']
-			if (type === 'interview_invite') {
+			if (['interview_invite', 'interview_reschedule', 'interview_nudge'].includes(type)) {
 				return [...common, 'interview_title', 'interview_link']
 			}
 			if (type === 'interview_reminder') {
 				return [...common, 'interview_title', 'interview_link', 'interview_date', 'interview_time', 'interview_location']
+			}
+			if (type === 'interview_cancelled') {
+				return [...common, 'interview_title']
 			}
 			if (type === 'offer') {
 				return [...common, 'offer_job_title', 'offer_start_date', 'offer_valid_until']

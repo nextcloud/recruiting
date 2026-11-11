@@ -10,6 +10,50 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Interview feedback: once an interview has ended, each interviewer gives a
+  verdict (yes / maybe / no, a "no" needs notes) and notes per round, also
+  when they are not a screener. The anti-anchoring rule of the screening
+  votes applies: interviewers see the others' feedback on a round only after
+  giving their own; the timeline records who gave feedback, never the
+  verdict. When every interviewer of a round has answered, the opening's
+  managers and the interview's organizer are notified. "My interviews" lists
+  the rounds of the last 30 days still waiting for your feedback.
+- "Propose other times" on an interview that awaits the candidate or is
+  confirmed: new slots from the same slot finder, same public link, a
+  confirmed booking is released (calendar event removed, Talk room kept and
+  reused), and a mail with the new times is prefilled (new template type
+  "New interview times").
+- Cancelling an interview offers a cancellation mail to the candidate (new
+  template type "Interview cancelled"), previewed and editable, or skipped.
+- One nudge mail to a candidate who has not picked a time three days after
+  the invitation (new template type "Interview time not picked yet"), sent
+  by the hourly interview job; not for closed or anonymized applications or
+  when no pickable time is left.
+- Proposed times can be held as tentative events ("Interview hold:
+  <opening>", no candidate name) in the interviewers' calendars, on by
+  default; the holds are removed when a time is confirmed, the interview is
+  cancelled or gets other times.
+- The interview calendar event links to the candidate in the app.
+
+### Changed
+
+- The slot finder uses each interviewer's working hours from Personal
+  settings → Availability; weekdays 9–17 remain the default for those who
+  set none.
+- Confirming a slot re-checks the interviewers' free/busy (ignoring the
+  interview's own holds). If someone is busy by now, the candidate is asked
+  to pick another time and the slot is marked unavailable.
+- Interviews whose end time has passed are marked "Done" by the hourly
+  interview job.
+- When a candidate withdraws (on their own page or by a move to
+  "Withdrawn"), their open interviews are cancelled and the interviewers
+  notified.
+- Anonymization removes interview feedback notes and keeps the verdicts; the
+  GDPR deletion removes feedback; the GDPR export contains the verdicts
+  without reviewer identity or notes.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

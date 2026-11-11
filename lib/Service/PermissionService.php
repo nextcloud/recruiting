@@ -175,6 +175,23 @@ class PermissionService {
 	}
 
 	/**
+	 * Anti-anchoring rule (spec §4.3) for screening votes and interview
+	 * feedback: interviewers see the verdicts of others only once they have
+	 * submitted their own. Managers, recruiters and observers always see
+	 * everything.
+	 *
+	 * @param bool $hasOwn whether the user has submitted their own verdict
+	 */
+	public function maySeeVerdicts(string $uid, Candidate $candidate, bool $hasOwn): bool {
+		if ($hasOwn || $this->canManageCandidate($uid, $candidate)) {
+			return true;
+		}
+		$openingId = $candidate->getOpeningId();
+		return $openingId !== null
+			&& $this->roleForOpening($uid, $openingId) === TeamMember::ROLE_OBSERVER;
+	}
+
+	/**
 	 * Commenting: everyone who can view except read-only observers.
 	 */
 	public function canComment(string $uid, Candidate $candidate): bool {

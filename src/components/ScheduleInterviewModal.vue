@@ -3,15 +3,29 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-	<NcModal :name="t('recruiting', 'Book interview')" size="normal" @close="$emit('close')">
+	<NcModal :name="interview ? t('recruiting', 'Propose other times') : t('recruiting', 'Book interview')" size="normal" @close="$emit('close')">
 		<div class="schedule-modal">
 			<!-- Step 1: pick interviewers & slots -->
 			<template v-if="step === 1">
-				<h2>{{ t('recruiting', 'Book an interview with {name}', { name: candidate.displayName }) }}</h2>
+				<template v-if="interview">
+					<h2>{{ t('recruiting', 'Propose other times for "{title}"', { title: interview.title }) }}</h2>
+					<NcNoteCard type="info">
+						{{ interview.status === 'confirmed'
+							? t('recruiting', 'The confirmed time is released and its calendar event removed. {name} picks a new time with the same link as before.', { name: candidate.displayName })
+							: t('recruiting', 'The times proposed so far are replaced. {name} picks a new time with the same link as before.', { name: candidate.displayName }) }}
+					</NcNoteCard>
+				</template>
+				<h2 v-else>
+					{{ t('recruiting', 'Book an interview with {name}', { name: candidate.displayName }) }}
+				</h2>
 
-				<NcTextField v-model="title" :label="t('recruiting', 'Interview title')" :placeholder="t('recruiting', 'e.g. Technical interview')" />
+				<NcTextField
+					v-if="!interview"
+					v-model="title"
+					:label="t('recruiting', 'Interview title')"
+					:placeholder="t('recruiting', 'e.g. Technical interview')" />
 
-				<div class="schedule-modal__row">
+				<div v-if="!interview" class="schedule-modal__row">
 					<!-- TODO: migrate to NcSelectUsers -->
 					<!-- eslint-disable @nextcloud/no-deprecated-library-props -->
 					<NcSelect
@@ -33,14 +47,14 @@
 				</div>
 
 				<NcCheckboxRadioSwitch
-					v-if="session.talkAvailable"
+					v-if="session.talkAvailable && !interview"
 					v-model="isVideo"
 					type="switch"
 					:title="t('recruiting', 'The room is created once the candidate confirms a slot; the link lands in the calendar event and on the confirmation page')">
 					{{ t('recruiting', 'Create a Talk video room for this interview') }}
 				</NcCheckboxRadioSwitch>
 				<NcTextField
-					v-if="!isVideo"
+					v-if="!isVideo && !interview"
 					v-model="location"
 					:label="t('recruiting', 'Location')"
 					:placeholder="session.talkAvailable
@@ -58,7 +72,7 @@
 					</NcButton>
 				</div>
 				<p class="schedule-modal__hint">
-					{{ t('recruiting', 'Slots are taken from the interviewers\' calendars (working days, 9–17). The candidate picks one of them on a public page.') }}
+					{{ t('recruiting', 'Slots are taken from the interviewers\' calendars, within the working hours each of them set in their availability settings (working days 9–17 for those who set none). The candidate picks one of them on a public page.') }}
 				</p>
 
 				<ul v-if="slots.length > 0" class="schedule-modal__slots">
@@ -87,19 +101,30 @@
 					</NcButton>
 				</div>
 
+				<NcCheckboxRadioSwitch
+					v-model="holdSlots"
+					type="switch"
+					:title="t('recruiting', 'Tentative events titled with the opening only, removed again once the candidate picks a time or the interview is cancelled')">
+					{{ t('recruiting', 'Hold the proposed times in the interviewers\' calendars') }}
+				</NcCheckboxRadioSwitch>
+
 				<div class="schedule-modal__buttons">
 					<NcButton @click="$emit('close')">
 						{{ t('recruiting', 'Cancel') }}
 					</NcButton>
 					<NcButton variant="primary" :disabled="!canCreate || creating" @click="create">
-						{{ t('recruiting', 'Create & write invitation') }}
+						{{ interview ? t('recruiting', 'Save new times & write email') : t('recruiting', 'Create & write invitation') }}
 					</NcButton>
 				</div>
 			</template>
 
 			<!-- Step 2: the invitation mail -->
 			<template v-else>
-				<h2>{{ t('recruiting', 'Invitation for {name}', { name: candidate.displayName }) }}</h2>
+				<h2>
+					{{ interview
+						? t('recruiting', 'New times for {name}', { name: candidate.displayName })
+						: t('recruiting', 'Invitation for {name}', { name: candidate.displayName }) }}
+				</h2>
 				<NcNoteCard v-if="!candidate.email" type="warning">
 					{{ t('recruiting', 'This candidate has no email address. Copy the scheduling link and send it yourself.') }}
 				</NcNoteCard>
@@ -137,7 +162,7 @@
 						<template #icon>
 							<SendOutline :size="20" />
 						</template>
-						{{ t('recruiting', 'Send invitation') }}
+						{{ interview ? t('recruiting', 'Send new times') : t('recruiting', 'Send invitation') }}
 					</NcButton>
 				</div>
 			</template>
@@ -187,6 +212,8 @@ export default {
 
 	props: {
 		candidate: { type: Object, required: true },
+		/** An existing interview to propose other times for, instead of booking a new one */
+		interview: { type: Object, default: null },
 	},
 
 	emits: ['close', 'saved'],
@@ -211,7 +238,8 @@ export default {
 			proposing: false,
 			manualSlot: null,
 			creating: false,
-			interview: null,
+			holdSlots: true,
+			saved: null,
 			mailSubject: '',
 			mailBody: '',
 			sending: false,
@@ -249,6 +277,12 @@ export default {
 	created() {
 		this.duration = this.durationOptions[2]
 		this.isVideo = this.session.talkAvailable
+		if (this.interview) {
+			this.title = this.interview.title
+			this.attendees = this.interview.attendees.map((attendee) => ({ id: attendee.uid, user: attendee.uid, displayName: attendee.displayName }))
+			this.duration = this.durationOptions.find((option) => option.id === this.interview.durationMin)
+				?? { id: this.interview.durationMin, label: this.t('recruiting', '{minutes} minutes', { minutes: this.interview.durationMin }) }
+		}
 	},
 
 	methods: {
@@ -301,20 +335,26 @@ export default {
 		async create() {
 			this.creating = true
 			try {
-				const { data } = await api.createInterview(this.candidate.id, {
-					title: this.title,
-					attendees: this.attendees.map((attendee) => attendee.id),
-					durationMin: this.duration.id,
-					isVideo: this.isVideo,
-					location: this.isVideo ? '' : this.location,
-					slots: this.selectedSlots.map((slot) => ({ start: slot.start })),
-				})
-				this.interview = data.interview
+				const slots = this.selectedSlots.map((slot) => ({ start: slot.start }))
+				const { data } = this.interview
+					? await api.rescheduleInterview(this.interview.id, { slots, holdSlots: this.holdSlots })
+					: await api.createInterview(this.candidate.id, {
+							title: this.title,
+							attendees: this.attendees.map((attendee) => attendee.id),
+							durationMin: this.duration.id,
+							isVideo: this.isVideo,
+							location: this.isVideo ? '' : this.location,
+							slots,
+							holdSlots: this.holdSlots,
+						})
+				this.saved = data.interview
 				this.mailSubject = data.inviteDraft.subject
 				this.mailBody = data.inviteDraft.body
 				this.step = 2
 			} catch (error) {
-				showError(errorMessage(error, this.t('recruiting', 'Could not create the interview')))
+				showError(errorMessage(error, this.interview
+					? this.t('recruiting', 'Could not save the new times')
+					: this.t('recruiting', 'Could not create the interview')))
 			} finally {
 				this.creating = false
 			}
@@ -323,8 +363,8 @@ export default {
 		async sendInvite() {
 			this.sending = true
 			try {
-				await api.sendInvite(this.interview.id, this.mailSubject, this.mailBody)
-				showSuccess(this.t('recruiting', 'Invitation sent'))
+				await api.sendInvite(this.saved.id, this.mailSubject, this.mailBody)
+				showSuccess(this.interview ? this.t('recruiting', 'New times sent') : this.t('recruiting', 'Invitation sent'))
 				this.finish()
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not send the invitation')))
@@ -336,11 +376,11 @@ export default {
 		onAiDraft(text) {
 			// Keep the scheduling link — the backend re-appends it if lost,
 			// but the preview should already show the final mail.
-			this.mailBody = text.trim() + '\n\n' + this.interview.publicUrl
+			this.mailBody = text.trim() + '\n\n' + this.saved.publicUrl
 		},
 
 		copyLink() {
-			copyToClipboard(this.interview.publicUrl)
+			copyToClipboard(this.saved.publicUrl)
 		},
 
 		finish() {

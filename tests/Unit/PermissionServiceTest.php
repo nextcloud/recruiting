@@ -194,4 +194,28 @@ class PermissionServiceTest extends TestCase {
 		$this->expectException(NotPermittedException::class);
 		$this->service->assertRecruiter('nobody');
 	}
+
+	/**
+	 * @return array<string, array{0: ?string, 1: bool, 2: bool}>
+	 */
+	public static function verdictVisibility(): array {
+		return [
+			'interviewer without own verdict' => [TeamMember::ROLE_INTERVIEWER, false, false],
+			'interviewer with own verdict' => [TeamMember::ROLE_INTERVIEWER, true, true],
+			'manager always' => [TeamMember::ROLE_MANAGER, false, true],
+			'observer always' => [TeamMember::ROLE_OBSERVER, false, true],
+		];
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('verdictVisibility')]
+	public function testAntiAnchoringRule(?string $role, bool $hasOwn, bool $expected): void {
+		$this->setRecruiter('hr1', true);
+		$this->setRole('u1', 3, $role);
+		$this->assertSame($expected, $this->service->maySeeVerdicts('u1', $this->candidate(3), $hasOwn));
+	}
+
+	public function testRecruitersAlwaysSeeVerdicts(): void {
+		$this->setRecruiter('hr1', true);
+		$this->assertTrue($this->service->maySeeVerdicts('hr1', $this->candidate(3), false));
+	}
 }

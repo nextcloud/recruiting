@@ -117,7 +117,8 @@ class PortalService {
 
 	/**
 	 * The candidate withdraws. The hiring team is told; open interviews are
-	 * left for them to cancel, so nothing disappears from calendars unseen.
+	 * cancelled through CandidateWithdrawnEvent, which notifies the
+	 * interviewers.
 	 *
 	 * @throws ValidationException
 	 */

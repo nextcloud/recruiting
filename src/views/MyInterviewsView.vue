@@ -10,15 +10,48 @@
 		</p>
 
 		<NcLoadingIcon v-if="loading" :size="44" class="my-interviews__loading" />
+
+		<section v-if="!loading && feedbackOwed.length > 0" class="my-interviews__owed">
+			<h3>{{ t('recruiting', 'Feedback owed') }}</h3>
+			<p class="my-interviews__hint">
+				{{ t('recruiting', 'Interviews of the last 30 days you have not given feedback on yet. Open the candidate and use “Give feedback” in the Interviews tab.') }}
+			</p>
+			<ul class="my-interviews__list">
+				<li
+					v-for="interview in feedbackOwed"
+					:key="interview.id"
+					class="my-interviews__item"
+					role="button"
+					tabindex="0"
+					@click="sidebar.open(interview.candidate.id)"
+					@keydown.enter.prevent="sidebar.open(interview.candidate.id)">
+					<div class="my-interviews__when my-interviews__when--past">
+						<strong>{{ formatDate(interview.startAt) }}</strong>
+						<span>{{ formatTime(interview.startAt) }}</span>
+					</div>
+					<div class="my-interviews__what">
+						<strong>{{ interview.candidate.displayName }}</strong>
+						<span class="my-interviews__meta">
+							{{ interview.title }}
+							<template v-if="interview.candidate.openingTitle">
+								· {{ interview.candidate.openingTitle }}
+							</template>
+						</span>
+					</div>
+				</li>
+			</ul>
+			<h3>{{ t('recruiting', 'Upcoming') }}</h3>
+		</section>
+
 		<NcEmptyContent
-			v-else-if="interviews.length === 0"
+			v-if="!loading && interviews.length === 0"
 			:name="t('recruiting', 'No upcoming interviews')">
 			<template #icon>
 				<CalendarClock />
 			</template>
 		</NcEmptyContent>
 
-		<ul v-else class="my-interviews__list">
+		<ul v-else-if="!loading" class="my-interviews__list">
 			<li
 				v-for="interview in interviews"
 				:key="interview.id"
@@ -79,6 +112,7 @@ export default {
 	data() {
 		return {
 			interviews: [],
+			feedbackOwed: [],
 			loading: true,
 		}
 	},
@@ -101,8 +135,9 @@ export default {
 				this.loading = true
 			}
 			try {
-				const { data } = await api.getMyInterviews()
-				this.interviews = data
+				const [upcoming, owed] = await Promise.all([api.getMyInterviews(), api.getFeedbackOwed()])
+				this.interviews = upcoming.data
+				this.feedbackOwed = owed.data
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not load your interviews')))
 			} finally {
@@ -164,9 +199,20 @@ export default {
 		border-radius: var(--border-radius-large);
 		padding: calc(var(--default-grid-baseline) * 2);
 
-		&--pending {
+		&--pending,
+		&--past {
 			background-color: var(--color-background-hover);
 			color: var(--color-text-maxcontrast);
+		}
+	}
+
+	&__owed {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--default-grid-baseline) * 3);
+
+		h3 {
+			margin: 0;
 		}
 	}
 

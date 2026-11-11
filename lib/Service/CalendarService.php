@@ -147,6 +147,66 @@ class CalendarService {
 	}
 
 	/**
+	 * A tentative placeholder for a proposed slot in the user's own
+	 * calendar. It carries no organizer or attendees and is stored without
+	 * the scheduling plugins, so no invitation goes out; it makes the time
+	 * show as busy in free/busy, so other interviews are not proposed on top
+	 * of it.
+	 *
+	 * @param string $eventUid stable UID, so the hold can be found again
+	 * @return bool whether the hold was stored
+	 */
+	public function createHold(IUser $user, string $eventUid, string $summary, \DateTimeInterface $start, \DateTimeInterface $end): bool {
+		$calendar = $this->pickCalendar($user);
+		if ($calendar === null) {
+			return false;
+		}
+		$utc = new \DateTimeZone('UTC');
+		$format = static fn (\DateTimeInterface $time): string => \DateTimeImmutable::createFromInterface($time)->setTimezone($utc)->format('Ymd\THis\Z');
+		$lines = [
+			'BEGIN:VCALENDAR',
+			'VERSION:2.0',
+			'PRODID:-//Nextcloud//Recruiting//EN',
+			'BEGIN:VEVENT',
+			'UID:' . $eventUid,
+			'DTSTAMP:' . $format(new \DateTimeImmutable('now')),
+			'DTSTART:' . $format($start),
+			'DTEND:' . $format($end),
+			'SUMMARY:' . IcsScrubber::escape($summary),
+			'STATUS:TENTATIVE',
+			'TRANSP:OPAQUE',
+			'END:VEVENT',
+			'END:VCALENDAR',
+		];
+		try {
+			$calendar->createFromStringMinimal($eventUid . '.ics', implode("\r\n", array_map(IcsScrubber::fold(...), $lines)) . "\r\n");
+			return true;
+		} catch (\Exception $e) {
+			$this->logger->warning('Failed to create interview hold: ' . $e->getMessage(), ['exception' => $e]);
+			return false;
+		}
+	}
+
+	/**
+	 * Remove a hold created by createHold() from the user's calendars,
+	 * past the trash bin. Unknown holds are ignored.
+	 */
+	public function removeHold(string $uid, string $eventUid): void {
+		$backend = $this->calDavBackend();
+		if ($backend === null) {
+			return;
+		}
+		try {
+			$copy = $this->findByUid($backend, $this->principal($uid), $eventUid);
+			if ($copy !== null) {
+				$backend->deleteCalendarObject($copy[0], $copy[1], CalDavBackend::CALENDAR_TYPE_CALENDAR, true);
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to remove interview hold: ' . $e->getMessage(), ['exception' => $e]);
+		}
+	}
+
+	/**
 	 * Every stored copy of one interview event.
 	 *
 	 * The event builder names the object `<UID>.ics`, and scheduling delivers
@@ -170,20 +230,30 @@ class CalendarService {
 			if ($attendeeUid === $organizer->getUID()) {
 				continue;
 			}
-			$principal = $this->principal($attendeeUid);
-			$path = $backend->getCalendarObjectByUID($principal, $eventUid);
-			if (!is_string($path) || !str_contains($path, '/')) {
-				continue;
-			}
-			[$calendarUri, $objectUri] = explode('/', $path, 2);
-			foreach ($backend->getCalendarsForUser($principal) as $calendar) {
-				if (($calendar['uri'] ?? null) === $calendarUri) {
-					$copies[] = [(int)$calendar['id'], $objectUri];
-					break;
-				}
+			$copy = $this->findByUid($backend, $this->principal($attendeeUid), $eventUid);
+			if ($copy !== null) {
+				$copies[] = $copy;
 			}
 		}
 		return $copies;
+	}
+
+	/**
+	 * @return ?array{0: int, 1: string} calendar id and object URI of the
+	 *                                   principal's event with this UID
+	 */
+	private function findByUid(CalDavBackend $backend, string $principal, string $eventUid): ?array {
+		$path = $backend->getCalendarObjectByUID($principal, $eventUid);
+		if (!is_string($path) || !str_contains($path, '/')) {
+			return null;
+		}
+		[$calendarUri, $objectUri] = explode('/', $path, 2);
+		foreach ($backend->getCalendarsForUser($principal) as $calendar) {
+			if (($calendar['uri'] ?? null) === $calendarUri) {
+				return [(int)$calendar['id'], $objectUri];
+			}
+		}
+		return null;
 	}
 
 	private function principal(string $uid): string {

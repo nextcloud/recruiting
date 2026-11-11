@@ -10,28 +10,33 @@ namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Event\CandidateWithdrawnEvent;
 use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\StageService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\EventDispatcher\IEventDispatcher;
 use PHPUnit\Framework\TestCase;
 
 class StageServiceTest extends TestCase {
 	private CandidateMapper $candidateMapper;
 	private \OCA\Recruiting\Service\NotificationService $notifications;
 	private StageService $service;
+	private IEventDispatcher&\PHPUnit\Framework\MockObject\MockObject $dispatcher;
 
 	protected function setUp(): void {
 		$this->candidateMapper = $this->createMock(CandidateMapper::class);
 		$this->notifications = $this->createMock(\OCA\Recruiting\Service\NotificationService::class);
 		$timeFactory = $this->createMock(ITimeFactory::class);
 		$timeFactory->method('getDateTime')->willReturnCallback(static fn () => new \DateTime('2026-08-16T12:00:00+00:00'));
+		$this->dispatcher = $this->createMock(IEventDispatcher::class);
 		$this->service = new StageService(
 			$this->candidateMapper,
 			$this->createMock(TimelineService::class),
 			$this->createMock(ActivityPublisher::class),
 			$timeFactory,
 			$this->notifications,
+			$this->dispatcher,
 		);
 	}
 
@@ -124,5 +129,20 @@ class StageServiceTest extends TestCase {
 		$referred = $this->candidate(Candidate::STAGE_REJECTED);
 		$referred->setReferredBy('bob');
 		$this->service->apply($referred, Candidate::STAGE_WITHDRAWN, 'hr', [], allowFromTerminal: true);
+	}
+
+	public function testWithdrawalIsAnnounced(): void {
+		$candidate = $this->candidate(Candidate::STAGE_INTERVIEW);
+		$this->dispatcher->expects($this->once())->method('dispatchTyped')
+			->with($this->callback(static fn ($event) => $event instanceof CandidateWithdrawnEvent
+				&& $event->getCandidate() === $candidate
+				&& $event->getActorUid() === 'hr'));
+		$this->service->apply($candidate, Candidate::STAGE_WITHDRAWN, 'hr');
+	}
+
+	public function testOtherMovesAreNotAnnounced(): void {
+		$this->dispatcher->expects($this->never())->method('dispatchTyped');
+		$this->service->apply($this->candidate(Candidate::STAGE_SCREENING), Candidate::STAGE_INTERVIEW, 'hr');
+		$this->service->apply($this->candidate(Candidate::STAGE_WITHDRAWN), Candidate::STAGE_WITHDRAWN, 'hr');
 	}
 }

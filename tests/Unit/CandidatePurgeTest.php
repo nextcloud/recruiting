@@ -13,6 +13,7 @@ use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\PermissionService;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -56,6 +57,7 @@ class CandidatePurgeTest extends TestCase {
 		$candidate = $this->candidate();
 		$this->mock(InterviewService::class)->expects($this->once())->method('scrubForCandidate')->with($candidate, false);
 		$this->mock(InterviewService::class)->expects($this->once())->method('deleteAllFor')->with(5);
+		$this->mock(InterviewFeedbackService::class)->expects($this->once())->method('deleteForCandidate')->with(5);
 		$this->mock(ActivityPurgeService::class)->expects($this->once())->method('purgeForCandidate')->with(5);
 		$this->mock(CandidateMapper::class)->expects($this->once())->method('delete')->with($candidate);
 

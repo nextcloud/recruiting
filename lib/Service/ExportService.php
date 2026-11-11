@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\Db\Candidate;
+use OCA\Recruiting\Db\InterviewFeedbackMapper;
 use OCA\Recruiting\Db\InterviewMapper;
 use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TimelineEventMapper;
@@ -22,8 +23,8 @@ use OCP\ITempManager;
  * Data-access-request export (spec §4.8): one ZIP with the candidate's
  * structured data as JSON plus all their documents.
  *
- * Included: profile, correspondence (timeline), interviews, offer terms and
- * anonymous vote values. Deliberately excluded: reviewer identities and
+ * Included: profile, correspondence (timeline), interviews, offer terms,
+ * anonymous vote values and anonymous interview verdicts. Deliberately excluded: reviewer identities and
  * internal team comments — those are the reviewers' personal data, not the
  * candidate's.
  */
@@ -36,6 +37,7 @@ class ExportService {
 		private VoteMapper $voteMapper,
 		private ITempManager $tempManager,
 		private IL10N $l10n,
+		private InterviewFeedbackMapper $feedbackMapper,
 	) {
 	}
 
@@ -59,14 +61,24 @@ class ExportService {
 		}
 
 		$id = $candidate->getId();
+		$interviews = $this->interviewMapper->findForCandidate($id);
+		$titles = [];
+		foreach ($interviews as $interview) {
+			$titles[$interview->getId()] = $interview->getTitle();
+		}
 		$data = [
 			'profile' => $candidate->jsonSerialize(),
 			'timeline' => array_map(static fn ($e) => $e->jsonSerialize(), $this->eventMapper->findForCandidate($id)),
-			'interviews' => array_map(static fn ($i) => $i->jsonSerialize(), $this->interviewMapper->findForCandidate($id)),
+			'interviews' => array_map(static fn ($i) => $i->jsonSerialize(), $interviews),
 			'offers' => array_map(static fn ($o) => $o->jsonSerialize(), $this->offerMapper->findForCandidate($id)),
 			'screeningVotes' => array_map(
 				static fn ($v) => ['vote' => $v->getVote()], // values only, no reviewer identity
 				$this->voteMapper->findForCandidate($id),
+			),
+			'interviewFeedback' => array_map(
+				// verdicts only, like the votes: no reviewer identity, no notes
+				static fn ($f) => ['interview' => $titles[$f->getInterviewId()] ?? '', 'verdict' => $f->getVerdict()],
+				$this->feedbackMapper->findForInterviews(array_keys($titles)),
 			),
 		];
 		$zip->addFromString('candidate.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));

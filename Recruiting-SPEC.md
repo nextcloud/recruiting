@@ -802,6 +802,56 @@ Beyond the §9 non-goals, which did not exclude these:
   the referrer when the coarse status changes. `PermissionService` is
   unchanged — referrers get no candidate access.
 
+### 10.15 Interviews: feedback, rescheduling, real calendars (Unreleased)
+
+- **Done and feedback:** the hourly `InterviewReminderJob` marks confirmed
+  interviews whose end has passed as `done` (one UPDATE); feedback is
+  accepted as soon as the end has passed, so it does not wait for the job.
+  Feedback lives in `recruiting_intv_feedback` (Snowflake id, unique per
+  interview + uid; ids come from `QBMapper::insert`, which calls
+  `generateId()`). Only the round's attendees may give it, verdicts use the
+  vote values, a "no" needs notes. Visibility reuses the vote rule, now
+  `PermissionService::maySeeVerdicts()` (votes call it too). The timeline
+  event `interview_feedback` never carries the verdict, for anyone. The
+  "everyone answered" notification goes to the opening's managers **and**
+  the interview's organizer — deviation: openings run by recruiters alone
+  would otherwise never hear. "Feedback owed" is `GET /api/my-feedback-owed`
+  rather than a change of `/api/my-interviews`.
+- **Rescheduling** (`POST /api/interviews/{id}/reschedule`) replaces the
+  slots, keeps the public token, resets status to `proposed`, start/end and
+  the reminder; the Talk room is kept and reused on the next confirmation.
+  The draft uses the new type `interview_reschedule`; it is sent through the
+  existing invite endpoint. The candidate nudge (`interview_nudge`) is sent
+  once per interview (`nudge_sent_at`), counted from the last invitation
+  mail (`invited_at`, set by the invite endpoint) — no invitation sent, no
+  nudge. Cancelling takes an optional mail (`interview_cancelled`, preview
+  via `GET /api/interviews/{id}/cancel-preview`), sent before cancelling so
+  a failed send changes nothing.
+- **Withdrawal:** `StageService` dispatches `CandidateWithdrawnEvent`; a
+  listener cancels open interviews (awaiting a pick, or confirmed and not
+  ended) with the usual interviewer notification. An event rather than a
+  direct call, as `PortalService` → `InterviewService` would close a
+  dependency cycle through `MailService`.
+- **Working hours:** read from the dav app's `calendar-availability`
+  property of the user's inbox in `oc_properties` (no public API exists;
+  the dav app's user-status automation reads the same row), parsed as text
+  (`WorkingHours`, weekly AVAILABLE blocks only). A slot must lie within the
+  hours of every interviewer; those without hours get weekdays 9–17 in the
+  organizer's timezone. Free/busy still includes the organizer, as before.
+- **Holds:** tentative, attendee-less VEVENTs written with
+  `createFromStringMinimal()` (no scheduling) into each interviewer's
+  writable calendar, UID `recruiting-hold-<slotId>`, so they are found again
+  without bookkeeping; removed past the trash bin. Per-interview switch
+  `hold_slots`. `confirmSlot` lifts the interview's holds overlapping the
+  chosen time, re-checks free/busy of the interviewers only (not the
+  organizer, who may book interviews without attending); when busy it marks
+  the slot `unavailable`, re-holds the other lifted slots, puts the
+  interview back to `proposed` and answers with the current slots.
+  Holds of *other* interviews count as busy, so overlapping proposals for
+  the same panel cannot both be confirmed.
+- **Deep link** in the event description: `#/candidate/{id}`; the app
+  checks access when it is opened, as for notifications.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |

@@ -95,7 +95,12 @@ class PublicController extends Controller {
 			$confirmed = $this->interviewMapper->findByToken($token) ?? $interview;
 			return new DataResponse($this->interviews->publicData($confirmed));
 		} catch (ValidationException $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+			// The current state lets the page drop a slot that was just taken
+			$current = $this->interviewMapper->findByToken($token) ?? $interview;
+			return new DataResponse([
+				'message' => $e->getMessage(),
+				'interview' => $this->interviews->publicData($current),
+			], Http::STATUS_BAD_REQUEST);
 		} catch (\Exception $e) {
 			$this->logger->error('Confirming interview slot failed: ' . $e->getMessage(), ['exception' => $e]);
 			return new DataResponse(['message' => 'An unexpected error occurred.'], Http::STATUS_INTERNAL_SERVER_ERROR);

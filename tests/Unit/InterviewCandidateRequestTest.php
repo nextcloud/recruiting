@@ -195,4 +195,21 @@ class InterviewCandidateRequestTest extends TestCase {
 		$this->assertSame(['sent' => true], $controller->declineSlots(str_repeat('a', 48), 'hi')->getData());
 		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->requestReschedule(str_repeat('a', 48))->getStatus());
 	}
+
+	public function testAFailedConfirmationReturnsTheCurrentSlots(): void {
+		$interview = $this->interview(Interview::STATUS_PROPOSED);
+		$mapper = $this->createMock(InterviewMapper::class);
+		$mapper->method('findByToken')->willReturn($interview);
+		$interviews = $this->createMock(InterviewService::class);
+		$interviews->method('findByPublicToken')->willReturn($interview);
+		$interviews->method('confirmSlot')->willThrowException(new ValidationException('This time is no longer available, please pick another one.'));
+		$interviews->method('publicData')->with($interview)->willReturn(['status' => 'proposed', 'slots' => []]);
+
+		$response = $this->controller($mapper, $interviews)->confirmSlot(str_repeat('a', 48), 3);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame([
+			'message' => 'This time is no longer available, please pick another one.',
+			'interview' => ['status' => 'proposed', 'slots' => []],
+		], $response->getData());
+	}
 }

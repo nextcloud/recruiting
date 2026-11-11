@@ -36,6 +36,9 @@ class NotificationService {
 	public const SUBJECT_CANDIDATE_UPLOADED = 'candidate_uploaded';
 	public const SUBJECT_INTERVIEW_SLOTS_DECLINED = 'interview_slots_declined';
 	public const SUBJECT_INTERVIEW_RESCHEDULE_REQUESTED = 'interview_reschedule_requested';
+	public const SUBJECT_INTERVIEW_RESCHEDULED = 'interview_rescheduled';
+	/** To the opening's managers once every interviewer of a round gave feedback */
+	public const SUBJECT_INTERVIEW_FEEDBACK_COMPLETE = 'interview_feedback_complete';
 	/** To the employee who referred the candidate; carries only the coarse status */
 	public const SUBJECT_REFERRAL_STATUS = 'referral_status';
 

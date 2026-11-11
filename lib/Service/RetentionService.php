@@ -67,6 +67,7 @@ class RetentionService {
 		private ICommentsManager $commentsManager,
 		private ITimeFactory $timeFactory,
 		private LoggerInterface $logger,
+		private InterviewFeedbackService $feedback,
 	) {
 	}
 
@@ -210,14 +211,15 @@ class RetentionService {
 	}
 
 	/**
-	 * Remove everything that identifies the person; keep stage, dates and
-	 * vote values as anonymous aggregates for statistics.
+	 * Remove everything that identifies the person; keep stage, dates, vote
+	 * values and interview verdicts as anonymous aggregates for statistics.
 	 */
 	public function anonymize(Candidate $candidate): void {
 		$id = $candidate->getId();
 
 		$this->documents->deleteAllFor($id);
 		$this->voteMapper->stripCommentsForCandidate($id);
+		$this->feedback->stripNotesForCandidate($id);
 		try {
 			$this->commentsManager->deleteCommentsAtObject(CommentService::OBJECT_TYPE, (string)$id);
 		} catch (\Exception) {

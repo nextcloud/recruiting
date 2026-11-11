@@ -219,6 +219,10 @@ export default {
 					}
 				case 'interview_cancelled':
 					return { icon: '🚫', text: this.t('recruiting', 'The interview "{title}" was cancelled', { title: data.title ?? '' }) }
+				case 'interview_rescheduled':
+					return { icon: '🔁', text: this.t('recruiting', '{actor} proposed other times for "{title}"', { actor, title: data.title ?? '' }) }
+				case 'interview_feedback':
+					return { icon: '📝', text: this.t('recruiting', '{actor} gave feedback on "{title}"', { actor, title: data.title ?? '' }) }
 				case 'interview_slots_declined':
 					return {
 						icon: '🙅',

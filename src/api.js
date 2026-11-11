@@ -59,7 +59,12 @@ export default {
 	proposeSlots: (candidateId, data) => axios.post(url(`/api/candidates/${candidateId}/slot-proposals`), data),
 	createInterview: (candidateId, data) => axios.post(url(`/api/candidates/${candidateId}/interviews`), data),
 	sendInvite: (interviewId, subject, body) => axios.post(url(`/api/interviews/${interviewId}/invite`), { subject, body }),
-	cancelInterview: (interviewId) => axios.post(url(`/api/interviews/${interviewId}/cancel`)),
+	// mail: optional { mailSubject, mailBody } sent to the candidate before cancelling
+	cancelInterview: (interviewId, mail = {}) => axios.post(url(`/api/interviews/${interviewId}/cancel`), mail),
+	previewCancelMail: (interviewId) => axios.get(url(`/api/interviews/${interviewId}/cancel-preview`)),
+	rescheduleInterview: (interviewId, data) => axios.post(url(`/api/interviews/${interviewId}/reschedule`), data),
+	submitFeedback: (interviewId, verdict, notes) => axios.post(url(`/api/interviews/${interviewId}/feedback`), { verdict, notes }),
+	getFeedbackOwed: () => axios.get(url('/api/my-feedback-owed')),
 
 	// Offers
 	createOffer: (candidateId, data) => axios.post(url(`/api/candidates/${candidateId}/offers`), data),

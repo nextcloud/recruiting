@@ -26,6 +26,7 @@ use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
@@ -93,6 +94,7 @@ class CandidateServiceBoardTest extends TestCase {
 			$time,
 			$l10n,
 			$this->createMock(PortalService::class),
+			$this->createMock(InterviewFeedbackService::class),
 		);
 	}
 

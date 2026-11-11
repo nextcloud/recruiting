@@ -114,6 +114,7 @@ class InterviewService {
 		}
 
 		$slots = $this->parseSlots($data['slots'] ?? [], $durationMin);
+		$holdSlots = (bool)($data['holdSlots'] ?? true);
 
 		$interview = new Interview();
 		$interview->setCandidateId($candidateId);
@@ -125,21 +126,18 @@ class InterviewService {
 		$interview->setPublicToken($this->random->generate(48, ISecureRandom::CHAR_ALPHANUMERIC));
 		$interview->setCreatedBy($uid);
 		$interview->setCreatedAt($this->timeFactory->getDateTime());
+		$interview->setHoldSlots($holdSlots);
 		$interview = $this->interviewMapper->insert($interview);
 
-		foreach ($slots as [$start, $end]) {
-			$slot = new InterviewSlot();
-			$slot->setInterviewId($interview->getId());
-			$slot->setStartAt($start);
-			$slot->setEndAt($end);
-			$this->slotMapper->insert($slot);
-		}
+		$insertedSlots = $this->insertSlots($interview, $slots);
 		foreach ($attendeeUids as $attendeeUid) {
 			$attendee = new InterviewAttendee();
 			$attendee->setInterviewId($interview->getId());
 			$attendee->setUid($attendeeUid);
 			$this->attendeeMapper->insert($attendee);
 		}
+		$openingTitle = $this->openingMapper->findTitle($candidate->getOpeningId());
+		$this->placeHolds($interview, $insertedSlots, $attendeeUids, $openingTitle);
 
 		$this->timeline->record($candidateId, TimelineEvent::TYPE_INTERVIEW_PROPOSED, $uid, [
 			'title' => $title,
@@ -150,7 +148,6 @@ class InterviewService {
 			'interviewTitle' => $title,
 		]);
 
-		$openingTitle = $this->openingMapper->findTitle($candidate->getOpeningId());
 		$inviteDraft = $this->mail->preview($candidate, $openingTitle, MailTemplate::TYPE_INTERVIEW_INVITE, null, $uid, [
 			'interview_title' => $title,
 			'interview_link' => $this->publicUrl($interview),
@@ -163,8 +160,10 @@ class InterviewService {
 	}
 
 	/**
-	 * Send the invite mail. The public link is what makes self-scheduling
-	 * work, so if the edited mail lost it we append it again.
+	 * Send the invite mail — the first one or the one with new times. The
+	 * public link is what makes self-scheduling work, so if the edited mail
+	 * lost it we append it again. The send time starts the clock for the
+	 * nudge (InterviewReminderService::NUDGE_AFTER_DAYS).
 	 *
 	 * @throws NotPermittedException|ValidationException
 	 */
@@ -181,7 +180,71 @@ class InterviewService {
 			$body = rtrim($body) . "\n\n" . $this->l10n->t('Pick your interview time here: %s', [$url]);
 		}
 		$this->mail->sendToCandidate($candidate, $subject, $body, $uid);
-		return $this->serialize($this->interviewMapper->find($interviewId));
+		$interview->setInvitedAt($this->timeFactory->getDateTime());
+		$this->interviewMapper->update($interview);
+		return $this->serialize($interview);
+	}
+
+	/**
+	 * "Propose other times": replace the slots of a proposed or confirmed
+	 * interview and return it with the prefilled mail draft. The public link
+	 * stays the same. A confirmed interview goes back to "proposed": its
+	 * calendar event is removed the same way cancelling removes it, while
+	 * its Talk room is kept and reused once the candidate picks a new time.
+	 *
+	 * @throws NotPermittedException|ValidationException
+	 */
+	public function reschedule(string $uid, int $interviewId, array $data): array {
+		$interview = $this->interviewMapper->find($interviewId);
+		$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		$this->permissions->assertCanManageCandidate($uid, $candidate);
+		if (!in_array($interview->getStatus(), [Interview::STATUS_PROPOSED, Interview::STATUS_CONFIRMED], true)) {
+			throw new ValidationException($this->l10n->t('Only an interview that is awaiting the candidate or confirmed can get new times'));
+		}
+		if ($candidate->getAnonymizedAt() !== null || $candidate->isTerminal()) {
+			throw new ValidationException($this->l10n->t('This application is already closed.'));
+		}
+		$slots = $this->parseSlots($data['slots'] ?? [], $interview->getDurationMin());
+		$attendeeUids = $this->attendeeUids($interview);
+		$openingTitle = $this->openingMapper->findTitle($candidate->getOpeningId());
+		$previousStart = $interview->getStartAt();
+
+		if ($interview->getCalendarUid() !== '') {
+			$organizer = $this->userManager->get($interview->getCreatedBy());
+			if ($organizer !== null) {
+				$this->calendar->cancelEvent($organizer, $interview->getCalendarUid(), $attendeeUids);
+			}
+			$interview->setCalendarUid('');
+		}
+		$this->releaseHolds($interview, $this->slotMapper->findForInterview($interview->getId()), $attendeeUids);
+		$this->slotMapper->deleteForInterview($interview->getId());
+
+		$interview->setStatus(Interview::STATUS_PROPOSED);
+		$interview->setStartAt(null);
+		$interview->setEndAt(null);
+		$interview->setReminderSentAt(null);
+		if (array_key_exists('holdSlots', $data)) {
+			$interview->setHoldSlots((bool)$data['holdSlots']);
+		}
+		$this->interviewMapper->update($interview);
+		$this->placeHolds($interview, $this->insertSlots($interview, $slots), $attendeeUids, $openingTitle);
+
+		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_INTERVIEW_RESCHEDULED, $uid, [
+			'title' => $interview->getTitle(),
+			'slotCount' => count($slots),
+			'previousStartAt' => $previousStart?->format(\DateTimeInterface::ATOM),
+		]);
+		$this->notifications->notify($attendeeUids, NotificationService::SUBJECT_INTERVIEW_RESCHEDULED, $candidate, $uid, [
+			'interviewTitle' => $interview->getTitle(),
+		]);
+
+		return [
+			'interview' => $this->serialize($interview),
+			'inviteDraft' => $this->mail->preview($candidate, $openingTitle, MailTemplate::TYPE_INTERVIEW_RESCHEDULE, null, $uid, [
+				'interview_title' => $interview->getTitle(),
+				'interview_link' => $this->publicUrl($interview),
+			]),
+		];
 	}
 
 	/**
@@ -200,12 +263,44 @@ class InterviewService {
 		if ($slot->getStartAt() <= $this->timeFactory->getDateTime()) {
 			throw new ValidationException($this->l10n->t('This slot is in the past — please pick another one'));
 		}
+		if ($slot->getUnavailable()) {
+			throw new ValidationException($this->l10n->t('This time is no longer available, please pick another one.'));
+		}
 		// Take the interview out of "proposed" atomically: a second, parallel
 		// submission of the public page must not book a second calendar event.
 		if (!$this->interviewMapper->claimForConfirmation($interview->getId())) {
 			throw new ValidationException($this->l10n->t('This interview is no longer awaiting confirmation'));
 		}
 		$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		$attendeeUids = $this->attendeeUids($interview);
+		$organizer = $this->userManager->get($interview->getCreatedBy());
+
+		// Re-check the panel's free/busy: the slot was free when it was
+		// proposed, but may have been booked since. This interview's own
+		// holds on the chosen time must not count, so they go first.
+		$slots = $this->slotMapper->findForInterview($interview->getId());
+		$overlapping = array_values(array_filter(
+			$slots,
+			static fn (InterviewSlot $other) => $other->getStartAt() < $slot->getEndAt() && $other->getEndAt() > $slot->getStartAt(),
+		));
+		$this->releaseHolds($interview, $overlapping, $attendeeUids);
+		if ($organizer !== null && !$this->slotFinder->attendeesFree($organizer, $attendeeUids, $slot->getStartAt(), $slot->getEndAt())) {
+			$slot->setUnavailable(true);
+			$this->slotMapper->update($slot);
+			$this->placeHolds(
+				$interview,
+				array_filter($overlapping, static fn (InterviewSlot $other) => $other->getId() !== $slot->getId()),
+				$attendeeUids,
+				$this->openingMapper->findTitle($candidate->getOpeningId()),
+			);
+			$this->interviewMapper->releaseConfirmation($interview->getId());
+			throw new ValidationException($this->l10n->t('This time is no longer available, please pick another one.'));
+		}
+		$this->releaseHolds(
+			$interview,
+			array_filter($slots, static fn (InterviewSlot $other) => !in_array($other, $overlapping, true)),
+			$attendeeUids,
+		);
 
 		$slot->setChosen(true);
 		$this->slotMapper->update($slot);
@@ -214,11 +309,8 @@ class InterviewService {
 		$interview->setEndAt($slot->getEndAt());
 		$interview->setStatus(Interview::STATUS_CONFIRMED);
 
-		$attendees = $this->attendeeMapper->findForInterview($interview->getId());
-		$attendeeUids = array_map(static fn (InterviewAttendee $a) => $a->getUid(), $attendees);
-
-		// Talk room for video interviews
-		if ($interview->getIsVideo()) {
+		// Talk room for video interviews; one kept from before a reschedule is reused
+		if ($interview->getIsVideo() && $interview->getTalkToken() === '') {
 			$moderators = [];
 			foreach (array_unique(array_merge([$interview->getCreatedBy()], $attendeeUids)) as $moderatorUid) {
 				$moderator = $this->userManager->get($moderatorUid);
@@ -237,7 +329,6 @@ class InterviewService {
 		}
 
 		// Calendar event in the organizer's calendar, interviewers as iTIP attendees
-		$organizer = $this->userManager->get($interview->getCreatedBy());
 		if ($organizer !== null) {
 			$emails = $this->attendeeEmails($attendeeUids);
 			$description = $this->l10n->t('Candidate: %s', [$candidate->getDisplayName()]);
@@ -248,6 +339,8 @@ class InterviewService {
 			if ($interview->getTalkLink() !== '') {
 				$description .= "\n" . $interview->getTalkLink();
 			}
+			// Opens the candidate in the app; access is checked there as always
+			$description .= "\n" . $this->l10n->t('Open in Recruiting: %s', [$this->candidateUrl($candidate)]);
 			$fileName = $this->calendar->createEvent(
 				$organizer,
 				$interview->getTitle() . ' — ' . $candidate->getDisplayName(),
@@ -322,10 +415,7 @@ class InterviewService {
 			'title' => $interview->getTitle(),
 			'message' => mb_substr(trim($message), 0, self::CANDIDATE_MESSAGE_LIMIT),
 		]);
-		$attendeeUids = array_map(
-			static fn (InterviewAttendee $a) => $a->getUid(),
-			$this->attendeeMapper->findForInterview($interview->getId()),
-		);
+		$attendeeUids = $this->attendeeUids($interview);
 		$this->notifications->notify(
 			array_unique(array_merge($attendeeUids, [$interview->getCreatedBy()])),
 			$subject,
@@ -336,14 +426,75 @@ class InterviewService {
 	}
 
 	/**
-	 * @throws NotPermittedException
+	 * Cancel an interview. With a (previewed, possibly edited) mail it goes
+	 * to the candidate first, so a failed send leaves the interview as it
+	 * was instead of cancelled with the candidate uninformed.
+	 *
+	 * @throws NotPermittedException|ValidationException
 	 */
-	public function cancel(string $uid, int $interviewId): array {
+	public function cancel(string $uid, int $interviewId, ?string $mailSubject = null, ?string $mailBody = null): array {
 		$interview = $this->interviewMapper->find($interviewId);
 		$candidate = $this->candidateMapper->find($interview->getCandidateId());
 		$this->permissions->assertCanManageCandidate($uid, $candidate);
+		if ($mailSubject !== null && $mailBody !== null) {
+			if (!in_array($interview->getStatus(), [Interview::STATUS_PROPOSED, Interview::STATUS_CONFIRMED], true)) {
+				throw new ValidationException($this->l10n->t('This interview can no longer be cancelled'));
+			}
+			$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
+		}
 		$this->doCancel($interview, $candidate, $uid, notify: true);
 		return $this->serialize($this->interviewMapper->find($interviewId));
+	}
+
+	/**
+	 * The prefilled cancellation mail for the cancel dialog.
+	 *
+	 * @return array{subject: string, body: string, to: string}
+	 * @throws NotPermittedException|ValidationException
+	 */
+	public function cancelPreview(string $uid, int $interviewId): array {
+		$interview = $this->interviewMapper->find($interviewId);
+		$candidate = $this->candidateMapper->find($interview->getCandidateId());
+		$this->permissions->assertCanManageCandidate($uid, $candidate);
+		return $this->mail->preview(
+			$candidate,
+			$this->openingMapper->findTitle($candidate->getOpeningId()),
+			MailTemplate::TYPE_INTERVIEW_CANCELLED,
+			null,
+			$uid,
+			['interview_title' => $interview->getTitle()],
+		);
+	}
+
+	/**
+	 * Cancel the interviews of a candidate who withdrew: those awaiting a
+	 * pick and confirmed ones that have not ended. The interviewers are
+	 * notified; the candidate gets no mail, they left on their own.
+	 *
+	 * @return int the number of interviews cancelled
+	 */
+	public function cancelOpenFor(Candidate $candidate, ?string $actorUid): int {
+		$now = $this->timeFactory->getDateTime();
+		$cancelled = 0;
+		foreach ($this->interviewMapper->findForCandidate($candidate->getId()) as $interview) {
+			$open = $interview->getStatus() === Interview::STATUS_PROPOSED
+				|| ($interview->getStatus() === Interview::STATUS_CONFIRMED && ($interview->getEndAt() === null || $interview->getEndAt() > $now));
+			if ($open) {
+				$this->doCancel($interview, $candidate, $actorUid, notify: true);
+				$cancelled++;
+			}
+		}
+		return $cancelled;
+	}
+
+	/**
+	 * Confirmed interviews whose end time has passed become "done" (run
+	 * hourly by InterviewReminderJob).
+	 *
+	 * @return int the number of interviews marked done
+	 */
+	public function markPastAsDone(): int {
+		return $this->interviewMapper->markEndedAsDone($this->timeFactory->getDateTime());
 	}
 
 	/**
@@ -435,10 +586,7 @@ class InterviewService {
 		if ($organizer === null) {
 			return;
 		}
-		$attendeeUids = array_map(
-			static fn (InterviewAttendee $a) => $a->getUid(),
-			$this->attendeeMapper->findForInterview($interview->getId()),
-		);
+		$attendeeUids = $this->attendeeUids($interview);
 		$this->calendar->neutralizeEvent(
 			$organizer,
 			$interview->getCalendarUid(),
@@ -457,8 +605,7 @@ class InterviewService {
 		if ($interview->getStatus() === Interview::STATUS_CANCELLED) {
 			return;
 		}
-		$attendees = $this->attendeeMapper->findForInterview($interview->getId());
-		$attendeeUids = array_map(static fn (InterviewAttendee $a) => $a->getUid(), $attendees);
+		$attendeeUids = $this->attendeeUids($interview);
 
 		if ($interview->getCalendarUid() !== '') {
 			$organizer = $this->userManager->get($interview->getCreatedBy());
@@ -466,6 +613,7 @@ class InterviewService {
 				$this->calendar->cancelEvent($organizer, $interview->getCalendarUid(), $attendeeUids, $permanently);
 			}
 		}
+		$this->releaseHolds($interview, $this->slotMapper->findForInterview($interview->getId()), $attendeeUids);
 		if ($interview->getTalkToken() !== '') {
 			$this->talk->deleteRoom($interview->getTalkToken());
 		}
@@ -495,7 +643,7 @@ class InterviewService {
 		$now = $this->timeFactory->getDateTime();
 		$slots = array_values(array_filter(
 			$this->slotMapper->findForInterview($interview->getId()),
-			static fn (InterviewSlot $slot) => $slot->getStartAt() > $now,
+			static fn (InterviewSlot $slot) => $slot->getStartAt() > $now && !$slot->getUnavailable(),
 		));
 		return [
 			'status' => $interview->getStatus(),
@@ -551,6 +699,91 @@ class InterviewService {
 			],
 			$this->attendeeMapper->findForInterview($interview->getId()),
 		);
+	}
+
+	/**
+	 * The candidate in the app (the notification deep link).
+	 */
+	public function candidateUrl(Candidate $candidate): string {
+		return $this->urlGenerator->linkToRouteAbsolute('recruiting.page.index') . '#/candidate/' . $candidate->getId();
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function attendeeUids(Interview $interview): array {
+		return array_map(
+			static fn (InterviewAttendee $a) => $a->getUid(),
+			$this->attendeeMapper->findForInterview($interview->getId()),
+		);
+	}
+
+	/**
+	 * @param array<int, array{0: \DateTime, 1: \DateTime}> $slots
+	 * @return InterviewSlot[]
+	 */
+	private function insertSlots(Interview $interview, array $slots): array {
+		$inserted = [];
+		foreach ($slots as [$start, $end]) {
+			$slot = new InterviewSlot();
+			$slot->setInterviewId($interview->getId());
+			$slot->setStartAt($start);
+			$slot->setEndAt($end);
+			$inserted[] = $this->slotMapper->insert($slot);
+		}
+		return $inserted;
+	}
+
+	/**
+	 * The calendar UID of a slot's hold — the same in every interviewer's
+	 * calendar, so a hold can be found again without storing anything.
+	 */
+	private function holdUid(InterviewSlot $slot): string {
+		return 'recruiting-hold-' . $slot->getId();
+	}
+
+	/**
+	 * Hold the upcoming, available slots as tentative events in every
+	 * interviewer's calendar, when the interview asks for it. The title
+	 * names the opening only, never the candidate.
+	 *
+	 * @param InterviewSlot[] $slots
+	 * @param string[] $attendeeUids
+	 */
+	private function placeHolds(Interview $interview, array $slots, array $attendeeUids, ?string $openingTitle): void {
+		if (!$interview->getHoldSlots()) {
+			return;
+		}
+		$summary = $openingTitle !== null
+			? $this->l10n->t('Interview hold: %s', [$openingTitle])
+			: $this->l10n->t('Interview hold');
+		$now = $this->timeFactory->getDateTime();
+		foreach ($attendeeUids as $attendeeUid) {
+			$user = $this->userManager->get($attendeeUid);
+			if ($user === null) {
+				continue;
+			}
+			foreach ($slots as $slot) {
+				if (!$slot->getUnavailable() && $slot->getStartAt() > $now) {
+					$this->calendar->createHold($user, $this->holdUid($slot), $summary, $slot->getStartAt(), $slot->getEndAt());
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param InterviewSlot[] $slots
+	 * @param string[] $attendeeUids
+	 */
+	private function releaseHolds(Interview $interview, array $slots, array $attendeeUids): void {
+		if (!$interview->getHoldSlots()) {
+			return;
+		}
+		foreach ($attendeeUids as $attendeeUid) {
+			foreach ($slots as $slot) {
+				$this->calendar->removeHold($attendeeUid, $this->holdUid($slot));
+			}
+		}
 	}
 
 	public function publicUrl(Interview $interview): string {

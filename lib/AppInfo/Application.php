@@ -8,7 +8,9 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\AppInfo;
 
+use OCA\Recruiting\Event\CandidateWithdrawnEvent;
 use OCA\Recruiting\Listener\AiTaskListener;
+use OCA\Recruiting\Listener\CandidateWithdrawnListener;
 use OCA\Recruiting\Listener\UserDeletedListener;
 use OCA\Recruiting\Notification\Notifier;
 use OCA\Recruiting\Search\RecruitingSearchProvider;
@@ -34,6 +36,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(UserDeletedEvent::class, UserDeletedListener::class);
 		$context->registerEventListener(TaskSuccessfulEvent::class, AiTaskListener::class);
 		$context->registerEventListener(TaskFailedEvent::class, AiTaskListener::class);
+		$context->registerEventListener(CandidateWithdrawnEvent::class, CandidateWithdrawnListener::class);
 	}
 
 	#[\Override]

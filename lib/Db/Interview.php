@@ -41,6 +41,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(\DateTime $createdAt)
  * @method ?\DateTime getReminderSentAt()
  * @method void setReminderSentAt(?\DateTime $reminderSentAt)
+ * @method bool getHoldSlots()
+ * @method void setHoldSlots(bool $holdSlots)
+ * @method ?\DateTime getInvitedAt()
+ * @method void setInvitedAt(?\DateTime $invitedAt)
+ * @method ?\DateTime getNudgeSentAt()
+ * @method void setNudgeSentAt(?\DateTime $nudgeSentAt)
  */
 class Interview extends Entity implements \JsonSerializable {
 	public const STATUS_PROPOSED = 'proposed';
@@ -63,6 +69,10 @@ class Interview extends Entity implements \JsonSerializable {
 	protected string $createdBy = '';
 	protected ?\DateTime $createdAt = null;
 	protected ?\DateTime $reminderSentAt = null;
+	/** Whether the proposed slots are held as tentative events in the interviewers' calendars */
+	protected bool $holdSlots = false;
+	protected ?\DateTime $invitedAt = null;
+	protected ?\DateTime $nudgeSentAt = null;
 
 	public function __construct() {
 		$this->addType('candidateId', 'integer');
@@ -72,6 +82,9 @@ class Interview extends Entity implements \JsonSerializable {
 		$this->addType('endAt', 'datetime');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('reminderSentAt', 'datetime');
+		$this->addType('holdSlots', 'boolean');
+		$this->addType('invitedAt', 'datetime');
+		$this->addType('nudgeSentAt', 'datetime');
 	}
 
 	#[\Override]
@@ -89,6 +102,7 @@ class Interview extends Entity implements \JsonSerializable {
 			'talkLink' => $this->talkLink,
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt?->format(\DateTimeInterface::ATOM),
+			'holdSlots' => $this->holdSlots,
 		];
 	}
 }

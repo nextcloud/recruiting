@@ -308,7 +308,8 @@
 				<li><strong>Triage inbox</strong> — applications that arrived by mail without
 				a matching opening. The badge counts what's waiting.</li>
 				<li><strong>My reviews</strong> — candidates <em>you</em> still owe a vote.</li>
-				<li><strong>My interviews</strong> — interviews where you are on the panel.</li>
+				<li><strong>My interviews</strong> — interviews where you are on the panel, and
+				the ones you still owe feedback on.</li>
 				<li><strong>Mail templates</strong> — the texts used for invitations,
 				rejections, offers and confirmations.</li>
 				<li><strong>Reports</strong> — live numbers over your openings.</li>
@@ -589,8 +590,12 @@
 		<li>Decide whether a <strong>Talk video room</strong> should be created (if Talk is
 		installed). Switched off, you can note a meeting room — or paste a video link from
 		another tool.</li>
-		<li><strong>Find free slots</strong> looks into the interviewers' calendars (working
-		days, 9–17) and proposes times. Untick any you dislike, add slots manually.</li>
+		<li><strong>Find free slots</strong> looks into the interviewers' calendars and
+		proposes times within everybody's working hours (Personal settings → Availability;
+		working days 9–17 for those who set none). Untick any you dislike, add slots
+		manually. <strong>Hold the proposed times in the interviewers' calendars</strong> (on
+		by default) blocks them as tentative "Interview hold" events until the candidate
+		picks one.</li>
 		<li><strong>Create &amp; write invitation</strong> shows the invitation mail —
 		prefilled from your template, with the personal scheduling link. Edit freely and
 		send. (If the link gets lost while editing, the app quietly re-attaches it.)</li>
@@ -609,17 +614,21 @@
 			<img class="ui" src="img/ics-button.png" alt="Add to my calendar"> for their own calendar.</figcaption>
 		</figure>
 	</div>
-	<p>The moment the candidate confirms a slot, everything happens at once: the calendar
-	event lands in all interviewers' calendars, the Talk room is created (for video
-	interviews), the card moves to <strong>Interview</strong>, and the panel is notified.</p>
+	<p>The moment the candidate confirms a slot, the app checks the interviewers' calendars
+	once more — if somebody got booked meanwhile, the candidate is asked to pick another
+	time. Then everything happens at once: the calendar event (with a link to the candidate
+	in the app) lands in all interviewers' calendars, the holds disappear, the Talk room is
+	created (for video interviews), the card moves to <strong>Interview</strong>, and the
+	panel is notified.</p>
 
 	<p>If none of the times fit, the candidate clicks <strong>None of these times work for
 	me</strong> and can add a short message; after confirming, <strong>I need to
 	reschedule</strong> does the same. Either way the organizer and the interviewers get a
 	notification and the message lands on the candidate's timeline — nothing is cancelled
-	automatically, you decide and propose new times. The day before a confirmed interview,
-	the candidate receives a <strong>reminder mail</strong> with date, time and place (the
-	"Interview reminder" template, chapter 10).</p>
+	automatically, you decide and propose new times. A candidate who has not picked a time
+	three days after the invitation gets one friendly nudge. The day before a confirmed
+	interview, the candidate receives a <strong>reminder mail</strong> with date, time and
+	place (the "Interview reminder" template, chapter 10).</p>
 
 	<div class="callout privacy">Scheduling links stop working a week after the interview,
 	when the interview is cancelled, and when the candidate is rejected or withdraws — an old
@@ -633,8 +642,15 @@
 	<ul>
 		<li><strong>Copy scheduling link</strong> — if you want to resend it yourself, or the
 		candidate has no email address on file.</li>
-		<li><strong>Cancel interview</strong> — notifies all interviewers and removes the
-		calendar event from every interviewer's calendar.</li>
+		<li><strong>Propose other times</strong> — new slots, same link; a confirmed booking is
+		released and the candidate gets the new times by mail after your review.</li>
+		<li><strong>Cancel interview</strong> — notifies all interviewers, removes the
+		calendar event from every interviewer's calendar and offers a cancellation mail to
+		the candidate. When a candidate withdraws, their open interviews are cancelled
+		automatically.</li>
+		<li><strong>Give feedback</strong> — after the interview, every interviewer gives
+		👍/🤔/👎 and notes. As with votes, you see the others' feedback once you gave yours;
+		the managers are notified when everybody has answered.</li>
 		<li><strong>My interviews</strong> in the navigation lists your own panel
 		appointments, including pending ones.</li>
 	</ul>

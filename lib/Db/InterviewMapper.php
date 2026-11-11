@@ -48,6 +48,104 @@ class InterviewMapper extends QBMapper {
 	}
 
 	/**
+	 * Put an interview back to "proposed" after a claim whose slot turned
+	 * out to be taken.
+	 */
+	public function releaseConfirmation(int $id): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('status', $qb->createNamedParameter(Interview::STATUS_PROPOSED))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Interview::STATUS_CONFIRMED)));
+		$qb->executeStatement();
+	}
+
+	/**
+	 * Confirmed interviews whose end time has passed become "done".
+	 *
+	 * @return int the number of interviews marked done
+	 */
+	public function markEndedAsDone(\DateTimeInterface $now): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('status', $qb->createNamedParameter(Interview::STATUS_DONE))
+			->where($qb->expr()->eq('status', $qb->createNamedParameter(Interview::STATUS_CONFIRMED)))
+			->andWhere($qb->expr()->lte('end_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)));
+		return $qb->executeStatement();
+	}
+
+	/**
+	 * Proposed interviews whose invitation went out before $invitedBefore
+	 * and whose candidate has not been nudged yet.
+	 *
+	 * @return Interview[]
+	 */
+	public function findDueNudges(\DateTimeInterface $invitedBefore): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('status', $qb->createNamedParameter(Interview::STATUS_PROPOSED)))
+			->andWhere($qb->expr()->isNull('nudge_sent_at'))
+			->andWhere($qb->expr()->isNotNull('invited_at'))
+			->andWhere($qb->expr()->lte('invited_at', $qb->createNamedParameter($invitedBefore, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->orderBy('invited_at', 'ASC');
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Atomically mark the nudge as sent, so overlapping cron runs never mail
+	 * the candidate twice.
+	 *
+	 * @return bool whether this caller claimed it
+	 */
+	public function claimNudge(int $id, \DateTimeInterface $now): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('nudge_sent_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('nudge_sent_at'));
+		return $qb->executeStatement() === 1;
+	}
+
+	/**
+	 * Undo a nudge claim when the mail could not be sent.
+	 */
+	public function releaseNudge(int $id): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('nudge_sent_at', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	/**
+	 * Interviews of the user that ended in [$since, $now] and that the user
+	 * has not given feedback on yet. Confirmed interviews count as well:
+	 * the hourly job may not have marked them done yet.
+	 *
+	 * @return Interview[]
+	 */
+	public function findFeedbackOwed(string $uid, \DateTimeInterface $since, \DateTimeInterface $now): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('i.*')
+			->from($this->getTableName(), 'i')
+			->innerJoin('i', 'recruiting_intv_attendees', 'a', $qb->expr()->andX(
+				$qb->expr()->eq('a.interview_id', 'i.id'),
+				$qb->expr()->eq('a.uid', $qb->createNamedParameter($uid)),
+			))
+			->leftJoin('i', 'recruiting_intv_feedback', 'f', $qb->expr()->andX(
+				$qb->expr()->eq('f.interview_id', 'i.id'),
+				$qb->expr()->eq('f.uid', $qb->createNamedParameter($uid)),
+			))
+			->where($qb->expr()->isNull('f.id'))
+			->andWhere($qb->expr()->in('i.status', $qb->createNamedParameter([Interview::STATUS_CONFIRMED, Interview::STATUS_DONE], IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->gte('i.end_at', $qb->createNamedParameter($since, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->andWhere($qb->expr()->lte('i.end_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+			->orderBy('i.end_at', 'DESC');
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Confirmed interviews starting in [$from, $to) whose reminder has not
 	 * gone out yet.
 	 *

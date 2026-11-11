@@ -11,11 +11,14 @@ namespace OCA\Recruiting\Service;
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\TimelineEvent;
+use OCA\Recruiting\Event\CandidateWithdrawnEvent;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\EventDispatcher\IEventDispatcher;
 
 /**
  * The one place where a candidate changes stage — used by manual moves,
- * rejection and the automatic move on interview confirmation.
+ * rejection and the automatic move on interview confirmation. A move to
+ * "withdrawn" dispatches CandidateWithdrawnEvent.
  */
 class StageService {
 	public function __construct(
@@ -24,6 +27,7 @@ class StageService {
 		private ActivityPublisher $activity,
 		private ITimeFactory $timeFactory,
 		private NotificationService $notifications,
+		private IEventDispatcher $eventDispatcher,
 	) {
 	}
 
@@ -65,6 +69,9 @@ class StageService {
 		], $timelineData));
 		$this->activity->publish($candidate, 'stage_changed', $actorUid, ['fromStage' => $from, 'toStage' => $stage]);
 		$this->notifyReferrer($candidate, $from);
+		if ($stage === Candidate::STAGE_WITHDRAWN) {
+			$this->eventDispatcher->dispatchTyped(new CandidateWithdrawnEvent($candidate, $actorUid));
+		}
 		return true;
 	}
 

@@ -18,6 +18,7 @@ use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\RetentionService;
@@ -37,6 +38,7 @@ class RetentionServiceTest extends TestCase {
 	private InterviewService $interviews;
 	private ActivityPurgeService $activityPurge;
 	private CandidateService $candidates;
+	private InterviewFeedbackService&\PHPUnit\Framework\MockObject\MockObject $feedback;
 	private RetentionService $service;
 
 	protected function setUp(): void {
@@ -53,6 +55,7 @@ class RetentionServiceTest extends TestCase {
 		$this->interviews = $this->createMock(InterviewService::class);
 		$this->activityPurge = $this->createMock(ActivityPurgeService::class);
 		$this->candidates = $this->createMock(CandidateService::class);
+		$this->feedback = $this->createMock(InterviewFeedbackService::class);
 		$this->service = $this->makeService($this->offerMapper);
 	}
 
@@ -71,6 +74,7 @@ class RetentionServiceTest extends TestCase {
 			$this->createMock(ICommentsManager::class),
 			$this->timeFactory,
 			new NullLogger(),
+			$this->feedback,
 		);
 	}
 
@@ -141,6 +145,7 @@ class RetentionServiceTest extends TestCase {
 
 		$this->documents->expects($this->once())->method('deleteAllFor')->with(5);
 		$this->voteMapper->expects($this->once())->method('stripCommentsForCandidate')->with(5);
+		$this->feedback->expects($this->once())->method('stripNotesForCandidate')->with(5);
 		$updatedEvents = [];
 		$this->eventMapper->method('update')->willReturnCallback(function (TimelineEvent $event) use (&$updatedEvents) {
 			$updatedEvents[] = $event->getId();

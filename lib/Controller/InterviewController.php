@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\Controller;
 
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -23,6 +24,7 @@ class InterviewController extends Controller {
 		IRequest $request,
 		private InterviewService $interviews,
 		private IUserSession $userSession,
+		private InterviewFeedbackService $feedback,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -46,7 +48,27 @@ class InterviewController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	public function cancel(int $id): DataResponse {
-		return $this->handle(fn () => $this->interviews->cancel($this->uid(), $id));
+	public function cancel(int $id, ?string $mailSubject = null, ?string $mailBody = null): DataResponse {
+		return $this->handle(fn () => $this->interviews->cancel($this->uid(), $id, $mailSubject, $mailBody));
+	}
+
+	#[NoAdminRequired]
+	public function cancelPreview(int $id): DataResponse {
+		return $this->handle(fn () => $this->interviews->cancelPreview($this->uid(), $id));
+	}
+
+	#[NoAdminRequired]
+	public function reschedule(int $id): DataResponse {
+		return $this->handle(fn () => $this->interviews->reschedule($this->uid(), $id, $this->request->getParams()));
+	}
+
+	#[NoAdminRequired]
+	public function feedback(int $id, string $verdict, string $notes = ''): DataResponse {
+		return $this->handle(fn () => $this->feedback->submit($this->uid(), $id, $verdict, $notes));
+	}
+
+	#[NoAdminRequired]
+	public function feedbackOwed(): DataResponse {
+		return $this->handle(fn () => $this->feedback->owed($this->uid()));
 	}
 }

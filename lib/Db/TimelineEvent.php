@@ -62,6 +62,9 @@ class TimelineEvent extends Entity implements \JsonSerializable {
 	public const TYPE_INTERVIEW_SLOTS_DECLINED = 'interview_slots_declined';
 	public const TYPE_INTERVIEW_RESCHEDULE_REQUESTED = 'interview_reschedule_requested';
 	public const TYPE_REFERRAL_NOTE = 'referral_note';
+	public const TYPE_INTERVIEW_RESCHEDULED = 'interview_rescheduled';
+	/** Who gave feedback on a round; the verdict stays out (anti-anchoring) */
+	public const TYPE_INTERVIEW_FEEDBACK = 'interview_feedback';
 
 	protected int $candidateId = 0;
 	protected string $type = '';

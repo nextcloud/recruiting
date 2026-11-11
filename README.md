@@ -28,9 +28,11 @@ a third party.
   nobody sees the other votes until they cast their own. A "no" always needs
   a written reason.
 * 📅 **Self-scheduling interviews** — the app reads the interviewers'
-  calendars, proposes free slots, and the candidate picks one on a public
-  page in their own timezone. Calendar event, invitations and (with Talk) the
-  video room appear by themselves.
+  calendars and working hours, proposes free slots, and the candidate picks
+  one on a public page in their own timezone. Calendar event, invitations and
+  (with Talk) the video room appear by themselves. After the interview every
+  interviewer gives a verdict and notes — hidden from the others until they
+  gave their own.
 * 🤝 **Offers with four eyes** — salary data is invisible to interviewers,
   every offer needs a designated approver (never yourself), and expiring
   offers warn you three days ahead.
@@ -82,7 +84,7 @@ grants no candidate access at all.
 | **New opening** | recruiters | Creates a job opening (see below) |
 | **Triage inbox** | recruiters | Mail applications that matched no opening; the counter shows how many wait |
 | **My reviews** | everyone | Candidates you were asked to screen — badge shows whether you still owe a vote |
-| **My interviews** | everyone | Your interview panel appointments, incl. "pending" ones the candidate hasn't confirmed yet |
+| **My interviews** | everyone | Your interview panel appointments, incl. "pending" ones the candidate hasn't confirmed yet, and under *Feedback owed* the interviews of the last 30 days you have not given feedback on |
 | **Mail templates** | recruiters | Manage the invitation/rejection/offer/confirmation mail templates |
 | **Reports** | team members & recruiters | Funnel, time-to-hire, rejection reasons — scoped to what you may see |
 | **Talent pool** | recruiters | Candidates who consented to be kept for future openings, searchable by name, email and CV text |
@@ -196,8 +198,21 @@ Click any card and the sidebar opens with five tabs:
   public link is out; copy it from here if you want to resend it yourself.
   The link stops working once the interview is cancelled, seven days after
   it ended, or when the candidate is rejected, withdraws or is anonymized.
-  Cancelling notifies all interviewers and removes the calendar event.
-  Optional AI interview-question suggestions.
+  **Propose other times** replaces the slots of a waiting or confirmed
+  interview and keeps the same link: a confirmed booking is released (its
+  calendar event removed, the Talk room kept), and a mail with the new times
+  (template *New interview times*) is prefilled for review. **Cancel
+  interview** notifies all interviewers, removes the calendar event and
+  offers a cancellation mail to the candidate (template *Interview
+  cancelled*, editable, can be skipped). When a candidate withdraws — on
+  their own page or by a move to *Withdrawn* — their open interviews are
+  cancelled and the interviewers notified.
+  Once an interview has ended (status *Done*, set hourly), each interviewer
+  gets **Give feedback**: 👍/🤔/👎 plus notes, a 👎 needs notes. Like the
+  screening votes, interviewers see the others' feedback on a round only
+  after giving their own; recruiters, managers and observers see it all.
+  When every interviewer has answered, the opening's managers and the
+  organizer are notified. Optional AI interview-question suggestions.
 
   ![Interviews tab](screenshots/06-interviews-tab.png)
 
@@ -232,23 +247,36 @@ show the candidate's current name.
 1. Pick interviewers and duration; choose whether a **Talk video room**
    should be created (if Talk is installed) — turned off, you can note a
    location or a video link from another tool instead.
-2. **Find free slots** reads the interviewers' calendars (working days,
-   9–17) and proposes times; deselect any, or add slots manually.
+2. **Find free slots** reads the interviewers' calendars and proposes times
+   within everybody's working hours — those set under Personal settings →
+   Availability, or working days 9–17 for interviewers who set none;
+   deselect any, or add slots manually. With **Hold the proposed times in
+   the interviewers' calendars** (on by default) every proposed time appears
+   there as a tentative "Interview hold: <opening>" event, so nothing else
+   gets booked on top; the holds disappear once the candidate picks a time or
+   the interview is cancelled or gets other times.
 3. **Create & write invitation** creates the interview and prefills the
    invitation mail including the personal scheduling link. Edit freely — if
    the link gets lost, the app re-attaches it. Send, or copy the link and
    deliver it yourself.
 4. The candidate opens the public page (times shown in *their* timezone,
-   no account needed) and confirms one slot. That books the calendar event
-   with all interviewers invited, creates the Talk room for video interviews,
-   moves the card to "Interview", and notifies the panel. The confirmation
-   page offers the appointment as an .ics download for the candidate's own
-   calendar.
+   no account needed) and confirms one slot. The app checks the
+   interviewers' free/busy once more; if someone got booked in the meantime,
+   the candidate is asked to pick another time and that slot is struck out.
+   Otherwise this books the calendar event with all interviewers invited
+   (its description links to the candidate in the app), creates the Talk
+   room for video interviews, moves the card to "Interview", and notifies
+   the panel. The confirmation page offers the appointment as an .ics
+   download for the candidate's own calendar.
 5. If none of the proposed times work, the candidate can say so on the same
    page (with an optional message); after confirming, they can ask to
    reschedule. Both land on the timeline and notify the organizer and the
    interviewers — nothing is cancelled automatically.
-6. About 24 hours before a confirmed interview the candidate gets a reminder
+6. Three days after the invitation went out without a pick, the candidate
+   gets one friendly nudge (template *Interview time not picked yet*) —
+   not when no pickable time is left, nor for closed or anonymized
+   applications.
+7. About 24 hours before a confirmed interview the candidate gets a reminder
    mail (template *Interview reminder*) with the time, the location or video
    link, and their interview and self-service links.
 

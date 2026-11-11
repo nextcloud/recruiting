@@ -12,6 +12,7 @@ use OCA\Recruiting\Db\AssignmentMapper;
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
 use OCA\Recruiting\Db\DocumentMapper;
+use OCA\Recruiting\Db\Interview;
 use OCA\Recruiting\Db\InterviewAttendeeMapper;
 use OCA\Recruiting\Db\InterviewMapper;
 use OCA\Recruiting\Db\OfferMapper;
@@ -26,6 +27,7 @@ use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
@@ -56,6 +58,8 @@ class CandidateMergeTest extends TestCase {
 	private TimelineEventMapper&MockObject $eventMapper;
 	private NotificationService&MockObject $notifications;
 	private ICommentsManager&MockObject $commentsManager;
+	private InterviewService&MockObject $interviews;
+	private InterviewFeedbackService&MockObject $feedback;
 	private CandidateService $service;
 
 	/** @var array<int, Candidate> */
@@ -93,7 +97,7 @@ class CandidateMergeTest extends TestCase {
 			$this->createMock(OfferService::class),
 			$this->permissions,
 			$this->documents,
-			$this->createMock(InterviewService::class),
+			$this->interviews = $this->createMock(InterviewService::class),
 			$this->createMock(MailService::class),
 			$this->createMock(PoolService::class),
 			$this->createMock(StageService::class),
@@ -107,6 +111,7 @@ class CandidateMergeTest extends TestCase {
 			$timeFactory,
 			$l10n,
 			$this->createMock(PortalService::class),
+			$this->feedback = $this->createMock(InterviewFeedbackService::class),
 		);
 	}
 
@@ -239,5 +244,20 @@ class CandidateMergeTest extends TestCase {
 		$this->eventMapper->expects($this->once())->method('deleteForCandidate')->with(4);
 		$this->candidateMapper->expects($this->once())->method('delete')->with($candidate);
 		$this->service->destroy('hr', 4);
+	}
+
+	public function testDetailCarriesTheFeedbackOfEachRound(): void {
+		$candidate = $this->candidate(1, 5);
+		$candidate->setEmail('');
+		$interview = new Interview();
+		$interview->setId(8);
+		$this->interviewMapper->method('findForCandidate')->willReturn([$interview]);
+		$this->interviews->method('serialize')->willReturn(['id' => 8, 'status' => 'done']);
+		$this->feedback->expects($this->once())->method('summaries')->with('manager', $candidate, [$interview])
+			->willReturn([8 => ['feedbackOpen' => true, 'feedback' => []]]);
+
+		$detail = $this->service->get('manager', 1);
+
+		$this->assertSame([['id' => 8, 'status' => 'done', 'feedbackOpen' => true, 'feedback' => []]], $detail['interviews']);
 	}
 }

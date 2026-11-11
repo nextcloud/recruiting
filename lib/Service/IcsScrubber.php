@@ -67,7 +67,7 @@ class IcsScrubber {
 	/**
 	 * @return string[] logical lines, continuation lines joined
 	 */
-	private static function unfold(string $ics): array {
+	public static function unfold(string $ics): array {
 		$lines = [];
 		foreach (preg_split('/\r\n|\n|\r/', $ics) ?: [] as $raw) {
 			if ($raw === '') {
@@ -82,7 +82,7 @@ class IcsScrubber {
 		return $lines;
 	}
 
-	private static function propertyName(string $line): string {
+	public static function propertyName(string $line): string {
 		$end = strcspn($line, ';:');
 		$name = strtoupper(substr($line, 0, $end));
 		// A group prefix ("item1.SUMMARY") does not change the property
@@ -90,7 +90,10 @@ class IcsScrubber {
 		return $dot === false ? $name : substr($name, $dot + 1);
 	}
 
-	private static function escape(string $text): string {
+	/**
+	 * Escape a TEXT property value (RFC 5545 §3.3.11).
+	 */
+	public static function escape(string $text): string {
 		return str_replace(['\\', ';', ',', "\r\n", "\n"], ['\\\\', '\\;', '\\,', '\\n', '\\n'], $text);
 	}
 
@@ -98,7 +101,7 @@ class IcsScrubber {
 	 * Lines longer than 75 octets are folded without splitting a UTF-8
 	 * character.
 	 */
-	private static function fold(string $line): string {
+	public static function fold(string $line): string {
 		if (strlen($line) <= 75) {
 			return $line;
 		}

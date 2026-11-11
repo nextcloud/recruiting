@@ -23,6 +23,7 @@ use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\InterviewFeedbackService;
 use OCA\Recruiting\Service\InterviewService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
@@ -81,6 +82,7 @@ class CandidateInsertTest extends TestCase {
 			$time,
 			$this->createMock(IL10N::class),
 			$portal,
+			$this->createMock(InterviewFeedbackService::class),
 		);
 
 		$candidate = $service->insertCandidate(3, 'Grace', 'grace@example.org', '', Candidate::SOURCE_REFERRAL, 'bob', 'bob');

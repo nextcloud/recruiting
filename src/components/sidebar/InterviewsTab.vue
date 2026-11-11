@@ -52,10 +52,85 @@
 				</div>
 
 				<ul v-if="interview.status === 'proposed'" class="interview__slots">
-					<li v-for="slot in interview.slots" :key="slot.id">
+					<li
+						v-for="slot in interview.slots"
+						:key="slot.id"
+						:class="{ 'interview__slot--unavailable': slot.unavailable }"
+						:title="slot.unavailable ? t('recruiting', 'Somebody on the panel was busy by the time the candidate picked this time') : null">
 						{{ formatDateTime(slot.startAt) }}
+						<span v-if="slot.unavailable">({{ t('recruiting', 'no longer available') }})</span>
 					</li>
 				</ul>
+
+				<section v-if="interview.feedbackOpen" class="interview__feedback">
+					<div class="interview__feedback-head">
+						<strong>{{ t('recruiting', 'Feedback') }}</strong>
+						<span class="interview__feedback-count">
+							{{ t('recruiting', '{given} of {total} interviewers', { given: interview.feedback.length, total: interview.attendeeCount }) }}
+						</span>
+					</div>
+					<NcNoteCard v-if="interview.feedback.some((entry) => entry.verdict === null)" type="info">
+						{{ t('recruiting', 'The feedback of others becomes visible once you gave your own — this keeps everyone\'s opinion unbiased.') }}
+					</NcNoteCard>
+					<ul v-if="interview.feedback.length > 0" class="interview__feedback-list">
+						<li v-for="entry in interview.feedback" :key="entry.uid" class="interview__feedback-entry">
+							<NcAvatar :user="entry.uid" :displayName="entry.displayName" :size="24" />
+							<div class="interview__feedback-body">
+								<div>
+									<strong>{{ entry.displayName }}</strong>
+									<span v-if="entry.verdict" class="interview__verdict">
+										{{ voteMeta(entry.verdict).emoji }} {{ voteMeta(entry.verdict).label }}
+									</span>
+									<span v-else class="interview__verdict interview__verdict--hidden">
+										{{ t('recruiting', 'hidden') }}
+									</span>
+								</div>
+								<p v-if="entry.notes" class="interview__feedback-notes">
+									{{ entry.notes }}
+								</p>
+							</div>
+						</li>
+					</ul>
+
+					<template v-if="interview.canGiveFeedback">
+						<div v-if="feedbackFor === interview.id" class="interview__feedback-form">
+							<div class="interview__verdict-buttons">
+								<NcButton
+									v-for="option in verdictOptions"
+									:key="option.id"
+									:variant="verdict === option.id ? 'primary' : 'secondary'"
+									@click="verdict = option.id">
+									{{ option.emoji }} {{ option.label }}
+								</NcButton>
+							</div>
+							<NcTextArea
+								v-model="notes"
+								:label="t('recruiting', 'Notes')"
+								:placeholder="verdict === 'no'
+									? t('recruiting', 'Required: why is your verdict no?')
+									: t('recruiting', 'What stood out in this interview?')"
+								rows="3"
+								resize="vertical" />
+							<div class="interview__actions">
+								<NcButton variant="tertiary" @click="feedbackFor = null">
+									{{ t('recruiting', 'Cancel') }}
+								</NcButton>
+								<NcButton
+									variant="primary"
+									:disabled="!verdict || (verdict === 'no' && !notes.trim()) || saving"
+									@click="submitFeedback(interview)">
+									{{ t('recruiting', 'Save feedback') }}
+								</NcButton>
+							</div>
+						</div>
+						<NcButton v-else @click="openFeedback(interview)">
+							<template #icon>
+								<CommentCheckOutline :size="18" />
+							</template>
+							{{ interview.myFeedback ? t('recruiting', 'Edit my feedback') : t('recruiting', 'Give feedback') }}
+						</NcButton>
+					</template>
+				</section>
 
 				<div v-if="candidate.permissions.manage && ['proposed', 'confirmed'].includes(interview.status)" class="interview__actions">
 					<NcButton
@@ -68,7 +143,13 @@
 						</template>
 						{{ t('recruiting', 'Copy scheduling link') }}
 					</NcButton>
-					<NcButton variant="tertiary" @click="cancel(interview)">
+					<NcButton v-if="!isTerminal" variant="tertiary" @click="$emit('reschedule', interview)">
+						<template #icon>
+							<CalendarEdit :size="18" />
+						</template>
+						{{ t('recruiting', 'Propose other times') }}
+					</NcButton>
+					<NcButton variant="tertiary" @click="cancelling = interview">
 						<template #icon>
 							<CloseCircleOutline :size="18" />
 						</template>
@@ -95,35 +176,51 @@
 			action="questions"
 			:label="t('recruiting', 'Suggest interview questions')"
 			@result="aiQuestions = $event" />
+
+		<CancelInterviewModal
+			v-if="cancelling"
+			:candidate="candidate"
+			:interview="cancelling"
+			@close="cancelling = null"
+			@cancelled="onCancelled" />
 	</div>
 </template>
 
 <script>
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import CalendarClock from 'vue-material-design-icons/CalendarClock.vue'
+import CalendarEdit from 'vue-material-design-icons/CalendarEdit.vue'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
+import CommentCheckOutline from 'vue-material-design-icons/CommentCheckOutline.vue'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import AiAssist from '../AiAssist.vue'
+import CancelInterviewModal from '../CancelInterviewModal.vue'
 import api, { errorMessage } from '../../api.js'
 import { useSessionStore, useSidebarStore } from '../../store.js'
 import { copyToClipboard } from '../../utils/clipboard.js'
-import { confirmDestructive } from '../../utils/confirm.js'
-import { formatDateTime, interviewStatusLabel } from '../../utils/format.js'
+import { formatDateTime, interviewStatusLabel, voteMeta } from '../../utils/format.js'
 
 export default {
 	name: 'InterviewsTab',
 	components: {
 		AiAssist,
 		CalendarClock,
+		CalendarEdit,
+		CancelInterviewModal,
 		CloseCircleOutline,
+		CommentCheckOutline,
 		ContentCopy,
 		NcAvatar,
 		NcButton,
 		NcEmptyContent,
+		NcNoteCard,
+		NcTextArea,
 		Plus,
 	},
 
@@ -131,18 +228,29 @@ export default {
 		candidate: { type: Object, required: true },
 	},
 
-	emits: ['schedule'],
+	emits: ['schedule', 'reschedule'],
 	setup() {
 		return { sidebar: useSidebarStore(), session: useSessionStore() }
 	},
 
 	data() {
-		return { aiQuestions: '' }
+		return {
+			aiQuestions: '',
+			cancelling: null,
+			feedbackFor: null,
+			verdict: null,
+			notes: '',
+			saving: false,
+		}
 	},
 
 	computed: {
 		isTerminal() {
 			return this.session.isTerminalStage(this.candidate.stage)
+		},
+
+		verdictOptions() {
+			return ['yes', 'maybe', 'no'].map((value) => ({ id: value, ...voteMeta(value) }))
 		},
 	},
 
@@ -153,20 +261,31 @@ export default {
 			copyToClipboard(interview.publicUrl)
 		},
 
-		async cancel(interview) {
-			if (!await confirmDestructive(
-				this.t('recruiting', 'Cancel "{title}"?', { title: interview.title }),
-				this.t('recruiting', 'Interviewers are notified and the calendar event is cancelled.'),
-				this.t('recruiting', 'Cancel interview'),
-			)) {
-				return
-			}
+		voteMeta,
+		onCancelled() {
+			this.cancelling = null
+			this.sidebar.reload()
+			this.sidebar.touch()
+		},
+
+		openFeedback(interview) {
+			this.feedbackFor = interview.id
+			this.verdict = interview.myFeedback?.verdict ?? null
+			this.notes = interview.myFeedback?.notes ?? ''
+		},
+
+		async submitFeedback(interview) {
+			this.saving = true
 			try {
-				await api.cancelInterview(interview.id)
+				await api.submitFeedback(interview.id, this.verdict, this.notes)
+				showSuccess(this.t('recruiting', 'Feedback saved'))
+				this.feedbackFor = null
 				this.sidebar.reload()
 				this.sidebar.touch()
 			} catch (error) {
-				showError(errorMessage(error, this.t('recruiting', 'Could not cancel the interview')))
+				showError(errorMessage(error, this.t('recruiting', 'Could not save the feedback')))
+			} finally {
+				this.saving = false
 			}
 		},
 	},
@@ -253,6 +372,72 @@ export default {
 		display: flex;
 		gap: var(--default-grid-baseline);
 		flex-wrap: wrap;
+	}
+
+	&__slot--unavailable {
+		text-decoration: line-through;
+	}
+
+	&__feedback {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--default-grid-baseline) * 2);
+		border-top: 1px solid var(--color-border);
+		padding-top: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__feedback-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__feedback-count {
+		color: var(--color-text-maxcontrast);
+		font-size: 0.9em;
+	}
+
+	&__feedback-list {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__feedback-entry {
+		display: flex;
+		gap: calc(var(--default-grid-baseline) * 2);
+		align-items: flex-start;
+	}
+
+	&__feedback-body {
+		min-width: 0;
+	}
+
+	&__verdict {
+		margin-inline-start: var(--default-grid-baseline);
+
+		&--hidden {
+			color: var(--color-text-maxcontrast);
+		}
+	}
+
+	&__feedback-notes {
+		margin: 0;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	&__feedback-form {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__verdict-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--default-grid-baseline);
 	}
 }
 </style>

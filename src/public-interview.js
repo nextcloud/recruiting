@@ -89,6 +89,8 @@ function render(errorText = '') {
 			text: t('recruiting', '📅 Add to my calendar'),
 		}))
 		card.appendChild(requestSection('reschedule', errorText))
+	} else if (data.status === 'done') {
+		card.appendChild(el('p', { text: t('recruiting', 'This interview has taken place. Thank you for your time!') }))
 	} else if (data.status === 'cancelled') {
 		card.appendChild(el('p', { text: t('recruiting', 'This interview was cancelled. Please contact the recruiting team if you have questions.') }))
 	} else if (data.slots.length === 0) {
@@ -218,6 +220,10 @@ async function confirm(event) {
 		})
 		const body = await response.json()
 		if (!response.ok) {
+			// A time that was just taken drops out of the list
+			if (body.interview) {
+				data = body.interview
+			}
 			render(body.message || t('recruiting', 'Something went wrong — please try again.'))
 			return
 		}

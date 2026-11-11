@@ -166,6 +166,24 @@ class Notifier implements INotifier {
 					'name' => $interviewTitle,
 				];
 				break;
+			case NotificationService::SUBJECT_INTERVIEW_RESCHEDULED:
+				$subject = $actorUid !== ''
+					? $l->t('{actor} proposed new times for the interview "{interview}" with {candidate}')
+					: $l->t('New times were proposed for the interview "{interview}" with {candidate}');
+				$richParameters['interview'] = [
+					'type' => 'highlight',
+					'id' => 'interview',
+					'name' => $interviewTitle,
+				];
+				break;
+			case NotificationService::SUBJECT_INTERVIEW_FEEDBACK_COMPLETE:
+				$subject = $l->t('All interviewers gave their feedback on "{interview}" with {candidate}');
+				$richParameters['interview'] = [
+					'type' => 'highlight',
+					'id' => 'interview',
+					'name' => $interviewTitle,
+				];
+				break;
 			case NotificationService::SUBJECT_REFERRAL_STATUS:
 				$subject = $l->t('Your referral {candidate}: {status}');
 				$richParameters['status'] = [

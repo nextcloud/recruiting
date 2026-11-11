@@ -86,6 +86,10 @@ return [
 		['name' => 'interview#create', 'url' => '/api/candidates/{candidateId}/interviews', 'verb' => 'POST'],
 		['name' => 'interview#sendInvite', 'url' => '/api/interviews/{id}/invite', 'verb' => 'POST'],
 		['name' => 'interview#cancel', 'url' => '/api/interviews/{id}/cancel', 'verb' => 'POST'],
+		['name' => 'interview#cancelPreview', 'url' => '/api/interviews/{id}/cancel-preview', 'verb' => 'GET'],
+		['name' => 'interview#reschedule', 'url' => '/api/interviews/{id}/reschedule', 'verb' => 'POST'],
+		['name' => 'interview#feedback', 'url' => '/api/interviews/{id}/feedback', 'verb' => 'POST'],
+		['name' => 'interview#feedbackOwed', 'url' => '/api/my-feedback-owed', 'verb' => 'GET'],
 
 		// Mail
 		['name' => 'mail#preview', 'url' => '/api/candidates/{candidateId}/mail-preview', 'verb' => 'POST'],

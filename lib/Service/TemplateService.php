@@ -220,6 +220,33 @@ class TemplateService {
 				'isDefault' => false,
 				'builtin' => true,
 			],
+			MailTemplate::TYPE_INTERVIEW_RESCHEDULE => [
+				'id' => 'builtin:' . MailTemplate::TYPE_INTERVIEW_RESCHEDULE,
+				'type' => MailTemplate::TYPE_INTERVIEW_RESCHEDULE,
+				'name' => $this->l10n->t('New interview times (built-in)'),
+				'subject' => $this->l10n->t('New times for your interview — {{opening_title}} at {{company}}'),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nWe need to move your interview ({{interview_title}}) for the {{opening_title}} position and would like to offer you new times. Any time you picked before no longer applies.\n\nPlease pick the time that suits you best:\n{{interview_link}}\n\nWe are sorry for the inconvenience and look forward to meeting you!\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'isDefault' => false,
+				'builtin' => true,
+			],
+			MailTemplate::TYPE_INTERVIEW_CANCELLED => [
+				'id' => 'builtin:' . MailTemplate::TYPE_INTERVIEW_CANCELLED,
+				'type' => MailTemplate::TYPE_INTERVIEW_CANCELLED,
+				'name' => $this->l10n->t('Interview cancelled (built-in)'),
+				'subject' => $this->l10n->t('Your interview for {{opening_title}} is cancelled'),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nUnfortunately we have to cancel your interview ({{interview_title}}) for the {{opening_title}} position. We are sorry for any inconvenience this causes.\n\nWe will get in touch with you about the next steps.\n\nYour application overview: {{portal_link}}\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'isDefault' => false,
+				'builtin' => true,
+			],
+			MailTemplate::TYPE_INTERVIEW_NUDGE => [
+				'id' => 'builtin:' . MailTemplate::TYPE_INTERVIEW_NUDGE,
+				'type' => MailTemplate::TYPE_INTERVIEW_NUDGE,
+				'name' => $this->l10n->t('Interview time not picked yet (built-in)'),
+				'subject' => $this->l10n->t('Please pick a time for your interview — {{opening_title}}'),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nA few days ago we invited you to an interview ({{interview_title}}) for the {{opening_title}} position. We would still love to meet you!\n\nPlease pick the time that suits you best — or let us know on the same page if none of the times work for you:\n{{interview_link}}\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'isDefault' => false,
+				'builtin' => true,
+			],
 		];
 	}
 }

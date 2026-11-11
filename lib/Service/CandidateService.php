@@ -71,6 +71,7 @@ class CandidateService {
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
 		private PortalService $portal,
+		private InterviewFeedbackService $feedback,
 	) {
 	}
 
@@ -231,9 +232,11 @@ class CandidateService {
 			$this->assignmentMapper->findForCandidate($id),
 		);
 		$data['votes'] = $this->serializeVotes($uid, $candidate);
+		$interviews = $this->interviewMapper->findForCandidate($id);
+		$feedback = $this->feedback->summaries($uid, $candidate, $interviews);
 		$data['interviews'] = array_map(
-			fn (Interview $i) => $this->interviews->serialize($i),
-			$this->interviewMapper->findForCandidate($id),
+			fn (Interview $i) => array_merge($this->interviews->serialize($i), $feedback[$i->getId()] ?? []),
+			$interviews,
 		);
 		$data['timeline'] = $this->serializeTimeline($this->timeline->eventsFor($id), $canSeeOffers);
 		$data['otherApplications'] = $this->otherApplications($uid, $candidate);
@@ -522,8 +525,8 @@ class CandidateService {
 	}
 
 	/**
-	 * Hard delete: candidate, documents, votes, comments, interviews,
-	 * notifications (GDPR delete-on-request, spec §4.8).
+	 * Hard delete: candidate, documents, votes, comments, interviews with
+	 * their feedback, notifications (GDPR delete-on-request, spec §4.8).
 	 *
 	 * @throws NotPermittedException
 	 */
@@ -603,7 +606,8 @@ class CandidateService {
 		$this->documents->deleteAllFor($id);
 		$this->voteMapper->deleteForCandidate($id);
 		$this->assignmentMapper->deleteForCandidate($id);
-		// Slots and attendees hang off the interviews, so they must go first
+		// Feedback, slots and attendees hang off the interviews, so they must go first
+		$this->feedback->deleteForCandidate($id);
 		$this->interviews->deleteAllFor($id);
 		$this->offerMapper->deleteForCandidate($id);
 		$this->notifications->purgeForCandidate($id);
@@ -734,18 +738,8 @@ class CandidateService {
 		return $reasons;
 	}
 
-	/**
-	 * Anti-anchoring rule (spec §4.3): interviewers see the votes of others
-	 * only once they have submitted their own. Managers, recruiters and
-	 * observers always see everything.
-	 */
 	private function maySeeVotes(string $uid, Candidate $candidate, bool $hasOwnVote): bool {
-		if ($hasOwnVote || $this->permissions->canManageCandidate($uid, $candidate)) {
-			return true;
-		}
-		$openingId = $candidate->getOpeningId();
-		return $openingId !== null
-			&& $this->permissions->roleForOpening($uid, $openingId) === TeamMember::ROLE_OBSERVER;
+		return $this->permissions->maySeeVerdicts($uid, $candidate, $hasOwnVote);
 	}
 
 	private function serializeVotes(string $uid, Candidate $candidate): array {

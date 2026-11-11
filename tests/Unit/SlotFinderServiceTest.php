@@ -9,11 +9,14 @@ declare(strict_types=1);
 namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Service\SlotFinderService;
+use OCA\Recruiting\Service\WorkingHours;
+use OCA\Recruiting\Service\WorkingHoursService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Calendar\IAvailabilityResult;
 use OCP\Calendar\IManager as ICalendarManager;
 use OCP\IUser;
 use OCP\IUserManager;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class SlotFinderServiceTest extends TestCase {
@@ -21,6 +24,7 @@ class SlotFinderServiceTest extends TestCase {
 	private IUserManager $userManager;
 	private SlotFinderService $finder;
 	private IUser $organizer;
+	private WorkingHoursService&MockObject $workingHours;
 
 	protected function setUp(): void {
 		$this->calendarManager = $this->createMock(ICalendarManager::class);
@@ -39,7 +43,8 @@ class SlotFinderServiceTest extends TestCase {
 			fn (string $uid) => $uid === 'boss' ? $this->organizer : ($uid === 'dev' ? $interviewer : null),
 		);
 
-		$this->finder = new SlotFinderService($this->calendarManager, $this->userManager, $timeFactory);
+		$this->workingHours = $this->createMock(WorkingHoursService::class);
+		$this->finder = new SlotFinderService($this->calendarManager, $this->userManager, $timeFactory, $this->workingHours);
 	}
 
 	public function testAllFreeYieldsSlotsInsideBusinessHoursOnWeekdays(): void {
@@ -111,5 +116,71 @@ class SlotFinderServiceTest extends TestCase {
 		$this->calendarManager->method('checkAvailability')->willThrowException(new \RuntimeException('CalDAV down'));
 		$slots = $this->finder->propose($this->organizer, ['dev'], 60, 'UTC', 2);
 		$this->assertCount(2, $slots);
+	}
+
+	public function testInterviewerWorkingHoursReplaceTheDefault(): void {
+		$this->calendarManager->method('checkAvailability')->willReturn([]);
+		// dev works Saturdays 07:00–10:00 Berlin (05:00–08:00 UTC in August) only
+		$this->workingHours->method('forUser')->willReturnCallback(
+			static fn (string $uid) => $uid === 'dev'
+				? new WorkingHours([['days' => [6], 'start' => 7 * 60, 'end' => 10 * 60, 'timezone' => new \DateTimeZone('Europe/Berlin')]])
+				: null,
+		);
+
+		$slots = $this->finder->propose($this->organizer, ['dev'], 60, 'UTC', 2);
+		$this->assertSame(['2026-08-15T05:00:00+00:00', '2026-08-15T06:30:00+00:00'], array_map(
+			static fn (array $slot) => (new \DateTimeImmutable($slot['start']))->format('c'),
+			$slots,
+		));
+	}
+
+	public function testEveryInterviewerMustBeWithinTheirHours(): void {
+		$this->calendarManager->method('checkAvailability')->willReturn([]);
+		// dev: Friday afternoons; ops has set nothing and gets weekdays 9–17
+		$this->workingHours->method('forUser')->willReturnCallback(
+			static fn (string $uid) => $uid === 'dev'
+				? new WorkingHours([['days' => [5, 6], 'start' => 15 * 60, 'end' => 20 * 60, 'timezone' => new \DateTimeZone('UTC')]])
+				: null,
+		);
+
+		$slots = $this->finder->propose($this->organizer, ['dev', 'ops'], 60, 'UTC', 6);
+		$this->assertNotEmpty($slots);
+		foreach ($slots as $slot) {
+			$start = new \DateTimeImmutable($slot['start']);
+			$this->assertSame(5, (int)$start->format('N'), 'Saturday is outside the default for ops');
+			$this->assertGreaterThanOrEqual(15, (int)$start->format('G'));
+			$this->assertLessThanOrEqual(16, (int)$start->format('G'), 'must end by 17:00 for ops');
+		}
+	}
+
+	public function testAttendeesFreeIgnoresTheOrganizer(): void {
+		$organizerBusy = $this->createMock(IAvailabilityResult::class);
+		$organizerBusy->method('getAttendeeEmail')->willReturn('boss@example.com');
+		$organizerBusy->method('isAvailable')->willReturn(false);
+		$devFree = $this->createMock(IAvailabilityResult::class);
+		$devFree->method('getAttendeeEmail')->willReturn('DEV@example.com');
+		$devFree->method('isAvailable')->willReturn(true);
+		$this->calendarManager->expects($this->once())->method('checkAvailability')
+			->with($this->anything(), $this->anything(), $this->organizer, ['dev@example.com'])
+			->willReturn([$organizerBusy, $devFree]);
+
+		$this->assertTrue($this->finder->attendeesFree($this->organizer, ['dev'], new \DateTime('2026-08-20T10:00:00Z'), new \DateTime('2026-08-20T11:00:00Z')));
+	}
+
+	public function testAttendeesFreeIsFalseWhenAnInterviewerIsBusy(): void {
+		$devBusy = $this->createMock(IAvailabilityResult::class);
+		$devBusy->method('getAttendeeEmail')->willReturn('dev@example.com');
+		$devBusy->method('isAvailable')->willReturn(false);
+		$this->calendarManager->method('checkAvailability')->willReturn([$devBusy]);
+
+		$this->assertFalse($this->finder->attendeesFree($this->organizer, ['dev'], new \DateTime('2026-08-20T10:00:00Z'), new \DateTime('2026-08-20T11:00:00Z')));
+	}
+
+	public function testAttendeesFreeDoesNotBlockOnCalendarErrorsOrMissingAddresses(): void {
+		$this->calendarManager->method('checkAvailability')->willThrowException(new \RuntimeException('CalDAV down'));
+		$start = new \DateTime('2026-08-20T10:00:00Z');
+		$end = new \DateTime('2026-08-20T11:00:00Z');
+		$this->assertTrue($this->finder->attendeesFree($this->organizer, ['dev'], $start, $end));
+		$this->assertTrue($this->finder->attendeesFree($this->organizer, ['nobody'], $start, $end));
 	}
 }

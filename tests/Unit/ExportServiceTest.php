@@ -10,6 +10,9 @@ namespace OCA\Recruiting\Tests\Unit;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\Document;
+use OCA\Recruiting\Db\Interview;
+use OCA\Recruiting\Db\InterviewFeedback;
+use OCA\Recruiting\Db\InterviewFeedbackMapper;
 use OCA\Recruiting\Db\InterviewMapper;
 use OCA\Recruiting\Db\OfferMapper;
 use OCA\Recruiting\Db\TimelineEventMapper;
@@ -55,6 +58,7 @@ class ExportServiceTest extends TestCase {
 			$this->voteMapper,
 			$tempManager,
 			$this->createMock(IL10N::class),
+			$this->createMock(InterviewFeedbackMapper::class),
 		);
 	}
 
@@ -147,6 +151,7 @@ class ExportServiceTest extends TestCase {
 			$voteMapper,
 			$tempManager,
 			$this->createMock(IL10N::class),
+			$this->createMock(InterviewFeedbackMapper::class),
 		);
 		$result = $service->buildZip($this->candidate());
 
@@ -168,5 +173,41 @@ class ExportServiceTest extends TestCase {
 		$result = $this->service->buildZip($candidate);
 		$this->assertStringNotContainsString('/', $result['name']);
 		$this->assertStringEndsWith('.zip', $result['name']);
+	}
+
+	public function testInterviewVerdictsAreExportedWithoutReviewerOrNotes(): void {
+		$this->documents->method('listFor')->willReturn([]);
+		$interview = new Interview();
+		$interview->setId(8);
+		$interview->setTitle('Tech talk');
+		$interviewMapper = $this->createMock(InterviewMapper::class);
+		$interviewMapper->method('findForCandidate')->willReturn([$interview]);
+		$feedback = new InterviewFeedback();
+		$feedback->setInterviewId(8);
+		$feedback->setUid('secret-reviewer');
+		$feedback->setVerdict('maybe');
+		$feedback->setNotes('internal reasoning');
+		$feedbackMapper = $this->createMock(InterviewFeedbackMapper::class);
+		$feedbackMapper->expects($this->once())->method('findForInterviews')->with([8])->willReturn([$feedback]);
+		$eventMapper = $this->createMock(TimelineEventMapper::class);
+		$eventMapper->method('findForCandidate')->willReturn([]);
+		$offerMapper = $this->createMock(OfferMapper::class);
+		$offerMapper->method('findForCandidate')->willReturn([]);
+		$tempManager = $this->createMock(ITempManager::class);
+		$tempManager->method('getTemporaryFile')->willReturnCallback(function () {
+			$path = tempnam(sys_get_temp_dir(), 'recruiting-test-');
+			$this->tempFiles[] = $path;
+			return $path;
+		});
+		$service = new ExportService($this->documents, $eventMapper, $interviewMapper, $offerMapper, $this->voteMapper, $tempManager, $this->createMock(IL10N::class), $feedbackMapper);
+
+		$zip = new \ZipArchive();
+		$zip->open($service->buildZip($this->candidate())['path']);
+		$json = (string)$zip->getFromName('candidate.json');
+		$zip->close();
+
+		$this->assertSame([['interview' => 'Tech talk', 'verdict' => 'maybe']], json_decode($json, true)['interviewFeedback']);
+		$this->assertStringNotContainsString('secret-reviewer', $json);
+		$this->assertStringNotContainsString('internal reasoning', $json);
 	}
 }

@@ -85,7 +85,10 @@
 				<template #icon>
 					<CalendarClock :size="20" />
 				</template>
-				<InterviewsTab :candidate="candidate" @schedule="showSchedule = true" />
+				<InterviewsTab
+					:candidate="candidate"
+					@schedule="showSchedule = true"
+					@reschedule="rescheduling = $event" />
 			</NcAppSidebarTab>
 
 			<NcAppSidebarTab
@@ -108,9 +111,10 @@
 		</template>
 
 		<ScheduleInterviewModal
-			v-if="showSchedule && candidate"
+			v-if="(showSchedule || rescheduling) && candidate"
 			:candidate="candidate"
-			@close="showSchedule = false"
+			:interview="rescheduling"
+			@close="showSchedule = false; rescheduling = null"
 			@saved="onMutated" />
 		<RejectModal
 			v-if="showReject && candidate"
@@ -189,6 +193,7 @@ export default {
 	data() {
 		return {
 			showSchedule: false,
+			rescheduling: null,
 			showReject: false,
 		}
 	},
@@ -256,6 +261,7 @@ export default {
 
 		onMutated() {
 			this.showSchedule = false
+			this.rescheduling = null
 			this.showReject = false
 			this.sidebar.reload()
 			this.sidebar.touch()
