@@ -37,6 +37,19 @@
 				{{ t('recruiting', 'Send an automatic confirmation mail to candidates applying by email') }}
 			</NcCheckboxRadioSwitch>
 
+			<NcCheckboxRadioSwitch v-model="form.publicApply" type="switch">
+				{{ t('recruiting', 'Accept applications through a public form on the web') }}
+			</NcCheckboxRadioSwitch>
+			<p v-if="form.publicApply" class="opening-modal__hint">
+				<template v-if="applyUrl">
+					{{ t('recruiting', 'Link this address from your job ad or career site:') }}
+					<a :href="applyUrl" target="_blank" rel="noopener">{{ applyUrl }}</a>
+				</template>
+				<template v-else>
+					{{ t('recruiting', 'The address of the form is shown here once the opening is saved.') }}
+				</template>
+			</p>
+
 			<h3>{{ t('recruiting', 'Hiring team') }}</h3>
 			<p class="opening-modal__hint">
 				{{ t('recruiting', 'Hiring managers run the process, interviewers only see candidates assigned to them, observers can watch but not act. Recruiters always have access.') }}
@@ -83,6 +96,7 @@
 
 <script>
 import { showError } from '@nextcloud/dialogs'
+import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcModal from '@nextcloud/vue/components/NcModal'
@@ -125,6 +139,7 @@ export default {
 				description: this.opening?.description ?? '',
 				requirements: this.opening?.requirements ?? '',
 				autoAck: this.opening?.autoAck ?? true,
+				publicApply: this.opening?.publicApply ?? false,
 				team: (this.opening?.team ?? []).map((member) => ({
 					user: { id: member.uid, user: member.uid, displayName: member.displayName },
 					role: { id: member.role, label: roleLabel(member.role) },
@@ -138,6 +153,12 @@ export default {
 			return this.opening
 				? this.t('recruiting', 'Edit opening')
 				: this.t('recruiting', 'New job opening')
+		},
+
+		applyUrl() {
+			return this.opening?.mailSlug
+				? window.location.origin + generateUrl('/apps/recruiting/apply/{slug}', { slug: this.opening.mailSlug })
+				: ''
 		},
 
 		roleOptions() {

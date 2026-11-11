@@ -208,7 +208,7 @@
 		<span class="stage s-offer">Offer</span><span class="arrow">→</span>
 		<span class="stage s-hired">Hired 🎉</span>
 	</div>
-	<p class="meta">For Recruiting 0.7 · August 2026 · Everything in this handbook stays on your own server.</p>
+	<p class="meta">For Recruiting 0.8 · November 2026 · Everything in this handbook stays on your own server.</p>
 </div>
 
 <!-- ================================================== TOC -->
@@ -217,16 +217,18 @@
 	<ol>
 		<li>Recruiting in five minutes <span>The idea, the pipeline, and who sees what</span></li>
 		<li>Finding your way around <span>Navigation, the board, and the anatomy of a candidate card</span></li>
-		<li>How applications arrive <span>Email intake, the mail tag, replies, and the triage inbox</span></li>
-		<li>The candidate file <span>The five tabs: Profile, Votes, Interviews, Offer, Log</span></li>
+		<li>How applications arrive <span>Email, the application form, referrals, and the triage inbox</span></li>
+		<li>The candidate file <span>The five tabs, duplicates and merging</span></li>
 		<li>Screening &amp; votes <span>Unbiased reviews, assigning screeners, "My reviews"</span></li>
-		<li>Interviews <span>Booking against real calendars, the candidate's scheduling page</span></li>
+		<li>Interviews <span>Booking against real calendars, the candidate's scheduling page, reminders</span></li>
 		<li>Offers <span>Draft, four-eyes approval, sending, and tracking the answer</span></li>
-		<li>Rejecting &amp; the talent pool <span>Respectful rejections and consent-based keeping-in-touch</span></li>
+		<li>Rejecting &amp; the talent pool <span>Respectful rejections, closing an opening, consent-based keeping-in-touch</span></li>
 		<li>Staying on top of things <span>The Stuck lens, aging colors, notifications and the digest</span></li>
 		<li>Mail templates <span>Your voice, with placeholders that cannot break</span></li>
-		<li>Reports <span>Funnel, time-to-hire and applications per week</span></li>
+		<li>Reports <span>Period, funnel, sources, time-to-hire and CSV export</span></li>
 		<li>Privacy &amp; GDPR <span>What is stored, who can see it, and what is deleted when</span></li>
+		<li>Referrals <span>Recommending people you know</span></li>
+		<li>The candidate's own page <span>What applicants can see and do themselves</span></li>
 	</ol>
 </div>
 
@@ -312,6 +314,8 @@
 				<li><strong>Reports</strong> — live numbers over your openings.</li>
 				<li><strong>Talent pool</strong> — candidates who agreed to be considered for
 				future openings.</li>
+				<li><strong>Refer someone</strong> — recommend a person you know for an open
+				position. Available to every colleague, not only the hiring teams (chapter 13).</li>
 				<li><strong>Openings</strong> — one entry per job, with the number of active
 				candidates. Closed openings collapse at the bottom.</li>
 				<li><strong>Handbook</strong> — this document, always one click away.</li>
@@ -335,6 +339,12 @@
 	<img class="ui" src="img/column-header.png" alt="column header"> always shows the
 	<em>true</em> total — if a stage holds more than 100 candidates, the column loads them in
 	pages with a <em>Show more</em> button.</p>
+
+	<p>The board <strong>keeps itself up to date</strong>: while it is open, it checks every
+	30 seconds whether a colleague moved a candidate, added one or voted, and quietly reloads
+	— your selection and an open candidate file stay where they are. If you move a card
+	that somebody else has just moved, nothing is overwritten: you get a short note
+	("… was moved to Interview by someone else") and the board shows the current state.</p>
 
 	<h3>Anatomy of a card</h3>
 	<div class="duo">
@@ -377,10 +387,7 @@
 	<p>Click any column header to sort (a third click restores the original order). Managers
 	get checkboxes: select several candidates and the bulk bar appears —
 	<img class="ui ui-lg" src="img/bulk-bar.png" alt="Bulk bar"> — to move them together or
-	reject them in one go. The bulk rejection asks for one reason and one mail text; the
-	placeholders (such as the name) are filled in for each candidate, and you see the
-	finished mail for the first one before anything is sent. Afterwards a summary lists who
-	was rejected and who could not be (for example because their mail could not be sent).</p>
+	reject them in one go (chapter 8).</p>
 </section>
 
 <!-- ================================================== 3 -->
@@ -391,9 +398,14 @@
 
 	<h3>By email — the normal way</h3>
 	<p>Your admin connects a dedicated application mailbox (for example
-	<code>jobs@your-company.com</code>). The app checks it every five minutes. Every new mail
-	becomes a candidate: name and address are read from the sender, the mail text lands on
-	the candidate's timeline, and attachments become documents.</p>
+	<code>jobs@your-company.com</code>). The app checks it every five minutes. Every new
+	application mail becomes a candidate: name and address are read from the sender, the
+	mail text lands on the candidate's timeline, and attachments become documents.</p>
+
+	<p>Automatic mail is recognized and left alone: bounces, out-of-office replies and
+	newsletters never turn into "candidates" and never get a confirmation. The heartbeat
+	line in the triage inbox counts them as <em>skipped</em>, so you can see that nothing
+	was lost.</p>
 
 	<p>Every opening has a <strong>mail tag</strong>, shown in its header:
 	<img class="ui" src="img/mail-tag.png" alt="Opening header with mail tag"></p>
@@ -407,7 +419,24 @@
 	<div class="callout tip">Put the tagged address into your job postings —
 	<code>jobs+product-designer@…</code> on the design job ad, and applications sort
 	themselves. An automatic confirmation of receipt can be sent per opening, so applicants
-	immediately know their documents arrived.</div>
+	immediately know their documents arrived. The confirmation also carries the link to the
+	candidate's own page (chapter 14).</div>
+
+	<h3>Through the application form</h3>
+	<p>Don't want applicants to write emails? In the opening's <strong>⋯ → Edit opening
+	&amp; team</strong>, switch on <strong>Accept applications through a public form on the
+	web</strong>. The dialog then shows the form's address
+	(<code>…/apps/recruiting/apply/&lt;mail-tag&gt;</code>) — link it from your career site
+	or job ad. Applicants enter their name and email address, write a few lines, attach their
+	CV and agree to the processing of their data; the application lands in the opening's
+	"New" column like a mailed one. The form only works while the opening is open, and it is
+	protected against bots and floods, so it does not need a captcha.</p>
+
+	<h3>Through referrals</h3>
+	<p>Colleagues can recommend people they know with <strong>Refer someone</strong> in the
+	navigation. A referral arrives in the opening's "New" column with the source
+	"Employee referral" and the colleague's note on the timeline. Chapter 13 explains what
+	the referring colleague sees.</p>
 
 	<h3>When candidates reply</h3>
 	<p>Mails the app sends carry a personal reply address for each candidate. When Grace
@@ -425,7 +454,10 @@
 	Spam goes into the bin via the row's ⋮ menu — permanently, documents included.</p>
 	<p>The heartbeat line <img class="ui" src="img/heartbeat.png" alt="Mailbox heartbeat">
 	shows when the mailbox was last checked. If a check fails, a warning appears here — so a
-	broken mailbox can never silently swallow applications.</p>
+	broken mailbox can never silently swallow applications. A mail that cannot be processed
+	is tried again; after three failed attempts it is moved to the mailbox folder
+	<code>Recruiting-Failed</code>, and the warning tells you how many are waiting there, so
+	someone can look at them by hand.</p>
 
 	<h3>Adding candidates by hand</h3>
 	<p>Somebody applied at a job fair or on paper? <img class="ui ui-lg" src="img/btn-add-candidate.png"
@@ -445,7 +477,8 @@
 	<div class="duo">
 		<figure>
 			<img src="../screenshots/03-candidate-profile.png" alt="The profile tab">
-			<figcaption>Contact details, source, application date — and the current stage at the top.</figcaption>
+			<figcaption>A second application by the same person: the duplicate warning with
+			<em>Merge</em>, and the list of their other applications.</figcaption>
 		</figure>
 		<figure>
 			<img src="../screenshots/04-candidate-documents.png" alt="Documents in the profile tab">
@@ -454,12 +487,27 @@
 	</div>
 	<ul>
 		<li><strong>Contact details</strong> are editable by managers (Edit contact details).</li>
-		<li>If the same address applied before, a <strong>duplicate warning</strong> links to
-		the earlier application.</li>
+		<li>If the same person applied for this opening before (the address is compared
+		regardless of upper and lower case), a <strong>duplicate warning</strong> links to the
+		earlier application, and <strong>Merge into the earlier application</strong> combines
+		the two: documents, timeline, comments, votes, interviews and offers move over, and the
+		second record disappears. Only applications for the <em>same</em> opening can be
+		merged.</li>
+		<li><strong>Also applied for</strong> lists the person's applications for other
+		openings — as far as you have access to them — with a link to each.</li>
+		<li><strong>Referred by</strong> shows the colleague who recommended this candidate
+		(chapter 13).</li>
+		<li>If the candidate asked for their data to be deleted on their own page, a red
+		banner shows the date; recruiters get a <strong>Delete now</strong> button right
+		there (chapter 12).</li>
 		<li>With Nextcloud Assistant installed, an <strong>AI summary</strong> of the
-		application can be generated — always labeled, never a decision.</li>
-		<li><strong>Documents</strong>: upload more, preview PDFs in the browser, delete.
-		Stored privately in the app — never visible in Files.</li>
+		application can be generated — always labeled, never a decision. The summary reads the
+		application text and the CV; the candidate's email address and phone number are never
+		sent to the AI.</li>
+		<li><strong>Documents</strong>: upload more, delete. PDFs, images and text files open
+		in the browser; Word and OpenDocument files are downloaded. Stored privately in the
+		app — never visible in Files. If your server runs the antivirus app, every upload is
+		scanned first and infected files are refused.</li>
 		<li>At the very bottom sits the red <strong>Reject …</strong> button — deliberately
 		out of the way of everyday clicking (chapter 8).</li>
 	</ul>
@@ -552,7 +600,8 @@
 	<div class="duo">
 		<figure>
 			<img src="../screenshots/18-public-slot-picker.png" alt="The public scheduling page">
-			<figcaption>The scheduling page: no account, times in the <em>candidate's</em> timezone.</figcaption>
+			<figcaption>The scheduling page: no account, times in the <em>candidate's</em>
+			timezone — and a way to say that none of them fit.</figcaption>
 		</figure>
 		<figure>
 			<img src="../screenshots/19-public-confirmed.png" alt="The confirmation page">
@@ -564,6 +613,18 @@
 	event lands in all interviewers' calendars, the Talk room is created (for video
 	interviews), the card moves to <strong>Interview</strong>, and the panel is notified.</p>
 
+	<p>If none of the times fit, the candidate clicks <strong>None of these times work for
+	me</strong> and can add a short message; after confirming, <strong>I need to
+	reschedule</strong> does the same. Either way the organizer and the interviewers get a
+	notification and the message lands on the candidate's timeline — nothing is cancelled
+	automatically, you decide and propose new times. The day before a confirmed interview,
+	the candidate receives a <strong>reminder mail</strong> with date, time and place (the
+	"Interview reminder" template, chapter 10).</p>
+
+	<div class="callout privacy">Scheduling links stop working a week after the interview,
+	when the interview is cancelled, and when the candidate is rejected or withdraws — an old
+	link in someone's inbox reveals nothing.</div>
+
 	<h3>Keeping track</h3>
 	<figure>
 		<img src="../screenshots/06-interviews-tab.png" alt="The Interviews tab">
@@ -573,7 +634,7 @@
 		<li><strong>Copy scheduling link</strong> — if you want to resend it yourself, or the
 		candidate has no email address on file.</li>
 		<li><strong>Cancel interview</strong> — notifies all interviewers and removes the
-		calendar event. The candidate page shows the cancellation.</li>
+		calendar event from every interviewer's calendar.</li>
 		<li><strong>My interviews</strong> in the navigation lists your own panel
 		appointments, including pending ones.</li>
 	</ul>
@@ -644,15 +705,47 @@
 		<li>Optionally tick <strong>"Ask to stay in our talent pool"</strong>.</li>
 	</ol>
 
+	<h3>Rejecting several candidates at once</h3>
+	<figure>
+		<img src="../screenshots/22-bulk-reject.png" alt="Rejecting three candidates at once">
+		<figcaption>One reason and one mail text for everyone; the preview shows the finished
+		mail for the first candidate.</figcaption>
+	</figure>
+	<p>In the table view, tick the candidates and choose <strong>Reject …</strong> in the
+	bulk bar. You pick one reason and one mail text; placeholders such as
+	<code>{{candidate_name}}</code> are filled in for each candidate, so everybody still gets
+	a personal mail. Large selections are sent in portions with a progress bar, and the
+	summary at the end lists who was rejected and who could not be (for example because
+	their mail could not be sent) — one problem never stops the others.</p>
+
+	<h3>Closing an opening</h3>
+	<figure>
+		<img src="../screenshots/23-close-opening.png" alt="The close-opening dialog">
+		<figcaption>Closing an opening with candidates still in the pipeline.</figcaption>
+	</figure>
+	<p>When a position is filled, choose <strong>⋯ → Close opening</strong>. If candidates are
+	still active, the app asks what should happen to them: <strong>Reject the remaining
+	candidates</strong> opens the bulk rejection with the reason "position filled" already
+	chosen, <strong>Close without changing them</strong> leaves them as they are. Either way,
+	nobody is forgotten: candidates left behind in a closed opening are anonymized
+	automatically after the retention period (chapter 12).</p>
+	<p>A mistyped opening that never received an application can be removed completely with
+	<strong>⋯ → Delete opening</strong> (recruiters only). As soon as an opening has a single
+	candidate, it can only be closed — the history belongs to the candidates.</p>
+
 	<h3>The talent pool — strictly on consent</h3>
 	<figure>
 		<img src="../screenshots/15-talent-pool.png" alt="The talent pool">
-		<figcaption>Only people who explicitly confirmed the consent link appear here.</figcaption>
+		<figcaption>Only people who explicitly confirmed the consent link appear here. The search
+		also looks into their CVs.</figcaption>
 	</figure>
 	<p>The pool invitation adds a consent link to the rejection mail. Only when the candidate
 	clicks it and confirms do they appear in the pool — nobody is kept "just in case"
 	(that's not just polite, it's the GDPR). Pool membership expires automatically after the
 	configured period.</p>
+	<p>Looking for a particular skill? The search box finds pool members by name, email
+	address <em>or the text of their CV</em> — type "Kubernetes" or "Figma" and see who
+	mentioned it.</p>
 	<p>When a fitting position opens later, <strong>Add to opening</strong> creates a fresh
 	copy of the application — documents included — in that opening's "New" column. The pool
 	entry stays until it expires or the person asks to be removed.</p>
@@ -684,8 +777,12 @@
 	<h3>Notifications</h3>
 	<p>You get a Nextcloud notification (bell, top right) when: a new application arrives in
 	your opening · you are asked to review someone · you are added to an interview panel ·
-	a candidate confirms or a candidate replies · an offer waits for your approval · an
-	offer is about to expire · someone @mentions you.</p>
+	a candidate confirms, asks for other times or replies · a candidate withdraws or adds
+	documents on their own page · an offer waits for your approval · an offer is about to
+	expire · someone @mentions you. Recruiters are also told when a candidate asks for their
+	data to be deleted, and when an opening reaches its daily limit of automatic
+	confirmations (a sign of a spam wave). Colleagues who referred someone hear when their
+	referral moves on.</p>
 
 	<h3>The email digest</h3>
 	<figure>
@@ -699,14 +796,16 @@
 	<div class="callout tip">Recruiting results also show up in Nextcloud's universal search
 	(<span class="kbd">Ctrl</span>+<span class="kbd">K</span> /
 	<span class="kbd">⌘</span>+<span class="kbd">K</span>) — type a candidate's name from
-	anywhere in Nextcloud.</div>
+	anywhere in Nextcloud. Words of three letters or more also find candidates whose CV
+	contains them. You only ever find candidates you are allowed to see.</div>
 </section>
 
 <!-- ================================================== 10 -->
 <section class="chapter" style="--accent: var(--violet)">
 	<h2 class="chapter-title"><span class="no">10</span>Mail templates</h2>
-	<p class="chapter-lede">Four mail types — confirmation of receipt, interview invitation,
-	rejection, offer — each with a built-in template you can replace with your own voice.</p>
+	<p class="chapter-lede">Five mail types — confirmation of receipt, interview invitation,
+	interview reminder, rejection, offer — each with a built-in template you can replace
+	with your own voice.</p>
 
 	<figure>
 		<img src="../screenshots/16-mail-templates.png" alt="Mail templates">
@@ -718,6 +817,17 @@
 	<code>{{interview_link}}</code> appear as chips — click one to insert it at the cursor.
 	Each mail type only offers the placeholders it can actually fill, and templates are
 	validated when you save: a typo in a placeholder can never reach a candidate.</p>
+
+	<p><code>{{portal_link}}</code> inserts the link to the candidate's own page (chapter 14).
+	The built-in confirmation of receipt contains it; if you use your own template, add it
+	there so applicants can follow their application. The interview reminder knows
+	<code>{{interview_date}}</code>, <code>{{interview_time}}</code> and
+	<code>{{interview_location}}</code> — the Talk link for video interviews.</p>
+
+	<div class="callout privacy">Names in outgoing mail are cleaned up automatically: line
+	breaks, web addresses and email addresses are removed from <code>{{candidate_name}}</code>,
+	so nobody can misuse the application form to send spam in your company's name. The
+	stored name itself is not changed.</div>
 
 	<div class="callout note">Templates are the <em>starting point</em>, not the final word:
 	every send shows the resolved text first, and you can edit it per candidate.</div>
@@ -731,18 +841,31 @@
 
 	<figure>
 		<img src="../screenshots/14-reports.png" alt="Reports">
-		<figcaption>Headline numbers, applications per week, and per opening the funnel in stage colors.</figcaption>
+		<figcaption>The period, headline numbers, applications over time, the stage conversion
+		and where applications come from.</figcaption>
 	</figure>
 
 	<ul>
-		<li><strong>Headline tiles</strong>: total candidates (with this week's trend), hired,
+		<li><strong>The period</strong>: <em>Applications from … until …</em> — by default the
+		last twelve months. Every number on the page describes the applications received in
+		that period, so the figures always fit together.</li>
+		<li><strong>Headline tiles</strong>: candidates (with this month's trend), hired,
 		average days to hire, open offers.</li>
-		<li><strong>Applications per week</strong> — the last twelve weeks, current week
-		highlighted.</li>
-		<li><strong>Per opening</strong>: the funnel (how many candidates sit in each stage,
-		in the stage colors you know from the board), the average time spent in each stage,
-		days-to-hire, open offers, and the breakdown of rejection reasons.</li>
+		<li><strong>Applications over time</strong> — per week for periods up to half a year,
+		per month for longer ones.</li>
+		<li><strong>Stage conversion</strong> — how many applications reached at least
+		Screening, Interview, Offer and Hired. Where does your funnel narrow?</li>
+		<li><strong>Source of applications</strong> — mail, application form, referral, added
+		manually or from the talent pool. Which channel brings people?</li>
+		<li><strong>Per opening</strong>: the funnel in stage colors, the average time spent in
+		each stage, days-to-hire, open offers, sources and the breakdown of rejection
+		reasons.</li>
+		<li><strong>Export CSV</strong> downloads the per-opening table for your own
+		spreadsheets.</li>
 	</ul>
+
+	<p>The numbers are calculated by the database and kept for a few minutes, so the page
+	stays fast even with years of history; any change to a candidate refreshes them.</p>
 
 	<div class="callout privacy">Numbers survive anonymization: when a rejected candidate's
 	personal data is automatically erased after the retention period, their anonymous journey
@@ -758,7 +881,10 @@
 
 	<h3>Where candidate data lives</h3>
 	<ul>
-		<li>All data is stored in your Nextcloud — nothing is ever sent to a third party.</li>
+		<li>All data is stored in your Nextcloud — nothing is sent to a third party. The one
+		exception is the optional AI assistance: if your admin connected an external AI
+		provider, application texts and CVs go there for the summary — but never the
+		candidate's email address or phone number.</li>
 		<li>Documents live in protected app storage: they never appear in the Files app, and
 		only people with access to that candidate can open them.</li>
 		<li>Access follows the roles from chapter 1 — interviewers only see their assigned
@@ -769,7 +895,19 @@
 	<p>Rejected and withdrawn candidates are <strong>anonymized automatically</strong> after
 	the retention period your admin configures (typically a few months). Name, contact data,
 	documents, mail texts, comments and summaries are erased; the anonymous stage history
-	stays for the reports. Expired talent-pool memberships are anonymized the same way.</p>
+	stays for the reports. The same happens to</p>
+	<ul>
+		<li>candidates who were still in the pipeline when their opening was <strong>closed</strong>
+		— counted from the day of closing,</li>
+		<li>expired <strong>talent-pool</strong> memberships.</li>
+	</ul>
+	<p>Mails waiting in the <strong>triage inbox</strong> that nobody assigned to an opening
+	are <strong>deleted</strong> after their own period (90 days unless your admin changed
+	it) — that is where spam and stray mail end up.</p>
+	<p>Anonymizing or deleting a candidate also removes their name from the activity stream
+	and from notifications, and rewrites past interview appointments in the interviewers'
+	calendars to a neutral "Interview: &lt;opening&gt;". Their links (scheduling page, own
+	page) stop working.</p>
 
 	<h3>When a candidate asks…</h3>
 	<table>
@@ -785,7 +923,9 @@
 			<td>"Please delete my data."</td>
 			<td>Candidate header menu → <strong>Delete permanently (GDPR)</strong>. Removes the
 			candidate with all documents, votes, comments, interviews and notifications.
-			Irreversible, with a confirmation dialog.</td>
+			Irreversible, with a confirmation dialog. Candidates can also ask on their own page
+			(chapter 14): you then get a notification, the profile shows a red banner with the
+			date of the request, and <strong>Delete now</strong> does the rest.</td>
 		</tr>
 		<tr>
 			<td>"Keep me in mind for later."</td>
@@ -796,8 +936,89 @@
 
 	<h3>For your admin</h3>
 	<p>The administration settings (Administration → Recruiting) hold the technical setup:
-	the application mailbox (IMAP), the HR group, the sender identity, the retention period
-	and the talent-pool duration. Admins configure — they don't see candidates.</p>
+	the application mailbox (IMAP), the HR group, the sender identity, the daily limit of
+	automatic confirmations per opening, the retention period, the triage-inbox retention,
+	the talent-pool duration and whether employee referrals are switched on. Admins
+	configure — they don't see candidates.</p>
+</section>
+
+<!-- ================================================== 13 -->
+<section class="chapter" style="--accent: var(--green)">
+	<h2 class="chapter-title"><span class="no">13</span>Referrals</h2>
+	<p class="chapter-lede">The best hires often come from people your colleagues already
+	know. Refer someone takes thirty seconds — and every colleague can do it.</p>
+
+	<figure>
+		<img src="../screenshots/20-referrals.png" alt="Refer someone">
+		<figcaption>The referral form, and below it the status of your own referrals.</figcaption>
+	</figure>
+
+	<ol class="steps">
+		<li>Open <strong>Refer someone</strong> in the navigation. You don't need to be on a
+		hiring team; every Nextcloud user can refer.</li>
+		<li>Pick one of the <strong>open positions</strong>, enter the person's name and email
+		address (phone is optional) and write why you recommend them. Attach their CV if you
+		have it.</li>
+		<li>Tick <strong>This person agreed to be referred</strong> — ask them first; their
+		data should not end up in a hiring process without their knowledge.</li>
+		<li><strong>Send referral</strong>. The candidate arrives in the opening's "New" column
+		with the source "Employee referral", your note on the timeline, and "Referred by" with
+		your name in the profile. The hiring managers are notified as for any new
+		application.</li>
+	</ol>
+
+	<h3>What you see afterwards</h3>
+	<p>Under <strong>Your referrals</strong> you follow each referral with a simple status:
+	<em>Received</em>, <em>In review</em>, <em>Interview scheduled</em>, <em>Offer</em> or
+	<em>Closed</em>. When the status changes, you get a notification.</p>
+
+	<div class="callout privacy">Referring someone gives you <strong>no access</strong> to
+	their candidate file. You don't see votes, comments, interview feedback or the reason
+	why an application was closed — just the status above. Your admin can switch referrals
+	off in the administration settings.</div>
+</section>
+
+<!-- ================================================== 14 -->
+<section class="chapter" style="--accent: var(--violet)">
+	<h2 class="chapter-title"><span class="no">14</span>The candidate's own page</h2>
+	<p class="chapter-lede">Applicants shouldn't have to email you to ask how things are going.
+	Every candidate has a personal page that answers that — and lets them act themselves.</p>
+
+	<div class="duo">
+		<figure>
+			<img src="../screenshots/21-candidate-portal.png" alt="The candidate's own page">
+			<figcaption>What Grace sees when she opens the link from her confirmation of receipt.</figcaption>
+		</figure>
+		<div>
+			<h3>How candidates get there</h3>
+			<p>The link is in the confirmation of receipt (and in the interview reminder). It is
+			personal and needs no account. If you write your own templates, add the
+			<code>{{portal_link}}</code> placeholder (chapter 10).</p>
+
+			<h3>What they see</h3>
+			<ul>
+				<li>A simple <strong>status</strong>: received, in review, interview scheduled,
+				offer, or closed. Never your internal stages, votes, comments or rejection
+				reasons — and "closed" only once a decision is final.</li>
+				<li>Their <strong>interviews</strong>, with the link to pick a time or to see the
+				confirmed appointment.</li>
+			</ul>
+
+			<h3>What they can do</h3>
+			<ul>
+				<li><strong>Add documents</strong> — an updated CV or a certificate. It appears in
+				the profile and the hiring managers are notified.</li>
+				<li><strong>Withdraw</strong> the application. The candidate moves to Withdrawn
+				and the managers are notified; booked interviews stay until you cancel them.</li>
+				<li><strong>Ask for their data to be deleted.</strong> The recruiters are notified
+				and see the request in the profile (chapter 12); the deletion itself stays a
+				recruiter's decision.</li>
+			</ul>
+		</div>
+	</div>
+
+	<div class="callout note">The page stops working when the candidate's data is anonymized
+	or deleted. Until then, only the person holding the link can open it.</div>
 
 	<div class="callout tip">Questions this handbook doesn't answer? Ask your recruiting
 	team, or open the candidate's Log tab — chances are the answer is already in the
