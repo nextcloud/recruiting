@@ -7,7 +7,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 export default createRouter({
 	history: createWebHashHistory(),
 	routes: [
-		{ path: '/', name: 'home', component: () => import('./views/HomeView.vue') },
+		{ path: '/', name: 'home', component: () => import('./views/TodayView.vue') },
 		{ path: '/openings/:id(\\d+)', name: 'opening', component: () => import('./views/OpeningView.vue'), props: true },
 		{ path: '/triage', name: 'triage', component: () => import('./views/TriageView.vue') },
 		{ path: '/my-reviews', name: 'myReviews', component: () => import('./views/MyReviewsView.vue') },

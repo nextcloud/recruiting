@@ -98,6 +98,13 @@ class InterviewReminderServiceTest extends TestCase {
 		$this->assertSame(1, $this->service->sendDue());
 	}
 
+	public function testTheReminderIsDatedInTheCandidatesLanguage(): void {
+		$this->interviewMapper->method('findDueReminders')->willReturn([$this->interview()]);
+		$this->interviewMapper->method('claimReminder')->willReturn(true);
+		$this->mail->expects($this->once())->method('l10nFor')->with($this->candidate);
+		$this->assertSame(1, $this->service->sendDue());
+	}
+
 	public function testAlreadyClaimedRemindersAreSkipped(): void {
 		$this->interviewMapper->method('findDueReminders')->willReturn([$this->interview()]);
 		$this->interviewMapper->method('claimReminder')->willReturn(false);

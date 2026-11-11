@@ -37,6 +37,8 @@ export default {
 		candidateId: { type: Number, required: true },
 		action: { type: String, required: true },
 		label: { type: String, required: true },
+		/** extra input for the action, e.g. { purpose } for draft_email */
+		params: { type: Object, default: () => ({}) },
 	},
 
 	emits: ['result'],
@@ -56,7 +58,7 @@ export default {
 		async run() {
 			this.working = true
 			try {
-				const { data } = await api.aiRequest(this.candidateId, this.action)
+				const { data } = await api.aiRequest(this.candidateId, this.action, this.params)
 				const started = Date.now()
 				// Back off while waiting: 1s, 2s, … capped at 5s — most tasks
 				// return within seconds, long ones should not hammer the server

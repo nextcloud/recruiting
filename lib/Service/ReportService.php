@@ -126,10 +126,10 @@ class ReportService {
 			$this->l10n->t('Applications'),
 		];
 		foreach ($stages as $stage) {
-			$header[] = $this->l10n->t('Now in "%s"', [$this->stageLabel($stage)]);
+			$header[] = $this->l10n->t('Now in "%s"', [CandidateStatus::stageLabel($stage, $this->l10n)]);
 		}
 		foreach ($funnel as $stage) {
-			$header[] = $this->l10n->t('Reached "%s"', [$this->stageLabel($stage)]);
+			$header[] = $this->l10n->t('Reached "%s"', [CandidateStatus::stageLabel($stage, $this->l10n)]);
 		}
 		$header[] = $this->l10n->t('Avg. days to hire');
 		$header[] = $this->l10n->t('Open offers');
@@ -480,19 +480,6 @@ class ReportService {
 			throw new ValidationException($this->l10n->t('Invalid date: %s', [$value]));
 		}
 		return $date;
-	}
-
-	private function stageLabel(string $stage): string {
-		return match ($stage) {
-			Candidate::STAGE_NEW => $this->l10n->t('New'),
-			Candidate::STAGE_SCREENING => $this->l10n->t('Screening'),
-			Candidate::STAGE_INTERVIEW => $this->l10n->t('Interview'),
-			Candidate::STAGE_OFFER => $this->l10n->t('Offer'),
-			Candidate::STAGE_HIRED => $this->l10n->t('Hired'),
-			Candidate::STAGE_REJECTED => $this->l10n->t('Rejected'),
-			Candidate::STAGE_WITHDRAWN => $this->l10n->t('Withdrawn'),
-			default => $stage,
-		};
 	}
 
 	private function statusLabel(string $status): string {

@@ -35,6 +35,10 @@
 					:label="t('recruiting', 'Email address')"
 					:required="true" />
 				<NcTextField v-model="form.phone" type="tel" :label="t('recruiting', 'Phone (optional)')" />
+				<LanguageSelect
+					v-model="form.language"
+					:label="t('recruiting', 'Language for emails (optional)')"
+					:placeholder="t('recruiting', 'Not set — the server’s default language')" />
 				<NcTextArea
 					v-model="form.note"
 					:label="t('recruiting', 'Why do you recommend this person?')"
@@ -92,6 +96,7 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AccountPlusOutline from 'vue-material-design-icons/AccountPlusOutline.vue'
+import LanguageSelect from '../components/LanguageSelect.vue'
 import api, { errorMessage } from '../api.js'
 import { coarseStatusLabel, fromNow } from '../utils/format.js'
 
@@ -104,6 +109,7 @@ function emptyForm() {
 		name: '',
 		email: '',
 		phone: '',
+		language: null,
 		note: '',
 		consent: false,
 	}
@@ -113,6 +119,7 @@ export default {
 	name: 'ReferralsView',
 	components: {
 		AccountPlusOutline,
+		LanguageSelect,
 		NcButton,
 		NcCheckboxRadioSwitch,
 		NcEmptyContent,
@@ -176,6 +183,7 @@ export default {
 			form.append('name', this.form.name.trim())
 			form.append('email', this.form.email.trim())
 			form.append('phone', this.form.phone.trim())
+			form.append('language', this.form.language ?? '')
 			form.append('note', this.form.note.trim())
 			form.append('consent', this.form.consent ? '1' : '0')
 			const file = this.$refs.cv?.files?.[0]

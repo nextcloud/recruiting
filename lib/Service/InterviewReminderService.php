@@ -15,6 +15,7 @@ use OCA\Recruiting\Db\MailTemplate;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IL10N;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -66,7 +67,7 @@ class InterviewReminderService {
 					MailTemplate::TYPE_INTERVIEW_REMINDER,
 					null,
 					null,
-					$this->placeholders($interview),
+					$this->placeholders($interview, $this->mail->l10nFor($candidate)),
 				);
 				$this->mail->sendToCandidate($candidate, $draft['subject'], $draft['body'], null);
 				$sent++;
@@ -81,10 +82,10 @@ class InterviewReminderService {
 	/**
 	 * @return array<string, string>
 	 */
-	private function placeholders(Interview $interview): array {
+	private function placeholders(Interview $interview, IL10N $l): array {
 		$link = $this->interviews->publicUrl($interview);
 		$when = $interview->getStartAt() !== null
-			? $this->timeFormatter->format($interview->getStartAt(), $interview->getCreatedBy())
+			? $this->timeFormatter->format($interview->getStartAt(), $interview->getCreatedBy(), $l)
 			: ['date' => '', 'time' => ''];
 		$location = $interview->getTalkLink() !== '' ? $interview->getTalkLink() : $interview->getLocation();
 		return [

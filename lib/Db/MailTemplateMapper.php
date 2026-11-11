@@ -52,11 +52,23 @@ class MailTemplateMapper extends QBMapper {
 		return $this->findEntities($qb);
 	}
 
-	public function clearDefault(string $type): void {
+	/**
+	 * Unmark the default of a type for one language (null: the
+	 * language-neutral default) — there is one default per type and language.
+	 */
+	public function clearDefault(string $type, ?string $language): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update($this->getTableName())
 			->set('is_default', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT))
 			->where($qb->expr()->eq('type', $qb->createNamedParameter($type)));
+		if ($language === null || $language === '') {
+			$qb->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('language'),
+				$qb->expr()->eq('language', $qb->createNamedParameter('')),
+			));
+		} else {
+			$qb->andWhere($qb->expr()->eq('language', $qb->createNamedParameter($language)));
+		}
 		$qb->executeStatement();
 	}
 }

@@ -12,6 +12,7 @@ use OCA\Recruiting\Db\MailTemplateMapper;
 use OCA\Recruiting\Exception\ValidationException;
 use OCA\Recruiting\Service\ActivityPublisher;
 use OCA\Recruiting\Service\ConfigService;
+use OCA\Recruiting\Service\LanguageService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\PortalService;
 use OCA\Recruiting\Service\TemplateService;
@@ -19,6 +20,7 @@ use OCA\Recruiting\Service\TimelineService;
 use OCP\Defaults;
 use OCP\IL10N;
 use OCP\IUserManager;
+use OCP\L10N\IFactory;
 use OCP\Mail\IMailer;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -26,13 +28,18 @@ use Psr\Log\NullLogger;
 class MailRenderingTest extends TestCase {
 	private MailService $mail;
 	private TemplateService $templates;
+	private LanguageService $languages;
 
 	protected function setUp(): void {
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(
 			static fn (string $text, $params = []) => vsprintf(str_replace('%s', '%s', $text), is_array($params) ? $params : [$params]),
 		);
-		$this->templates = new TemplateService($this->createMock(MailTemplateMapper::class), $l10n);
+		$factory = $this->createMock(IFactory::class);
+		$factory->method('get')->willReturn($l10n);
+		$factory->method('findGenericLanguage')->willReturn('en');
+		$this->languages = new LanguageService($factory, $l10n);
+		$this->templates = new TemplateService($this->createMock(MailTemplateMapper::class), $l10n, $this->languages);
 		$this->mail = new MailService(
 			$this->createMock(IMailer::class),
 			$this->createMock(ConfigService::class),
@@ -46,6 +53,7 @@ class MailRenderingTest extends TestCase {
 			$l10n,
 			new NullLogger(),
 			$this->createMock(PortalService::class),
+			$this->languages,
 		);
 	}
 
@@ -73,7 +81,7 @@ class MailRenderingTest extends TestCase {
 	}
 
 	public function testBuiltinTemplatesResolveForEveryType(): void {
-		foreach (['rejection', 'interview_invite', 'receipt_confirmation', 'offer', 'interview_reminder'] as $type) {
+		foreach (['rejection', 'interview_invite', 'receipt_confirmation', 'offer', 'interview_reminder', 'custom'] as $type) {
 			$template = $this->templates->effectiveFor($type);
 			$this->assertNotSame('', $template['subject']);
 			$this->assertStringContainsString('{{candidate_name}}', $template['body']);
@@ -107,6 +115,7 @@ class MailRenderingTest extends TestCase {
 			$l10n,
 			new NullLogger(),
 			$portal,
+			$this->languages,
 		);
 		$candidate = new \OCA\Recruiting\Db\Candidate();
 		$candidate->setId(3);
@@ -167,5 +176,15 @@ class MailRenderingTest extends TestCase {
 
 		$this->assertStringNotContainsString('spam.test', $mail['body']);
 		$this->assertStringContainsString('applicant', $mail['body']);
+	}
+
+	public function testThePreviewNamesTheTemplateItWasWrittenFrom(): void {
+		$candidate = new \OCA\Recruiting\Db\Candidate();
+		$candidate->setDisplayName('Ada');
+
+		$mail = $this->mail->preview($candidate, 'Backend Engineer', 'receipt_confirmation', null, null);
+
+		$this->assertSame('builtin:receipt_confirmation', $mail['templateId']);
+		$this->assertSame('en', $mail['language']);
 	}
 }

@@ -142,6 +142,28 @@ class CandidateMapper extends QBMapper {
 	}
 
 	/**
+	 * Candidates on the board (active stages) of several openings, the
+	 * longest-waiting first.
+	 *
+	 * @param int[] $openingIds
+	 * @return Candidate[]
+	 */
+	public function findActiveInOpenings(array $openingIds): array {
+		$entities = [];
+		foreach ($this->idChunks($openingIds) as $chunk) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('*')
+				->from($this->getTableName())
+				->where($qb->expr()->in('opening_id', $qb->createNamedParameter($chunk, IQueryBuilder::PARAM_INT_ARRAY)))
+				->andWhere($qb->expr()->in('stage', $qb->createNamedParameter(Candidate::ACTIVE_STAGES, IQueryBuilder::PARAM_STR_ARRAY)))
+				->orderBy('stage_changed_at', 'ASC')
+				->addOrderBy('id', 'ASC');
+			$entities = array_merge($entities, $this->findEntities($qb));
+		}
+		return $entities;
+	}
+
+	/**
 	 * Candidates without an opening: the triage inbox.
 	 *
 	 * @return Candidate[]

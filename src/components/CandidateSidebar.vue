@@ -20,6 +20,16 @@
 
 		<template v-if="candidate && candidate.permissions.manage" #secondary-actions>
 			<NcActionButton
+				v-if="candidate.email"
+				:closeAfterClick="true"
+				:title="t('recruiting', 'A personal email with the candidate’s reply address, logged on the timeline')"
+				@click="showWrite = true">
+				<template #icon>
+					<EmailEditOutline :size="20" />
+				</template>
+				{{ t('recruiting', 'Write email') }}
+			</NcActionButton>
+			<NcActionButton
 				v-if="!isTerminal"
 				:closeAfterClick="true"
 				:title="t('recruiting', 'Finds free slots in the interviewers’ calendars; the candidate picks one on a public page')"
@@ -71,7 +81,11 @@
 				<template #icon>
 					<AccountOutline :size="20" />
 				</template>
-				<ProfileTab :candidate="candidate" @reject="showReject = true" @delete="deleteCandidate" />
+				<ProfileTab
+					:candidate="candidate"
+					@reject="showReject = true"
+					@delete="deleteCandidate"
+					@write="showWrite = true" />
 			</NcAppSidebarTab>
 
 			<NcAppSidebarTab id="screening" :name="t('recruiting', 'Votes')" :order="2">
@@ -117,6 +131,11 @@
 			:candidate="candidate"
 			@close="showReject = false"
 			@rejected="onMutated" />
+		<WriteEmailModal
+			v-if="showWrite && candidate"
+			:candidate="candidate"
+			@close="showWrite = false"
+			@sent="onMutated" />
 	</NcAppSidebar>
 </template>
 
@@ -134,6 +153,7 @@ import ArrowRightThin from 'vue-material-design-icons/ArrowRightThin.vue'
 import CalendarClock from 'vue-material-design-icons/CalendarClock.vue'
 import CalendarPlus from 'vue-material-design-icons/CalendarPlus.vue'
 import DownloadOutline from 'vue-material-design-icons/DownloadOutline.vue'
+import EmailEditOutline from 'vue-material-design-icons/EmailEditOutline.vue'
 import HandshakeOutline from 'vue-material-design-icons/HandshakeOutline.vue'
 import LightningBoltOutline from 'vue-material-design-icons/LightningBoltOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
@@ -145,6 +165,7 @@ import InterviewsTab from './sidebar/InterviewsTab.vue'
 import OfferTab from './sidebar/OfferTab.vue'
 import ProfileTab from './sidebar/ProfileTab.vue'
 import ScreeningTab from './sidebar/ScreeningTab.vue'
+import WriteEmailModal from './WriteEmailModal.vue'
 import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
 import { confirmDestructive } from '../utils/confirm.js'
@@ -160,6 +181,7 @@ export default {
 		CalendarClock,
 		CalendarPlus,
 		DownloadOutline,
+		EmailEditOutline,
 		HandshakeOutline,
 		InterviewsTab,
 		LightningBoltOutline,
@@ -177,6 +199,7 @@ export default {
 		ScreeningTab,
 		TrashCanOutline,
 		VoteOutline,
+		WriteEmailModal,
 	},
 
 	setup() {
@@ -190,6 +213,7 @@ export default {
 		return {
 			showSchedule: false,
 			showReject: false,
+			showWrite: false,
 		}
 	},
 
@@ -257,6 +281,7 @@ export default {
 		onMutated() {
 			this.showSchedule = false
 			this.showReject = false
+			this.showWrite = false
 			this.sidebar.reload()
 			this.sidebar.touch()
 		},

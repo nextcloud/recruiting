@@ -24,6 +24,7 @@ use OCA\Recruiting\Service\ApplicationFormToken;
 use OCA\Recruiting\Service\CalendarService;
 use OCA\Recruiting\Service\IngestionService;
 use OCA\Recruiting\Service\InterviewService;
+use OCA\Recruiting\Service\LanguageService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\PermissionService;
@@ -168,6 +169,7 @@ class InterviewCandidateRequestTest extends TestCase {
 			$this->createMock(Defaults::class),
 			$this->createMock(IL10N::class),
 			new NullLogger(),
+			$this->createMock(LanguageService::class),
 		);
 	}
 

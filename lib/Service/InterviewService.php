@@ -151,10 +151,7 @@ class InterviewService {
 		]);
 
 		$openingTitle = $this->openingMapper->findTitle($candidate->getOpeningId());
-		$inviteDraft = $this->mail->preview($candidate, $openingTitle, MailTemplate::TYPE_INTERVIEW_INVITE, null, $uid, [
-			'interview_title' => $title,
-			'interview_link' => $this->publicUrl($interview),
-		]);
+		$inviteDraft = $this->mail->preview($candidate, $openingTitle, MailTemplate::TYPE_INTERVIEW_INVITE, null, $uid, $this->invitePlaceholders($interview));
 
 		return [
 			'interview' => $this->serialize($interview),
@@ -178,7 +175,7 @@ class InterviewService {
 
 		$url = $this->publicUrl($interview);
 		if (!str_contains($body, $url)) {
-			$body = rtrim($body) . "\n\n" . $this->l10n->t('Pick your interview time here: %s', [$url]);
+			$body = rtrim($body) . "\n\n" . $this->mail->l10nFor($candidate)->t('Pick your interview time here: %s', [$url]);
 		}
 		$this->mail->sendToCandidate($candidate, $subject, $body, $uid);
 		return $this->serialize($this->interviewMapper->find($interviewId));
@@ -557,6 +554,18 @@ class InterviewService {
 		return $this->urlGenerator->linkToRouteAbsolute('recruiting.public.showInterview', [
 			'token' => $interview->getPublicToken(),
 		]);
+	}
+
+	/**
+	 * Placeholder values of the invitation mail.
+	 *
+	 * @return array{interview_title: string, interview_link: string}
+	 */
+	public function invitePlaceholders(Interview $interview): array {
+		return [
+			'interview_title' => $interview->getTitle(),
+			'interview_link' => $this->publicUrl($interview),
+		];
 	}
 
 	/**

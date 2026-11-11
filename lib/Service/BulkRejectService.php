@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Service;
 
 use OCA\Recruiting\Db\Candidate;
 use OCA\Recruiting\Db\CandidateMapper;
+use OCA\Recruiting\Db\MailTemplate;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Exception\NotPermittedException;
 use OCA\Recruiting\Exception\ValidationException;
@@ -41,11 +42,15 @@ class BulkRejectService {
 	}
 
 	/**
+	 * The mail is either one shared text ($subject, $body) or, when
+	 * $templateId is given instead, that template rendered per candidate in
+	 * the candidate's language ('' = each candidate's default template).
+	 *
 	 * @param array<array-key, mixed> $ids candidate ids
 	 * @return array{rejected: list<array{id: int, name: string, mailed: bool}>, failed: list<array{id: int, name: string, message: string}>}
 	 * @throws ValidationException for input that makes the whole request invalid
 	 */
-	public function reject(string $uid, array $ids, string $reason, bool $sendMail, string $subject, string $body, bool $askPool): array {
+	public function reject(string $uid, array $ids, string $reason, bool $sendMail, string $subject, string $body, bool $askPool, ?string $templateId = null): array {
 		$ids = array_values(array_unique(array_filter(
 			array_map(static fn ($id) => (int)$id, $ids),
 			static fn (int $id) => $id > 0,
@@ -59,7 +64,7 @@ class BulkRejectService {
 		if (!in_array($reason, Candidate::REJECTION_REASONS, true)) {
 			throw new ValidationException($this->l10n->t('Invalid rejection reason'));
 		}
-		if ($sendMail && (trim($subject) === '' || trim($body) === '')) {
+		if ($sendMail && $templateId === null && (trim($subject) === '' || trim($body) === '')) {
 			throw new ValidationException($this->l10n->t('Subject and message must not be empty'));
 		}
 
@@ -83,7 +88,11 @@ class BulkRejectService {
 				$mailed = $sendMail && $candidate->getEmail() !== '';
 				$mailSubject = null;
 				$mailBody = null;
-				if ($mailed) {
+				if ($mailed && $templateId !== null) {
+					$draft = $this->mail->preview($candidate, $this->openingTitle($candidate, $titles), MailTemplate::TYPE_REJECTION, $templateId !== '' ? $templateId : null, $uid);
+					$mailSubject = $draft['subject'];
+					$mailBody = $draft['body'];
+				} elseif ($mailed) {
 					$context = $this->mail->contextFor($candidate, $this->openingTitle($candidate, $titles), $uid);
 					$mailSubject = $this->mail->render($subject, $context);
 					$mailBody = $this->mail->render($body, $context);

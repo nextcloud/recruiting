@@ -10,6 +10,8 @@ const url = (path) => generateUrl('/apps/recruiting' + path)
 export default {
 	// Session
 	getSession: () => axios.get(url('/api/session')),
+	getToday: () => axios.get(url('/api/today')),
+	getLanguages: () => axios.get(url('/api/languages')),
 
 	// Openings
 	getOpenings: () => axios.get(url('/api/openings')),
@@ -76,7 +78,8 @@ export default {
 	reportCsvUrl: (params = {}) => url('/api/reports/export.csv') + '?' + new URLSearchParams(params).toString(),
 
 	// AI assistance
-	aiRequest: (candidateId, action) => axios.post(url(`/api/candidates/${candidateId}/ai`), { action }),
+	// params: extra input for some actions, e.g. { purpose } for draft_email
+	aiRequest: (candidateId, action, params = {}) => axios.post(url(`/api/candidates/${candidateId}/ai`), { ...params, action }),
 	aiTask: (taskId) => axios.get(url(`/api/ai-tasks/${taskId}`)),
 
 	// Talent pool
@@ -95,8 +98,11 @@ export default {
 	exportUrl: (candidateId) => url(`/api/candidates/${candidateId}/export`),
 
 	// Mail
-	previewMail: (candidateId, type, templateId = null) => axios.post(url(`/api/candidates/${candidateId}/mail-preview`), { type, templateId }),
+	// templateId null: the default template for the candidate's language;
+	// extra: e.g. { interviewId } to fill the interview placeholders
+	previewMail: (candidateId, type, templateId = null, extra = {}) => axios.post(url(`/api/candidates/${candidateId}/mail-preview`), { ...extra, type, templateId }),
 	previewMailText: (candidateId, type, subject, body) => axios.post(url(`/api/candidates/${candidateId}/mail-preview`), { type, subject, body }),
+	writeEmail: (candidateId, subject, body) => axios.post(url(`/api/candidates/${candidateId}/mail`), { subject, body }),
 	getTemplates: () => axios.get(url('/api/templates')),
 	createTemplate: (data) => axios.post(url('/api/templates'), data),
 	updateTemplate: (id, data) => axios.put(url(`/api/templates/${id}`), data),

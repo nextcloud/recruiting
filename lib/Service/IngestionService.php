@@ -368,9 +368,10 @@ class IngestionService {
 	 * {@see processMessage()} minus the IMAP/idempotency machinery.
 	 *
 	 * @param array{name?:string,mime?:string,content?:string}|null $cv
+	 * @param ?string $language a known language code (see LanguageService)
 	 * @return Candidate the created candidate
 	 */
-	public function ingestWebApplication(Opening $opening, string $name, string $email, string $coverLetter, ?array $cv): Candidate {
+	public function ingestWebApplication(Opening $opening, string $name, string $email, string $coverLetter, ?array $cv, ?string $language = null): Candidate {
 		$candidate = $this->candidates->insertCandidate(
 			$opening->getId(),
 			$name,
@@ -378,6 +379,8 @@ class IngestionService {
 			'',
 			Candidate::SOURCE_WEB,
 			null,
+			null,
+			$language,
 		);
 
 		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_WEB_APPLICATION, null, [

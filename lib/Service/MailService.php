@@ -39,7 +39,16 @@ class MailService {
 		private IL10N $l10n,
 		private LoggerInterface $logger,
 		private PortalService $portal,
+		private LanguageService $languages,
 	) {
+	}
+
+	/**
+	 * Translations for text the candidate reads: their own language, else
+	 * the instance default.
+	 */
+	public function l10nFor(Candidate $candidate): IL10N {
+		return $this->languages->l10nForCandidate($candidate);
 	}
 
 	/**
@@ -64,7 +73,7 @@ class MailService {
 	 * A neutral greeting stands in when nothing is left. The stored name is
 	 * never changed.
 	 */
-	public function nameForMail(string $name): string {
+	public function nameForMail(string $name, ?IL10N $l = null): string {
 		$name = (string)preg_replace('/\p{C}+/u', ' ', $name);
 		$kept = [];
 		foreach (preg_split('/\s+/u', $name) ?: [] as $word) {
@@ -73,7 +82,7 @@ class MailService {
 			}
 		}
 		$name = trim(mb_substr(implode(' ', $kept), 0, self::MAIL_NAME_MAX_LENGTH));
-		return $name !== '' ? $name : $this->l10n->t('applicant');
+		return $name !== '' ? $name : ($l ?? $this->l10n)->t('applicant');
 	}
 
 	/**
@@ -96,7 +105,7 @@ class MailService {
 			$senderName = $this->userManager->getDisplayName($actorUid) ?? $actorUid;
 		}
 		return array_merge([
-			'candidate_name' => $this->nameForMail($candidate->getDisplayName()),
+			'candidate_name' => $this->nameForMail($candidate->getDisplayName(), $this->l10nFor($candidate)),
 			'opening_title' => $openingTitle ?? '',
 			'company' => $this->defaults->getName(),
 			'sender_name' => $senderName,
@@ -107,28 +116,32 @@ class MailService {
 	}
 
 	/**
-	 * Rendered subject + body for the compose preview.
+	 * Rendered subject + body for the compose preview, from the chosen
+	 * template or the default one for the candidate's language.
 	 *
-	 * @return array{subject: string, body: string, to: string}
+	 * @return array{subject: string, body: string, to: string, templateId: int|string, language: ?string}
 	 * @throws ValidationException
 	 */
 	public function preview(Candidate $candidate, ?string $openingTitle, string $type, ?string $templateId, ?string $actorUid, array $extra = []): array {
-		$template = $this->templates->resolve($type, $templateId);
+		$template = $this->templates->resolve($type, $templateId, $candidate->getLanguage());
 		$context = $this->contextFor($candidate, $openingTitle, $actorUid, $extra);
 		return [
 			'subject' => $this->render($template['subject'], $context),
 			'body' => $this->render($template['body'], $context),
 			'to' => $candidate->getEmail(),
+			'templateId' => $template['id'],
+			'language' => $template['language'],
 		];
 	}
 
 	/**
 	 * Send a (previewed, possibly hand-edited) mail to the candidate and log
-	 * it on the timeline.
+	 * it on the timeline. $kind tags the timeline entry (e.g. "custom" for a
+	 * mail written from the sidebar).
 	 *
 	 * @throws ValidationException when the candidate has no address or sending fails
 	 */
-	public function sendToCandidate(Candidate $candidate, string $subject, string $body, ?string $actorUid): void {
+	public function sendToCandidate(Candidate $candidate, string $subject, string $body, ?string $actorUid, ?string $kind = null): void {
 		$to = $candidate->getEmail();
 		if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
 			throw new ValidationException($this->l10n->t('This candidate has no valid email address'));
@@ -147,11 +160,11 @@ class MailService {
 				$template->addBodyText(str_replace("\n", ' ', $paragraph), $paragraph);
 			}
 		}
-		$template->addFooter();
+		$template->addFooter('', $this->languages->effectiveLanguage($candidate->getLanguage()));
 		$template->setSubject($subject);
 
 		$message = $this->mailer->createMessage();
-		$message->setTo([$to => $this->nameForMail($candidate->getDisplayName())]);
+		$message->setTo([$to => $this->nameForMail($candidate->getDisplayName(), $this->l10nFor($candidate))]);
 		$message->useTemplate($template);
 
 		$senderEmail = $this->config->getSenderEmail();
@@ -174,11 +187,15 @@ class MailService {
 			throw new ValidationException($this->l10n->t('Sending the email failed. Please check the email server configuration.'));
 		}
 
-		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_SENT, $actorUid, [
+		$data = [
 			'to' => $to,
 			'subject' => $subject,
 			'body' => $body,
-		]);
+		];
+		if ($kind !== null) {
+			$data['kind'] = $kind;
+		}
+		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_MAIL_SENT, $actorUid, $data);
 		$this->activity->publish($candidate, 'mail_sent', $actorUid, ['subject' => $subject]);
 	}
 

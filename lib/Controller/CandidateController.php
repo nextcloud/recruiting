@@ -89,13 +89,15 @@ class CandidateController extends Controller {
 
 	/**
 	 * Reject up to BulkRejectService::MAX_PER_REQUEST candidates with one
-	 * reason and one mail template, rendered per candidate.
+	 * reason and one mail template, rendered per candidate. With
+	 * $templateId instead of a text, each candidate gets that template
+	 * in their own language.
 	 *
 	 * @param list<int|string> $ids
 	 */
 	#[NoAdminRequired]
-	public function bulkReject(array $ids, string $reason, bool $sendMail = false, string $subject = '', string $body = '', bool $askPool = false): DataResponse {
-		return $this->handle(fn () => $this->bulkReject->reject($this->uid(), $ids, $reason, $sendMail, $subject, $body, $askPool));
+	public function bulkReject(array $ids, string $reason, bool $sendMail = false, string $subject = '', string $body = '', bool $askPool = false, ?string $templateId = null): DataResponse {
+		return $this->handle(fn () => $this->bulkReject->reject($this->uid(), $ids, $reason, $sendMail, $subject, $body, $askPool, $templateId));
 	}
 
 	/**

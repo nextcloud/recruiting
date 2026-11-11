@@ -37,10 +37,11 @@ class AiController extends Controller {
 
 	/**
 	 * Schedule an AI task for a candidate; the client polls the result.
+	 * $purpose: what a free-form email draft is about.
 	 */
 	#[NoAdminRequired]
-	public function request(int $candidateId, string $action): DataResponse {
-		return $this->handle(function () use ($candidateId, $action) {
+	public function request(int $candidateId, string $action, string $purpose = ''): DataResponse {
+		return $this->handle(function () use ($candidateId, $action, $purpose) {
 			$uid = $this->uid();
 			$candidate = $this->candidates->find($candidateId);
 			if (in_array($action, AiService::MANAGE_ACTIONS, true)) {
@@ -52,7 +53,7 @@ class AiController extends Controller {
 			} else {
 				throw new ValidationException($this->l10n->t('Unknown AI action'));
 			}
-			return ['taskId' => $this->ai->request($uid, $candidate, $action)];
+			return ['taskId' => $this->ai->request($uid, $candidate, $action, $purpose)];
 		});
 	}
 

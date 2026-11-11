@@ -25,9 +25,11 @@ class CandidateTimeFormatter {
 	}
 
 	/**
+	 * @param ?IL10N $l the candidate's language; the request's when null
 	 * @return array{date: string, time: string}
 	 */
-	public function format(\DateTimeInterface $at, ?string $organizerUid): array {
+	public function format(\DateTimeInterface $at, ?string $organizerUid, ?IL10N $l = null): array {
+		$l ??= $this->l10n;
 		$timezone = $organizerUid !== null && $organizerUid !== ''
 			? $this->userConfig->getValueString($organizerUid, 'core', 'timezone', '')
 			: '';
@@ -38,8 +40,8 @@ class CandidateTimeFormatter {
 		}
 		$local = \DateTime::createFromInterface($at)->setTimezone($zone);
 		return [
-			'date' => (string)$this->l10n->l('date', $local, ['width' => 'full']),
-			'time' => (string)$this->l10n->l('time', $local, ['width' => 'short']) . ' (' . $zone->getName() . ')',
+			'date' => (string)$l->l('date', $local, ['width' => 'full']),
+			'time' => (string)$l->l('time', $local, ['width' => 'short']) . ' (' . $zone->getName() . ')',
 		];
 	}
 }

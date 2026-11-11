@@ -80,6 +80,7 @@ grants no candidate access at all.
 | Entry | Who sees it | What it is |
 |---|---|---|
 | **New opening** | recruiters | Creates a job opening (see below) |
+| **Today** | everyone | The start page: offers to approve, your interviews this week, votes you owe, stuck candidates in your openings, and for recruiters the triage inbox and mailbox status |
 | **Triage inbox** | recruiters | Mail applications that matched no opening; the counter shows how many wait |
 | **My reviews** | everyone | Candidates you were asked to screen — badge shows whether you still owe a vote |
 | **My interviews** | everyone | Your interview panel appointments, incl. "pending" ones the candidate hasn't confirmed yet |
@@ -144,7 +145,8 @@ Header actions (managers and recruiters):
 form on the web"* in the opening editor (⋮ → Edit opening & team) and the app
 exposes a self-contained, login-free form at
 `…/apps/recruiting/apply/<opening-slug>` — the link appears right below the
-switch. Applicants see the opening and submit their name, email, an optional
+switch. Applicants see the opening and submit their name, email, the language
+they want our emails in (preselected from their browser), an optional
 cover letter and CV, and a consent checkbox; the submission lands in *New* just
 like an emailed application, complete with auto-acknowledgement and the full
 GDPR lifecycle. The page is server-rendered and hardened (rate limits,
@@ -170,7 +172,9 @@ the tag in the subject skip triage and land directly on this board.
 
 Click any card and the sidebar opens with five tabs:
 
-* **Profile** — contact details (editable by managers), source, an optional
+* **Profile** — contact details and the candidate's language for emails
+  (editable by managers; click the address to write an email, or copy it),
+  source, an optional
   AI summary (labeled, regenerable), duplicate warning with a link to the
   earlier application and a **Merge** action (same opening only), "Also
   applied for …" links to the person's other applications, and — in triage —
@@ -214,7 +218,10 @@ Click any card and the sidebar opens with five tabs:
   ![Timeline and team discussion](screenshots/07-activity-timeline.png)
 
 **Reject …** is the red button at the bottom of the profile tab. The header
-menu carries **Book interview**, **Move to …**, and for
+menu carries **Write email** (a personal mail from a template or from
+scratch, with a preview and an optional assistant draft — sent with the
+candidate's reply address and logged on the timeline), **Book interview**,
+**Move to …**, and for
 recruiters **Export data (GDPR)** (ZIP with everything about this person —
 without reviewer identities) and **Delete permanently (GDPR)** (removes the
 candidate with all documents, votes, comments, interviews, notifications and
@@ -388,11 +395,20 @@ ten minutes and refreshed as soon as a candidate of the opening changes.
 ### Mail templates
 
 Per mail type (confirmation of receipt, interview invitation, rejection,
-offer, interview reminder) the built-in template is always available; **Customize** copies it into
+offer, interview reminder, personal email) the built-in template is always available; **Customize** copies it into
 an editable one and **Make default** activates it. The editor offers each
 type's placeholders as chips — click to insert — and validates them when you
-save, so typos can't reach a candidate. Every send shows a
-resolved preview first, and every sent mail lands on the candidate's timeline.
+save, so typos can't reach a candidate. Every compose dialog has a template
+picker and shows a resolved preview first, and every sent mail lands on the
+candidate's timeline.
+
+Mail is written in the **candidate's language** (set on the application form,
+in the referral form, on manual entry or in the profile). A template can have
+a language: the default template in the candidate's language wins, then a
+language-neutral default, then the built-in, which is translated into the
+candidate's language. Candidates without a language get the server's default
+language. Automatic mails (receipt confirmation, interview reminders) follow
+the same rules.
 
 ![Mail templates](screenshots/16-mail-templates.png)
 
@@ -419,7 +435,10 @@ only sent when there is something to report.
 
 Bell notifications for everything that concerns you (assignments, interview
 confirmations, candidate replies, offer approvals, @-mentions, expiring
-offers), Activity stream entries per candidate, unified search over candidates
+offers), a **Dashboard widget** with your recruiting to-dos (for people with a
+role in recruiting), **link previews** for candidate links pasted into Talk or
+Text (only for people who may see the candidate), Activity stream entries per
+candidate, unified search over candidates
 and openings (permission-scoped in the database query, anonymized candidates
 excluded, paged; terms of three or more characters also match the text of
 candidates' documents), and deep links from every notification

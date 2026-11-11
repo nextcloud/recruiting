@@ -39,6 +39,22 @@ final class CandidateStatus {
 		return self::forStage($candidate->getStage());
 	}
 
+	/**
+	 * The internal stage name, for the hiring team only.
+	 */
+	public static function stageLabel(string $stage, IL10N $l): string {
+		return match ($stage) {
+			Candidate::STAGE_NEW => $l->t('New'),
+			Candidate::STAGE_SCREENING => $l->t('Screening'),
+			Candidate::STAGE_INTERVIEW => $l->t('Interview'),
+			Candidate::STAGE_OFFER => $l->t('Offer'),
+			Candidate::STAGE_HIRED => $l->t('Hired'),
+			Candidate::STAGE_REJECTED => $l->t('Rejected'),
+			Candidate::STAGE_WITHDRAWN => $l->t('Withdrawn'),
+			default => $stage,
+		};
+	}
+
 	public static function label(string $status, IL10N $l): string {
 		return match ($status) {
 			self::IN_REVIEW => $l->t('In review'),

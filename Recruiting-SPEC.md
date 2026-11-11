@@ -802,10 +802,49 @@ Beyond the §9 non-goals, which did not exclude these:
   the referrer when the coarse status changes. `PermissionService` is
   unchanged — referrers get no candidate access.
 
+### 10.15 Writing to candidates, languages and the Today page (Unreleased)
+
+- **Write email** (`ComposeService::writeEmail`): manage access first, then
+  placeholder validation (unknown ones are an error, as in templates),
+  rendering, and `MailService::sendToCandidate(..., kind: 'custom')` — so the
+  per-candidate Reply-To token applies and the timeline entry carries
+  `kind`. Template type `custom` with a built-in skeleton. The assistant
+  action `draft_email` takes a `purpose` (the subject, sanitised inline) and
+  the fenced application material; no email or phone.
+- **Languages** are Nextcloud language codes (`de`, `de_DE`, `pt_BR`), not
+  BCP-47 tags, because built-ins are rendered through
+  `IFactory::get('recruiting', $lang)`; input in BCP-47 spelling is accepted
+  and normalised, unknown codes are refused (`LanguageService`). The public
+  form preselects `IFactory::findLanguage()`. A candidate without a language
+  gets the instance default (`findGenericLanguage()`), never the sender's.
+  Default resolution: custom default with the exact language → with the same
+  base language → language-neutral custom default → built-in in that
+  language. `TemplateService` renders built-ins on a clone with the target
+  language's `IL10N`, so new template types follow without extra code.
+  `clearDefault` is per type and language.
+- **Bulk rejection** with an unedited template sends `templateId` ('' = each
+  candidate's default) and is rendered per candidate; an edited text is one
+  shared text, as before.
+- **Today** (`TodayService`, `GET /api/today`, route `#/`): votes owed
+  (assignment, active, visible, no own vote), confirmed interviews of the next
+  7 days, offers pending the user's approval (job title and requester only),
+  stuck candidates via `CandidateService::stuckCandidates` (managed openings
+  that are not closed; per-candidate `canManageCandidate`; same
+  `attentionFor` as the board), triage count and ingestion status for
+  recruiters. Lists are cut at 20; counts stay complete.
+- **Dashboard widget** `recruiting-today` (`IAPIWidgetV2`, conditional on
+  having any role: recruiter, team member, screener or pending approver;
+  reloads every 5 minutes).
+- **Reference provider** for candidate deep links of this instance (with or
+  without `index.php`); `resolveReference` returns null unless
+  `canViewCandidate`, and the cache key is the user id. Cached previews can
+  show an outdated stage for up to the reference cache lifetime.
+
 ### 10.3 Surface map (routes → screens)
 
 | Surface | Route | Access |
 |---|---|---|
+| Today (start page) | `#/` | everyone (entries permission-checked) |
 | Pipeline board / table | `#/openings/{id}` | opening team + recruiters |
 | Candidate sidebar (5 tabs) | any view + card click, deep link `#/candidate/{id}` | per-role, offers gated separately |
 | Triage inbox | `#/triage` | recruiters |
@@ -820,6 +859,8 @@ Beyond the §9 non-goals, which did not exclude these:
 | Refer someone | `#/referrals` | every logged-in user (if enabled) |
 | User handbook (PDF) | `/apps/recruiting/handbook` | logged-in users |
 | Ingestion status | `GET /api/ingestion-status` | recruiters |
+| Dashboard widget "Recruiting today" | Nextcloud Dashboard | users with a recruiting role |
+| Candidate link previews | Talk, Text, … (reference provider) | users who may view the candidate |
 | Admin settings | Administration → Recruiting | admins |
 | Digest setting | Personal settings → Groupware | everyone |
 

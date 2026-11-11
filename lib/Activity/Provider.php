@@ -10,6 +10,7 @@ namespace OCA\Recruiting\Activity;
 
 use OCA\Recruiting\AppInfo\Application;
 use OCA\Recruiting\Service\CandidateNameResolver;
+use OCA\Recruiting\Service\CandidateStatus;
 use OCP\Activity\Exceptions\UnknownActivityException;
 use OCP\Activity\IEvent;
 use OCP\Activity\IProvider;
@@ -47,7 +48,7 @@ class Provider implements IProvider {
 			'stage_changed' => $l->t('%1$s moved %2$s to "%3$s"', [
 				$actor !== '' ? $actor : $l->t('Someone'),
 				$candidate,
-				$this->stageName($l, (string)($params['toStage'] ?? '')),
+				CandidateStatus::stageLabel((string)($params['toStage'] ?? ''), $l),
 			]),
 			'vote_cast' => $l->t('%1$s cast a screening vote on %2$s', [$actor, $candidate]),
 			'mail_sent' => $l->t('%1$s sent an email to %2$s', [
@@ -73,19 +74,6 @@ class Provider implements IProvider {
 			$event->setLink($this->urlGenerator->linkToRouteAbsolute('recruiting.page.index') . '#/candidate/' . $event->getObjectId());
 		}
 		return $event;
-	}
-
-	private function stageName(\OCP\IL10N $l, string $stage): string {
-		return match ($stage) {
-			'new' => $l->t('New'),
-			'screening' => $l->t('Screening'),
-			'interview' => $l->t('Interview'),
-			'offer' => $l->t('Offer'),
-			'hired' => $l->t('Hired'),
-			'rejected' => $l->t('Rejected'),
-			'withdrawn' => $l->t('Withdrawn'),
-			default => $stage,
-		};
 	}
 
 	private function displayName(string $uid): string {

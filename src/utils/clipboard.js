@@ -14,13 +14,14 @@ import { translate as t } from '@nextcloud/l10n'
  * least be copied by hand.
  *
  * @param {string} text the text to copy
+ * @param {string} copied the confirmation shown after copying
  * @return {Promise<boolean>} whether copying worked
  */
-export async function copyToClipboard(text) {
+export async function copyToClipboard(text, copied = t('recruiting', 'Link copied')) {
 	try {
 		if (navigator.clipboard?.writeText) {
 			await navigator.clipboard.writeText(text)
-			showSuccess(t('recruiting', 'Link copied'))
+			showSuccess(copied)
 			return true
 		}
 	} catch {
@@ -38,13 +39,13 @@ export async function copyToClipboard(text) {
 		const ok = document.execCommand('copy')
 		document.body.removeChild(area)
 		if (ok) {
-			showSuccess(t('recruiting', 'Link copied'))
+			showSuccess(copied)
 			return true
 		}
 	} catch {
 		// reported below
 	}
 
-	showError(t('recruiting', 'Could not copy automatically — the link is: {link}', { link: text }))
+	showError(t('recruiting', 'Could not copy automatically: {link}', { link: text }))
 	return false
 }

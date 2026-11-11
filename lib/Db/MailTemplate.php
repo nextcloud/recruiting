@@ -21,6 +21,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setBody(string $body)
  * @method bool getIsDefault()
  * @method void setIsDefault(bool $isDefault)
+ * @method ?string getLanguage()
+ * @method void setLanguage(?string $language)
  */
 class MailTemplate extends Entity implements \JsonSerializable {
 	public const TYPE_INTERVIEW_INVITE = 'interview_invite';
@@ -28,6 +30,8 @@ class MailTemplate extends Entity implements \JsonSerializable {
 	public const TYPE_RECEIPT = 'receipt_confirmation';
 	public const TYPE_OFFER = 'offer';
 	public const TYPE_INTERVIEW_REMINDER = 'interview_reminder';
+	/** Free-form mail written from the candidate sidebar */
+	public const TYPE_CUSTOM = 'custom';
 
 	public const TYPES = [
 		self::TYPE_INTERVIEW_INVITE,
@@ -35,6 +39,7 @@ class MailTemplate extends Entity implements \JsonSerializable {
 		self::TYPE_RECEIPT,
 		self::TYPE_OFFER,
 		self::TYPE_INTERVIEW_REMINDER,
+		self::TYPE_CUSTOM,
 	];
 
 	protected string $type = '';
@@ -42,6 +47,8 @@ class MailTemplate extends Entity implements \JsonSerializable {
 	protected string $subject = '';
 	protected string $body = '';
 	protected bool $isDefault = false;
+	/** Nextcloud language code; null = any language */
+	protected ?string $language = null;
 
 	public function __construct() {
 		$this->addType('isDefault', 'boolean');
@@ -56,6 +63,7 @@ class MailTemplate extends Entity implements \JsonSerializable {
 			'subject' => $this->subject,
 			'body' => $this->body,
 			'isDefault' => $this->isDefault,
+			'language' => $this->language,
 			'builtin' => false,
 		];
 	}

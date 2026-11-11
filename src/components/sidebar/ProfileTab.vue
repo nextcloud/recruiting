@@ -38,6 +38,10 @@
 			<NcTextField v-model="form.displayName" :label="t('recruiting', 'Full name')" />
 			<NcTextField v-model="form.email" type="email" :label="t('recruiting', 'Email address')" />
 			<NcTextField v-model="form.phone" type="tel" :label="t('recruiting', 'Phone')" />
+			<LanguageSelect
+				v-model="form.language"
+				:label="t('recruiting', 'Language for emails')"
+				:placeholder="t('recruiting', 'Not set — the server’s default language')" />
 			<div class="profile-tab__buttons">
 				<NcButton @click="editing = false">
 					{{ t('recruiting', 'Cancel') }}
@@ -51,11 +55,32 @@
 		<dl v-else class="profile-tab__facts">
 			<div v-if="candidate.email">
 				<dt>{{ t('recruiting', 'Email') }}</dt>
-				<dd><a :href="'mailto:' + candidate.email">{{ candidate.email }}</a></dd>
+				<dd class="profile-tab__email">
+					<a
+						v-if="candidate.permissions.manage"
+						href="#"
+						:title="t('recruiting', 'Write an email from Recruiting — logged on the timeline')"
+						@click.prevent="$emit('write')">{{ candidate.email }}</a>
+					<span v-else>{{ candidate.email }}</span>
+					<NcButton
+						variant="tertiary-no-background"
+						size="small"
+						:ariaLabel="t('recruiting', 'Copy email address')"
+						:title="t('recruiting', 'Copy email address')"
+						@click="copyEmail">
+						<template #icon>
+							<ContentCopy :size="16" />
+						</template>
+					</NcButton>
+				</dd>
 			</div>
 			<div v-if="candidate.phone">
 				<dt>{{ t('recruiting', 'Phone') }}</dt>
 				<dd><a :href="'tel:' + candidate.phone">{{ candidate.phone }}</a></dd>
+			</div>
+			<div v-if="candidate.language">
+				<dt>{{ t('recruiting', 'Language') }}</dt>
+				<dd>{{ languages.name(candidate.language) }}</dd>
 			</div>
 			<div>
 				<dt>{{ t('recruiting', 'Source') }}</dt>
@@ -118,28 +143,32 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CloseCircleOutline from 'vue-material-design-icons/CloseCircleOutline.vue'
+import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import AiAssist from '../AiAssist.vue'
+import LanguageSelect from '../LanguageSelect.vue'
 import DocumentsSection from './DocumentsSection.vue'
 import DuplicateHints from './DuplicateHints.vue'
 import api, { errorMessage } from '../../api.js'
-import { useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
+import { useLanguagesStore, useOpeningsStore, useSessionStore, useSidebarStore } from '../../store.js'
+import { copyToClipboard } from '../../utils/clipboard.js'
 import { formatDateTime, sourceLabel } from '../../utils/format.js'
 
 export default {
 	name: 'ProfileTab',
-	components: { AiAssist, CloseCircleOutline, DocumentsSection, DuplicateHints, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline, TrashCanOutline },
+	components: { AiAssist, CloseCircleOutline, ContentCopy, DocumentsSection, DuplicateHints, LanguageSelect, NcButton, NcNoteCard, NcSelect, NcTextField, PencilOutline, TrashCanOutline },
 	props: {
 		candidate: { type: Object, required: true },
 	},
 
-	emits: ['reject', 'delete'],
+	emits: ['reject', 'delete', 'write'],
 	setup() {
 		return {
 			sidebar: useSidebarStore(),
 			session: useSessionStore(),
 			openings: useOpeningsStore(),
+			languages: useLanguagesStore(),
 		}
 	},
 
@@ -147,7 +176,7 @@ export default {
 		return {
 			editing: false,
 			saving: false,
-			form: { displayName: '', email: '', phone: '' },
+			form: { displayName: '', email: '', phone: '', language: null },
 			assignTarget: null,
 		}
 	},
@@ -164,14 +193,32 @@ export default {
 		},
 	},
 
+	watch: {
+		'candidate.language': {
+			immediate: true,
+			handler(language) {
+				if (language) {
+					this.languages.load().catch(() => {
+						// the code is shown instead of the name
+					})
+				}
+			},
+		},
+	},
+
 	methods: {
 		formatDateTime,
 		sourceLabel,
+		copyEmail() {
+			copyToClipboard(this.candidate.email, this.t('recruiting', 'Email address copied'))
+		},
+
 		startEdit() {
 			this.form = {
 				displayName: this.candidate.displayName,
 				email: this.candidate.email,
 				phone: this.candidate.phone,
+				language: this.candidate.language,
 			}
 			this.editing = true
 		},
@@ -233,6 +280,12 @@ export default {
 		dd {
 			overflow-wrap: anywhere;
 		}
+	}
+
+	&__email {
+		display: flex;
+		align-items: center;
+		gap: var(--default-grid-baseline);
 	}
 
 	&__buttons {

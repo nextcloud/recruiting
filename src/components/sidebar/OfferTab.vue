@@ -143,6 +143,11 @@
 				<!-- approved -->
 				<div v-else-if="offer.status === 'approved' && canManage" class="offer__workflow">
 					<template v-if="composing">
+						<TemplatePicker
+							:templates="templates"
+							:modelValue="templateId"
+							:disabled="working"
+							@update:modelValue="composeSend" />
 						<NcTextField v-model="mailSubject" :label="t('recruiting', 'Subject')" />
 						<NcTextArea
 							v-model="mailBody"
@@ -171,7 +176,7 @@
 							variant="primary"
 							:disabled="working || !candidate.email"
 							:title="t('recruiting', 'Opens the mail preview — the offer only counts as sent after you confirm. The card moves to the “Offer” column.')"
-							@click="composeSend()">
+							@click="composeSend(null)">
 							<template #icon>
 								<SendOutline :size="20" />
 							</template>
@@ -234,6 +239,7 @@ import CheckCircleOutline from 'vue-material-design-icons/CheckCircleOutline.vue
 import HandshakeOutline from 'vue-material-design-icons/HandshakeOutline.vue'
 import SendOutline from 'vue-material-design-icons/SendOutline.vue'
 import AiAssist from '../AiAssist.vue'
+import TemplatePicker from '../TemplatePicker.vue'
 import UserPicker from '../UserPicker.vue'
 import api, { errorMessage } from '../../api.js'
 import { useSessionStore, useSidebarStore } from '../../store.js'
@@ -266,6 +272,7 @@ export default {
 		NcTextArea,
 		NcTextField,
 		SendOutline,
+		TemplatePicker,
 		UserPicker,
 	},
 
@@ -289,6 +296,8 @@ export default {
 			composing: false,
 			mailSubject: '',
 			mailBody: '',
+			templates: [],
+			templateId: null,
 			form: this.emptyForm(),
 		}
 	},
@@ -410,12 +419,17 @@ export default {
 			this.run(() => api.declineOfferApproval(offer.id, note))
 		},
 
-		async composeSend() {
+		/**
+		 * @param {?string} templateId null = the default for the candidate's language
+		 */
+		async composeSend(templateId) {
 			this.working = true
 			try {
-				const { data } = await api.previewMail(this.candidate.id, 'offer')
+				const { data } = await api.previewMail(this.candidate.id, 'offer', templateId)
 				this.mailSubject = data.subject
 				this.mailBody = data.body
+				this.templates = data.templates ?? []
+				this.templateId = String(data.templateId)
 				this.composing = true
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))

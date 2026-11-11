@@ -47,6 +47,7 @@
 
 .recruiting-apply__form input[type="text"],
 .recruiting-apply__form input[type="email"],
+.recruiting-apply__form select,
 .recruiting-apply__form textarea {
 	width: 100%;
 	box-sizing: border-box;

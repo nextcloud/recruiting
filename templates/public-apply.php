@@ -52,6 +52,13 @@ $action = $urlGenerator->linkToRoute('recruiting.public.submitApplication', ['sl
 				<label class="recruiting-apply__label" for="ra-email"><?php p($l->t('Email address')); ?> *</label>
 				<input id="ra-email" type="email" name="email" required maxlength="250" value="<?php p($values['email'] ?? ''); ?>">
 
+				<label class="recruiting-apply__label" for="ra-language"><?php p($l->t('Preferred language for our emails')); ?></label>
+				<select id="ra-language" name="language">
+					<?php foreach ($_['languages'] as $language): ?>
+						<option value="<?php p($language['code']); ?>"<?php if ($language['code'] === ($values['language'] ?? '')): ?> selected<?php endif; ?>><?php p($language['name']); ?></option>
+					<?php endforeach; ?>
+				</select>
+
 				<label class="recruiting-apply__label" for="ra-cover"><?php p($l->t('Cover letter (optional)')); ?></label>
 				<textarea id="ra-cover" name="cover" rows="6" maxlength="20000"><?php p($values['cover'] ?? ''); ?></textarea>
 

@@ -15,6 +15,12 @@
 					</template>
 				</NcAppNavigationNew>
 
+				<NcAppNavigationItem :name="t('recruiting', 'Today')" :to="{ name: 'home' }">
+					<template #icon>
+						<WeatherSunny :size="20" />
+					</template>
+				</NcAppNavigationItem>
+
 				<NcAppNavigationItem
 					v-if="session.isRecruiter"
 					:name="t('recruiting', 'Triage inbox')"
@@ -159,6 +165,7 @@ import InboxArrowDown from 'vue-material-design-icons/InboxArrowDown.vue'
 import PauseCircleOutline from 'vue-material-design-icons/PauseCircleOutline.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import VoteOutline from 'vue-material-design-icons/VoteOutline.vue'
+import WeatherSunny from 'vue-material-design-icons/WeatherSunny.vue'
 import CandidateSidebar from './components/CandidateSidebar.vue'
 import OpeningModal from './components/OpeningModal.vue'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from './store.js'
@@ -188,6 +195,15 @@ export default {
 		PauseCircleOutline,
 		Plus,
 		VoteOutline,
+		WeatherSunny,
+	},
+
+	provide() {
+		return {
+			createOpening: () => {
+				this.showOpeningModal = true
+			},
+		}
 	},
 
 	setup() {
@@ -238,6 +254,7 @@ export default {
 // which overlays the top-left corner of the content area (applies to every view).
 .app-recruiting {
 	.opening-view__header,
+	.today-view > h2,
 	.triage-view > h2,
 	.my-reviews > h2,
 	.my-interviews > h2,

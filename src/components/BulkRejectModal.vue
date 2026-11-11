@@ -33,6 +33,12 @@
 				</p>
 
 				<template v-if="sendMail && withEmail.length > 0">
+					<TemplatePicker
+						:templates="templates"
+						:modelValue="templateId"
+						:perCandidate="true"
+						:disabled="loadingTemplate"
+						@update:modelValue="loadTemplate" />
 					<NcLoadingIcon v-if="loadingTemplate" :size="24" />
 					<template v-else>
 						<NcTextField v-model="subject" :label="t('recruiting', 'Subject')" />
@@ -42,6 +48,9 @@
 							:helperText="t('recruiting', 'Placeholders such as {placeholder} are filled in for each candidate.', { placeholder: '{{candidate_name}}' })"
 							rows="8"
 							resize="vertical" />
+						<p v-if="perCandidateLanguage" class="bulk-reject__hint">
+							{{ t('recruiting', 'As long as you leave the text unchanged, each candidate receives this template in their own language.') }}
+						</p>
 						<div class="bulk-reject__preview" aria-live="polite">
 							<div class="bulk-reject__preview-label">
 								{{ t('recruiting', 'Preview for {name}', { name: previewCandidate.displayName }) }}
@@ -113,9 +122,11 @@ import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import TemplatePicker from './TemplatePicker.vue'
 import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
 import { reasonLabel } from '../utils/format.js'
+import livePreview from '../utils/livePreview.js'
 
 /** Matches BulkRejectService::MAX_PER_REQUEST on the server */
 const CHUNK_SIZE = 50
@@ -132,7 +143,10 @@ export default {
 		NcSelect,
 		NcTextArea,
 		NcTextField,
+		TemplatePicker,
 	},
+
+	mixins: [livePreview('rejection')],
 
 	props: {
 		/** board cards: at least id, displayName and email */
@@ -157,11 +171,10 @@ export default {
 			askPool: false,
 			subject: '',
 			body: '',
-			preview: { subject: '', body: '' },
+			templates: [],
+			templateId: '',
+			loadedText: null,
 			loadingTemplate: false,
-			loadingPreview: false,
-			previewTimer: null,
-			previewedText: null,
 			processed: 0,
 			result: { rejected: [], failed: [] },
 		}
@@ -188,6 +201,19 @@ export default {
 			return this.withEmail[0] ?? null
 		},
 
+		previewCandidateId() {
+			return this.previewCandidate?.id ?? null
+		},
+
+		edited() {
+			return this.subject + '\0' + this.body !== this.loadedText
+		},
+
+		/** an unedited built-in or default template goes out per candidate language */
+		perCandidateLanguage() {
+			return !this.edited && (this.templateId === '' || String(this.templateId).startsWith('builtin:'))
+		},
+
 		canStart() {
 			if (this.candidates.length === 0 || this.reason === null) {
 				return false
@@ -211,61 +237,35 @@ export default {
 		},
 	},
 
-	watch: {
-		subject() {
-			this.schedulePreview()
-		},
-
-		body() {
-			this.schedulePreview()
-		},
-	},
-
-	async created() {
+	created() {
 		this.reason = this.reasonOptions.find((option) => option.id === this.presetReason) ?? this.reasonOptions[0] ?? null
 		this.sendMail = this.withEmail.length > 0
-		if (this.previewCandidate === null) {
-			return
+		if (this.previewCandidate !== null) {
+			this.loadTemplate('')
 		}
-		this.loadingTemplate = true
-		try {
-			const { data } = await api.previewMail(this.previewCandidate.id, 'rejection')
-			this.preview = { subject: data.subject, body: data.body }
-			this.subject = data.template?.subject ?? data.subject
-			this.body = data.template?.body ?? data.body
-			this.previewedText = this.subject + '\0' + this.body
-		} catch (error) {
-			showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))
-			this.sendMail = false
-		} finally {
-			this.loadingTemplate = false
-		}
-	},
-
-	beforeUnmount() {
-		clearTimeout(this.previewTimer)
 	},
 
 	methods: {
-		schedulePreview() {
-			if (this.loadingTemplate || this.previewCandidate === null || this.previewedText === this.subject + '\0' + this.body) {
-				return
-			}
-			clearTimeout(this.previewTimer)
-			this.previewTimer = setTimeout(this.refreshPreview, 500)
-		},
-
-		async refreshPreview() {
-			this.loadingPreview = true
+		/**
+		 * @param {string} templateId '' = each candidate's default template
+		 */
+		async loadTemplate(templateId) {
+			this.templateId = templateId
+			this.loadingTemplate = true
 			try {
-				const text = this.subject + '\0' + this.body
-				const { data } = await api.previewMailText(this.previewCandidate.id, 'rejection', this.subject, this.body)
-				this.preview = { subject: data.subject, body: data.body }
-				this.previewedText = text
-			} catch {
-				// the last preview stays; sending renders on the server anyway
+				const { data } = await api.previewMail(this.previewCandidate.id, 'rejection', templateId || null)
+				this.templates = data.templates ?? []
+				this.subject = data.template?.subject ?? data.subject
+				this.body = data.template?.body ?? data.body
+				this.loadedText = this.subject + '\0' + this.body
+				this.setPreview(data)
+			} catch (error) {
+				showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))
+				if (this.templates.length === 0) {
+					this.sendMail = false
+				}
 			} finally {
-				this.loadingPreview = false
+				this.loadingTemplate = false
 			}
 		},
 
@@ -279,12 +279,17 @@ export default {
 		 */
 		async run() {
 			const mail = this.sendMail && this.withEmail.length > 0
+			// An unedited template is rendered per candidate, in their language
+			const perCandidate = mail && !this.edited
 			const payload = {
 				reason: this.reason.id,
 				sendMail: mail,
-				subject: mail ? this.subject : '',
-				body: mail ? this.body : '',
+				subject: mail && !perCandidate ? this.subject : '',
+				body: mail && !perCandidate ? this.body : '',
 				askPool: mail && this.askPool,
+			}
+			if (perCandidate) {
+				payload.templateId = this.templateId
 			}
 			const ids = this.candidates.map((candidate) => candidate.id)
 			this.phase = 'working'

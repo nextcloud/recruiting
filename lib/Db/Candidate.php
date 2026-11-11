@@ -57,6 +57,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDeletionRequestedAt(?\DateTime $deletionRequestedAt)
  * @method ?string getReferredBy()
  * @method void setReferredBy(?string $referredBy)
+ * @method ?string getLanguage()
+ * @method void setLanguage(?string $language)
  */
 class Candidate extends Entity implements \JsonSerializable {
 	public const STAGE_NEW = 'new';
@@ -118,6 +120,8 @@ class Candidate extends Entity implements \JsonSerializable {
 	protected ?string $portalToken = null;
 	protected ?\DateTime $deletionRequestedAt = null;
 	protected ?string $referredBy = null;
+	/** Nextcloud language code candidate-facing mail is written in; null = instance default */
+	protected ?string $language = null;
 
 	public function __construct() {
 		$this->addType('openingId', 'integer');
@@ -161,6 +165,7 @@ class Candidate extends Entity implements \JsonSerializable {
 			'createdAt' => $this->createdAt?->format(\DateTimeInterface::ATOM),
 			'deletionRequestedAt' => $this->deletionRequestedAt?->format(\DateTimeInterface::ATOM),
 			'referredBy' => $this->referredBy,
+			'language' => $this->language,
 		];
 	}
 }

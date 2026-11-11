@@ -50,6 +50,7 @@ class PublicController extends Controller {
 		private Defaults $defaults,
 		private \OCP\IL10N $l10n,
 		private LoggerInterface $logger,
+		private \OCA\Recruiting\Service\LanguageService $languages,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -287,7 +288,8 @@ class PublicController extends Controller {
 		$email = trim((string)$this->request->getParam('email', ''));
 		$cover = (string)$this->request->getParam('cover', '');
 		$consent = $this->request->getParam('consent', '');
-		$values = ['name' => $name, 'email' => $email, 'cover' => $cover];
+		$language = $this->languages->normalize($this->request->getParam('language', ''));
+		$values = ['name' => $name, 'email' => $email, 'cover' => $cover, 'language' => $language ?? ''];
 
 		switch ($this->formToken->check((string)$this->request->getParam('t', ''), $opening->getMailSlug())) {
 			case ApplicationFormToken::INVALID:
@@ -342,7 +344,7 @@ class PublicController extends Controller {
 		}
 
 		try {
-			$this->ingestion->ingestWebApplication($opening, $name, $email, $cover, $cv);
+			$this->ingestion->ingestWebApplication($opening, $name, $email, $cover, $cv, $language);
 		} catch (\Throwable $e) {
 			$this->logger->error('Recruiting: public application failed', ['exception' => $e]);
 			$response = $this->applyForm($opening, [$this->l10n->t('Something went wrong. Please try again.')], $values);
@@ -377,14 +379,20 @@ class PublicController extends Controller {
 	}
 
 	/**
+	 * The language select preselects what the browser asks for.
+	 *
 	 * @param string[] $errors
-	 * @param array{name?:string,email?:string,cover?:string} $values
+	 * @param array{name?:string,email?:string,cover?:string,language?:string} $values
 	 */
 	private function applyForm(\OCA\Recruiting\Db\Opening $opening, array $errors = [], array $values = []): TemplateResponse {
+		if (($values['language'] ?? '') === '') {
+			$values['language'] = $this->languages->requestLanguage();
+		}
 		$response = new TemplateResponse($this->appName, 'public-apply', [
 			'opening' => $opening,
 			'errors' => $errors,
 			'values' => $values,
+			'languages' => $this->languages->languages(),
 			'token' => $this->formToken->issue($opening->getMailSlug()),
 			'instanceName' => $this->defaults->getName(),
 			'done' => false,

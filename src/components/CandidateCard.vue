@@ -93,7 +93,7 @@
 
 <script>
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
-import { daysSince, fromNow } from '../utils/format.js'
+import { attentionLabel, daysSince, fromNow } from '../utils/format.js'
 
 export default {
 	name: 'CandidateCard',
@@ -121,15 +121,7 @@ export default {
 		},
 
 		attentionTitle() {
-			const labels = {
-				waiting: this.t('recruiting', 'Waiting in "New" for a week'),
-				no_votes: this.t('recruiting', 'In screening without a single vote'),
-				no_interview: this.t('recruiting', 'No upcoming interview booked'),
-				no_offer: this.t('recruiting', 'In "Offer" without an active offer'),
-				offer_expiring: this.t('recruiting', 'The offer expires within three days'),
-				stale: this.t('recruiting', 'More than 30 days in this stage'),
-			}
-			return this.attention.map((reason) => labels[reason] ?? reason).join('\n')
+			return this.attention.map(attentionLabel).join('\n')
 		},
 
 		screeners() {

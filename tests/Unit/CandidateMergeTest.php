@@ -27,6 +27,7 @@ use OCA\Recruiting\Service\ActivityPurgeService;
 use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\DocumentService;
 use OCA\Recruiting\Service\InterviewService;
+use OCA\Recruiting\Service\LanguageService;
 use OCA\Recruiting\Service\MailService;
 use OCA\Recruiting\Service\NotificationService;
 use OCA\Recruiting\Service\OfferService;
@@ -107,6 +108,7 @@ class CandidateMergeTest extends TestCase {
 			$timeFactory,
 			$l10n,
 			$this->createMock(PortalService::class),
+			$this->createMock(LanguageService::class),
 		);
 	}
 

@@ -34,6 +34,7 @@ class ReferralService {
 		private DocumentService $documents,
 		private TimelineService $timeline,
 		private IL10N $l10n,
+		private LanguageService $languages,
 	) {
 	}
 
@@ -98,6 +99,7 @@ class ReferralService {
 		if (!$this->isTruthy($data['consent'] ?? null)) {
 			throw new ValidationException($this->l10n->t('Please confirm that this person agreed to be referred'));
 		}
+		$language = $this->languages->parse($data['language'] ?? null);
 		$cvMime = null;
 		if ($cv !== null) {
 			$cvMime = $this->documents->validate((string)($cv['mime'] ?? ''), (string)($cv['content'] ?? ''));
@@ -111,6 +113,7 @@ class ReferralService {
 			Candidate::SOURCE_REFERRAL,
 			$uid,
 			$uid,
+			$language,
 		);
 		$this->timeline->record($candidate->getId(), TimelineEvent::TYPE_REFERRAL_NOTE, $uid, ['note' => $note]);
 		if ($cv !== null && $cvMime !== null) {

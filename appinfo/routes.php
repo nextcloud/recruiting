@@ -17,6 +17,8 @@ return [
 		['name' => 'config#getPersonal', 'url' => '/api/personal', 'verb' => 'GET'],
 		['name' => 'config#ingestionStatus', 'url' => '/api/ingestion-status', 'verb' => 'GET'],
 		['name' => 'config#updatePersonal', 'url' => '/api/personal', 'verb' => 'PUT'],
+		['name' => 'config#languages', 'url' => '/api/languages', 'verb' => 'GET'],
+		['name' => 'today#index', 'url' => '/api/today', 'verb' => 'GET'],
 
 		// Openings
 		['name' => 'opening#index', 'url' => '/api/openings', 'verb' => 'GET'],
@@ -89,6 +91,7 @@ return [
 
 		// Mail
 		['name' => 'mail#preview', 'url' => '/api/candidates/{candidateId}/mail-preview', 'verb' => 'POST'],
+		['name' => 'mail#send', 'url' => '/api/candidates/{candidateId}/mail', 'verb' => 'POST'],
 		['name' => 'template#index', 'url' => '/api/templates', 'verb' => 'GET'],
 		['name' => 'template#create', 'url' => '/api/templates', 'verb' => 'POST'],
 		['name' => 'template#update', 'url' => '/api/templates/{id}', 'verb' => 'PUT'],

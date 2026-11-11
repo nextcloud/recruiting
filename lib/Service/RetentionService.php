@@ -251,6 +251,7 @@ class RetentionService {
 		$candidate->setDisplayName(self::ANONYMIZED_NAME);
 		$candidate->setEmail('');
 		$candidate->setPhone('');
+		$candidate->setLanguage(null);
 		$candidate->setAiSummary(null);
 		$candidate->setDuplicateOf(null);
 		$candidate->setPoolMember(false);

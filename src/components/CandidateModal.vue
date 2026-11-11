@@ -12,6 +12,10 @@
 				<NcTextField v-model="form.email" type="email" :label="t('recruiting', 'Email address')" />
 				<NcTextField v-model="form.phone" type="tel" :label="t('recruiting', 'Phone')" />
 			</div>
+			<LanguageSelect
+				v-model="form.language"
+				:label="t('recruiting', 'Language for emails (optional)')"
+				:placeholder="t('recruiting', 'Not set — the server’s default language')" />
 
 			<div
 				class="candidate-modal__dropzone"
@@ -65,12 +69,13 @@ import NcModal from '@nextcloud/vue/components/NcModal'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import Close from 'vue-material-design-icons/Close.vue'
 import Paperclip from 'vue-material-design-icons/Paperclip.vue'
+import LanguageSelect from './LanguageSelect.vue'
 import api, { errorMessage } from '../api.js'
 import { formatSize } from '../utils/format.js'
 
 export default {
 	name: 'CandidateModal',
-	components: { Close, NcButton, NcModal, NcTextField, Paperclip },
+	components: { Close, LanguageSelect, NcButton, NcModal, NcTextField, Paperclip },
 	props: {
 		openingId: { type: Number, required: true },
 	},
@@ -85,6 +90,7 @@ export default {
 				displayName: '',
 				email: '',
 				phone: '',
+				language: null,
 			},
 		}
 	},

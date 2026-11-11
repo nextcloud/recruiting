@@ -17,6 +17,7 @@ use OCA\Recruiting\Db\Interview;
 use OCA\Recruiting\Db\InterviewAttendeeMapper;
 use OCA\Recruiting\Db\InterviewMapper;
 use OCA\Recruiting\Db\OfferMapper;
+use OCA\Recruiting\Db\Opening;
 use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Db\TeamMember;
 use OCA\Recruiting\Db\TeamMemberMapper;
@@ -71,6 +72,7 @@ class CandidateService {
 		private ITimeFactory $timeFactory,
 		private IL10N $l10n,
 		private PortalService $portal,
+		private LanguageService $languages,
 	) {
 	}
 
@@ -198,6 +200,69 @@ class CandidateService {
 	}
 
 	/**
+	 * Candidates where something is stuck (the board's "Stuck" lens, see
+	 * attentionFor()) in the openings the user manages and has not closed.
+	 *
+	 * @return list<array{id: int, displayName: string, openingId: int, openingTitle: string, stage: string, attention: string[]}>
+	 */
+	public function stuckCandidates(string $uid): array {
+		$managed = null;
+		if (!$this->permissions->isRecruiter($uid)) {
+			$managed = [];
+			foreach ($this->teamMapper->findForUser($uid) as $membership) {
+				if ($membership->getRole() === TeamMember::ROLE_MANAGER) {
+					$managed[] = $membership->getOpeningId();
+				}
+			}
+			if ($managed === []) {
+				return [];
+			}
+		}
+		$titles = [];
+		foreach ($this->openingMapper->findAll() as $opening) {
+			if ($opening->getStatus() !== Opening::STATUS_CLOSED
+				&& ($managed === null || in_array($opening->getId(), $managed, true))) {
+				$titles[$opening->getId()] = $opening->getTitle();
+			}
+		}
+		if ($titles === []) {
+			return [];
+		}
+
+		$candidates = $this->candidateMapper->findActiveInOpenings(array_keys($titles));
+		$ids = array_map(static fn (Candidate $c) => $c->getId(), $candidates);
+		$now = $this->timeFactory->getDateTime();
+		$tallies = $this->voteMapper->tallyFor($ids);
+		$nextInterviews = $this->interviewMapper->nextConfirmedFor($ids, $now);
+		$activeOffers = $this->offerMapper->activeFor($ids);
+
+		$result = [];
+		foreach ($candidates as $candidate) {
+			$id = $candidate->getId();
+			if (!$this->permissions->canManageCandidate($uid, $candidate)) {
+				continue;
+			}
+			$attention = $this->attentionFor($candidate, [
+				'voteCount' => array_sum($tallies[$id] ?? []),
+				'nextInterviewAt' => $nextInterviews[$id] ?? null,
+			], $activeOffers[$id] ?? null, $now);
+			if ($attention === []) {
+				continue;
+			}
+			$openingId = (int)$candidate->getOpeningId();
+			$result[] = [
+				'id' => $id,
+				'displayName' => $candidate->getDisplayName(),
+				'openingId' => $openingId,
+				'openingTitle' => $titles[$openingId] ?? '',
+				'stage' => $candidate->getStage(),
+				'attention' => $attention,
+			];
+		}
+		return $result;
+	}
+
+	/**
 	 * Full detail for the sidebar.
 	 *
 	 * @throws NotPermittedException
@@ -292,6 +357,8 @@ class CandidateService {
 			throw new ValidationException($this->l10n->t('The email address is invalid'));
 		}
 
+		$language = $this->languages->parse($data['language'] ?? null);
+
 		$candidate = $this->insertCandidate(
 			$openingId,
 			$name,
@@ -299,6 +366,8 @@ class CandidateService {
 			trim((string)($data['phone'] ?? '')),
 			Candidate::SOURCE_MANUAL,
 			$uid,
+			null,
+			$language,
 		);
 		return $this->get($uid, $candidate->getId());
 	}
@@ -306,9 +375,10 @@ class CandidateService {
 	/**
 	 * Shared insertion path for manual entry, mail ingestion, the public form
 	 * and referrals: handles duplicate detection, the portal token, the
-	 * timeline, activity and manager notifications.
+	 * timeline, activity and manager notifications. $language must already
+	 * be a known language code (see LanguageService).
 	 */
-	public function insertCandidate(?int $openingId, string $name, string $email, string $phone, string $source, ?string $createdBy, ?string $referredBy = null): Candidate {
+	public function insertCandidate(?int $openingId, string $name, string $email, string $phone, string $source, ?string $createdBy, ?string $referredBy = null, ?string $language = null): Candidate {
 		$now = $this->timeFactory->getDateTime();
 
 		// Mail headers are attacker/typo territory: clamp to the column sizes,
@@ -331,6 +401,7 @@ class CandidateService {
 		$candidate->setCreatedAt($now);
 		$candidate->setPortalToken($this->portal->newToken());
 		$candidate->setReferredBy($referredBy);
+		$candidate->setLanguage($language);
 
 		$duplicate = $this->candidateMapper->findRecentByEmail(
 			$email,
@@ -374,6 +445,9 @@ class CandidateService {
 		}
 		if (array_key_exists('phone', $data)) {
 			$candidate->setPhone(trim((string)$data['phone']));
+		}
+		if (array_key_exists('language', $data)) {
+			$candidate->setLanguage($this->languages->parse($data['language']));
 		}
 		$this->candidateMapper->update($candidate);
 		return $this->get($uid, $id);
@@ -475,7 +549,7 @@ class CandidateService {
 			if ($askPool) {
 				$url = $this->pool->prepareConsentUrl($candidate, $uid);
 				$mailBody = rtrim($mailBody) . "\n\n"
-					. $this->l10n->t('PS: We would love to consider you for future openings. If you agree that we keep your application on file, just confirm here: %s', [$url]);
+					. $this->mail->l10nFor($candidate)->t('PS: We would love to consider you for future openings. If you agree that we keep your application on file, just confirm here: %s', [$url]);
 			}
 			$this->mail->sendToCandidate($candidate, $mailSubject, $mailBody, $uid);
 		}

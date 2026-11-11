@@ -112,6 +112,7 @@ class RetentionServiceTest extends TestCase {
 		$candidate->setDisplayName('Jane Doe');
 		$candidate->setEmail('jane@example.org');
 		$candidate->setPhone('+49 123');
+		$candidate->setLanguage('de');
 		$candidate->setAiSummary('Great candidate');
 		$candidate->setDuplicateOf(3);
 
@@ -152,6 +153,7 @@ class RetentionServiceTest extends TestCase {
 		$this->assertSame(RetentionService::ANONYMIZED_NAME, $candidate->getDisplayName());
 		$this->assertSame('', $candidate->getEmail());
 		$this->assertSame('', $candidate->getPhone());
+		$this->assertNull($candidate->getLanguage());
 		$this->assertNull($candidate->getAiSummary());
 		$this->assertNull($candidate->getDuplicateOf());
 		$this->assertNotNull($candidate->getAnonymizedAt());

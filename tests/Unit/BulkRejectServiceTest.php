@@ -96,6 +96,46 @@ class BulkRejectServiceTest extends TestCase {
 		$this->assertSame([], $result['failed']);
 	}
 
+	public function testWithATemplateEachCandidateGetsItInTheirOwnLanguage(): void {
+		$german = $this->candidate(1, 'one@example.org');
+		$german->setLanguage('de');
+		$english = $this->candidate(2, 'two@example.org');
+		$english->setLanguage('en');
+		$this->candidateMapper->method('findByIds')->willReturn([$german, $english]);
+		$this->mail->expects($this->exactly(2))->method('preview')
+			->with($this->isInstanceOf(Candidate::class), 'Backend Engineer', 'rejection', null, 'hr')
+			->willReturnCallback(static fn (Candidate $c) => [
+				'subject' => $c->getLanguage() === 'de' ? 'Ihre Bewerbung' : 'Your application',
+				'body' => 'Body ' . $c->getLanguage(),
+			]);
+		$this->mail->expects($this->never())->method('render');
+		$sent = [];
+		$this->candidates->method('rejectCandidate')
+			->willReturnCallback(function (string $uid, Candidate $c, string $reason, ?string $subject) use (&$sent) {
+				$sent[$c->getId()] = $subject;
+			});
+
+		$this->service->reject('hr', [1, 2], 'position_filled', true, '', '', false, '');
+
+		$this->assertSame([1 => 'Ihre Bewerbung', 2 => 'Your application'], $sent);
+	}
+
+	public function testAChosenTemplateIsPassedOnPerCandidate(): void {
+		$this->candidateMapper->method('findByIds')->willReturn([$this->candidate(1, 'one@example.org')]);
+		$this->mail->expects($this->once())->method('preview')
+			->with($this->anything(), $this->anything(), 'rejection', '12', 'hr')
+			->willReturn(['subject' => 'S', 'body' => 'B']);
+
+		$result = $this->service->reject('hr', [1], 'position_filled', true, '', '', false, '12');
+
+		$this->assertSame([], $result['failed']);
+	}
+
+	public function testAnEmptyTextWithoutATemplateIsStillRejected(): void {
+		$this->expectException(\OCA\Recruiting\Exception\ValidationException::class);
+		$this->service->reject('hr', [1], 'position_filled', true, '', '', false);
+	}
+
 	public function testOneFailureNeverAbortsTheRest(): void {
 		$this->candidateMapper->method('findByIds')->willReturn([
 			$this->candidate(1, 'one@example.org'),

@@ -6,7 +6,7 @@
 	<div class="templates-view">
 		<h2>{{ t('recruiting', 'Mail templates') }}</h2>
 		<p class="templates-view__hint">
-			{{ t('recruiting', 'Templates for candidate mail. The built-in templates are always available; mark one of your own as default to replace them. Every send shows a resolved preview first.') }}
+			{{ t('recruiting', 'Templates for candidate mail. The built-in templates are always available and are written in each candidate’s language; mark one of your own as default to replace them. A template with a language is the default for candidates with that language only. Every send lets you pick a template and shows a resolved preview first.') }}
 		</p>
 
 		<NcLoadingIcon v-if="loading" :size="44" class="templates-view__loading" />
@@ -24,6 +24,7 @@
 							<strong>{{ template.name }}</strong>
 							<span v-if="template.isDefault" class="template-card__badge">{{ t('recruiting', 'Default') }}</span>
 							<span v-else-if="template.builtin" class="template-card__badge template-card__badge--builtin">{{ t('recruiting', 'Built-in') }}</span>
+							<span v-if="template.language" class="template-card__badge template-card__badge--builtin">{{ languages.name(template.language) }}</span>
 						</div>
 						<p class="template-card__subject">
 							{{ template.subject }}
@@ -61,6 +62,10 @@
 			<div class="template-editor">
 				<h2>{{ editing.id ? t('recruiting', 'Edit template') : t('recruiting', 'New template') }}</h2>
 				<NcTextField v-model="editing.name" :label="t('recruiting', 'Template name')" />
+				<LanguageSelect
+					v-model="editing.language"
+					:label="t('recruiting', 'Language')"
+					:placeholder="t('recruiting', 'Any language')" />
 				<NcTextField v-model="editing.subject" :label="t('recruiting', 'Subject')" />
 				<div class="template-editor__placeholders">
 					<span class="template-editor__placeholders-label">{{ t('recruiting', 'Placeholders — click to insert:') }}</span>
@@ -81,7 +86,9 @@
 					rows="12"
 					resize="vertical" />
 				<NcCheckboxRadioSwitch v-model="editing.isDefault" type="switch">
-					{{ t('recruiting', 'Use as default for this mail type') }}
+					{{ editing.language
+						? t('recruiting', 'Use as default for this mail type in this language')
+						: t('recruiting', 'Use as default for this mail type') }}
 				</NcCheckboxRadioSwitch>
 				<div class="template-editor__buttons">
 					<NcButton @click="editing = null">
@@ -98,24 +105,32 @@
 
 <script>
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { getLanguage } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import LanguageSelect from '../components/LanguageSelect.vue'
 import api, { errorMessage } from '../api.js'
+import { useLanguagesStore } from '../store.js'
 import { confirmDestructive } from '../utils/confirm.js'
 
 export default {
 	name: 'TemplatesView',
 	components: {
+		LanguageSelect,
 		NcButton,
 		NcCheckboxRadioSwitch,
 		NcLoadingIcon,
 		NcModal,
 		NcTextArea,
 		NcTextField,
+	},
+
+	setup() {
+		return { languages: useLanguagesStore() }
 	},
 
 	data() {
@@ -135,12 +150,16 @@ export default {
 				{ id: 'offer', label: this.t('recruiting', 'Offer') },
 				{ id: 'rejection', label: this.t('recruiting', 'Rejection') },
 				{ id: 'interview_reminder', label: this.t('recruiting', 'Interview reminder') },
+				{ id: 'custom', label: this.t('recruiting', 'Personal email') },
 			]
 		},
 	},
 
 	created() {
 		this.load()
+		this.languages.load().catch(() => {
+			// badges show the language code instead
+		})
 	},
 
 	methods: {
@@ -208,6 +227,8 @@ export default {
 				name: this.t('recruiting', 'Custom {name}', { name: template.name.replace(/ \(.*\)$/, '') }),
 				subject: template.subject,
 				body: template.body,
+				// the built-in text is shown in the user's language
+				language: getLanguage().replace('-', '_'),
 				isDefault: true,
 			}
 		},

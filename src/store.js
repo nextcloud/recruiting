@@ -152,3 +152,35 @@ export const useSidebarStore = defineStore('sidebar', {
 		},
 	},
 })
+
+let languagesRequest = null
+
+/**
+ * Languages a candidate or a mail template can have — loaded once, on
+ * first use.
+ */
+export const useLanguagesStore = defineStore('languages', {
+	state: () => ({
+		languages: [],
+		loaded: false,
+	}),
+	getters: {
+		name: (state) => (code) => state.languages.find((language) => language.code === code)?.name ?? code,
+	},
+	actions: {
+		async load() {
+			if (this.loaded) {
+				return
+			}
+			languagesRequest ??= api.getLanguages()
+				.then(({ data }) => {
+					this.languages = data
+					this.loaded = true
+				})
+				.finally(() => {
+					languagesRequest = null
+				})
+			await languagesRequest
+		},
+	},
+})

@@ -33,4 +33,13 @@ class CandidateTimeFormatterTest extends TestCase {
 		$result = $this->formatter('Mars/Olympus')->format(new \DateTime('2026-11-11T10:00:00Z'), 'boss');
 		$this->assertStringContainsString('(', $result['time']);
 	}
+
+	public function testTheCandidatesLanguageCanBeGiven(): void {
+		$german = $this->createMock(IL10N::class);
+		$german->method('l')->willReturnCallback(
+			static fn (string $type, \DateTimeInterface $at) => 'de:' . $at->format($type === 'date' ? 'd.m.Y' : 'H:i'),
+		);
+		$result = $this->formatter('Europe/Berlin')->format(new \DateTime('2026-11-11T10:00:00Z'), 'boss', $german);
+		$this->assertSame(['date' => 'de:11.11.2026', 'time' => 'de:11:00 (Europe/Berlin)'], $result);
+	}
 }

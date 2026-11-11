@@ -12,6 +12,23 @@ export const fromNow = (iso) => (iso ? moment(iso).fromNow() : '')
 export const daysSince = (iso) => (iso ? Math.max(0, moment().diff(moment(iso), 'days')) : 0)
 
 /**
+ * Why a candidate counts as stuck (CandidateService::attentionFor)
+ *
+ * @param {string} reason attention reason
+ * @return {string}
+ */
+export function attentionLabel(reason) {
+	return {
+		waiting: t('recruiting', 'Waiting in "New" for a week'),
+		no_votes: t('recruiting', 'In screening without a single vote'),
+		no_interview: t('recruiting', 'No upcoming interview booked'),
+		no_offer: t('recruiting', 'In "Offer" without an active offer'),
+		offer_expiring: t('recruiting', 'The offer expires within three days'),
+		stale: t('recruiting', 'More than 30 days in this stage'),
+	}[reason] ?? reason
+}
+
+/**
  *
  * @param stage
  */

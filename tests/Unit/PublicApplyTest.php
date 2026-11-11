@@ -15,6 +15,7 @@ use OCA\Recruiting\Db\OpeningMapper;
 use OCA\Recruiting\Service\ApplicationFormToken;
 use OCA\Recruiting\Service\IngestionService;
 use OCA\Recruiting\Service\InterviewService;
+use OCA\Recruiting\Service\LanguageService;
 use OCA\Recruiting\Service\PoolService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -33,6 +34,7 @@ use Psr\Log\NullLogger;
 class PublicApplyTest extends TestCase {
 	private IngestionService&MockObject $ingestion;
 	private ApplicationFormToken&MockObject $formToken;
+	private LanguageService&MockObject $languages;
 	/** @var array<string, string> */
 	private array $params = [];
 	private string $tokenState = ApplicationFormToken::VALID;
@@ -62,6 +64,13 @@ class PublicApplyTest extends TestCase {
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnArgument(0);
 
+		$this->languages = $this->createMock(LanguageService::class);
+		$this->languages->method('normalize')->willReturnCallback(
+			static fn ($code) => in_array($code, ['de', 'en'], true) ? $code : null,
+		);
+		$this->languages->method('requestLanguage')->willReturn('de');
+		$this->languages->method('languages')->willReturn([['code' => 'de', 'name' => 'Deutsch'], ['code' => 'en', 'name' => 'English (US)']]);
+
 		$this->controller = new PublicController(
 			'recruiting',
 			$request,
@@ -75,6 +84,7 @@ class PublicApplyTest extends TestCase {
 			$this->createMock(Defaults::class),
 			$l10n,
 			new NullLogger(),
+			$this->languages,
 		);
 
 		$this->params = [
@@ -102,6 +112,26 @@ class PublicApplyTest extends TestCase {
 		$response = $this->submit();
 
 		$this->assertTrue($response->getParams()['done']);
+	}
+
+	public function testTheFormOffersTheLanguagesAndPreselectsTheBrowserLanguage(): void {
+		$params = $this->controller->showApplication('backend-dev')->getParams();
+		$this->assertSame(['de', 'en'], array_column($params['languages'], 'code'));
+		$this->assertSame('de', $params['values']['language']);
+	}
+
+	public function testTheChosenLanguageIsStoredWithTheApplication(): void {
+		$this->params['language'] = 'en';
+		$this->ingestion->expects($this->once())->method('ingestWebApplication')
+			->with($this->isInstanceOf(Opening::class), 'Ada Lovelace', 'ada@example.org', 'Hello', null, 'en');
+		$this->submit();
+	}
+
+	public function testAnUnknownLanguageIsIgnored(): void {
+		$this->params['language'] = 'xx-forged';
+		$this->ingestion->expects($this->once())->method('ingestWebApplication')
+			->with($this->isInstanceOf(Opening::class), 'Ada Lovelace', 'ada@example.org', 'Hello', null, null);
+		$this->submit();
 	}
 
 	public function testTheTokenIsCheckedAgainstTheOpeningSlug(): void {
@@ -138,7 +168,7 @@ class PublicApplyTest extends TestCase {
 		$this->assertFalse($params['done']);
 		$this->assertSame(['The form has expired. Please submit it again.'], $params['errors']);
 		$this->assertSame('fresh-token', $params['token']);
-		$this->assertSame(['name' => 'Ada Lovelace', 'email' => 'ada@example.org', 'cover' => 'Hello'], $params['values']);
+		$this->assertSame(['name' => 'Ada Lovelace', 'email' => 'ada@example.org', 'cover' => 'Hello', 'language' => 'de'], $params['values']);
 	}
 
 	public function testTheHoneypotWinsOverEverything(): void {

@@ -21,6 +21,11 @@
 			</NcCheckboxRadioSwitch>
 
 			<template v-if="sendMail && candidate.email">
+				<TemplatePicker
+					:templates="templates"
+					:modelValue="templateId"
+					:disabled="loadingPreview"
+					@update:modelValue="loadPreview" />
 				<NcLoadingIcon v-if="loadingPreview" :size="24" />
 				<template v-else>
 					<NcTextField v-model="subject" :label="t('recruiting', 'Subject')" />
@@ -66,6 +71,7 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AiAssist from './AiAssist.vue'
+import TemplatePicker from './TemplatePicker.vue'
 import api, { errorMessage } from '../api.js'
 import { useSessionStore, useSidebarStore } from '../store.js'
 import { reasonLabel } from '../utils/format.js'
@@ -81,6 +87,7 @@ export default {
 		NcSelect,
 		NcTextArea,
 		NcTextField,
+		TemplatePicker,
 	},
 
 	props: {
@@ -102,6 +109,8 @@ export default {
 			askPool: false,
 			subject: '',
 			body: '',
+			templates: [],
+			templateId: null,
 			loadingPreview: false,
 			working: false,
 		}
@@ -113,24 +122,35 @@ export default {
 		},
 	},
 
-	async created() {
+	created() {
 		this.reason = this.reasonOptions[0] ?? null
 		if (this.candidate.email) {
-			this.loadingPreview = true
-			try {
-				const { data } = await api.previewMail(this.candidate.id, 'rejection')
-				this.subject = data.subject
-				this.body = data.body
-			} catch (error) {
-				showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))
-				this.sendMail = false
-			} finally {
-				this.loadingPreview = false
-			}
+			this.loadPreview(null)
 		}
 	},
 
 	methods: {
+		/**
+		 * @param {?string} templateId null = the default for the candidate's language
+		 */
+		async loadPreview(templateId) {
+			this.loadingPreview = true
+			try {
+				const { data } = await api.previewMail(this.candidate.id, 'rejection', templateId)
+				this.subject = data.subject
+				this.body = data.body
+				this.templates = data.templates ?? []
+				this.templateId = String(data.templateId)
+			} catch (error) {
+				showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))
+				if (this.templates.length === 0) {
+					this.sendMail = false
+				}
+			} finally {
+				this.loadingPreview = false
+			}
+		},
+
 		async reject() {
 			this.working = true
 			try {

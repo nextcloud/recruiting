@@ -10,6 +10,54 @@ All notable changes to this app are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Write email** in the candidate sidebar (header menu, or click the address
+  on the profile): a personal mail from a template or from scratch, with
+  placeholders, a live preview and an optional assistant draft (it gets the
+  subject as the topic, the application as fenced background, no contact
+  data). It goes out like every candidate mail — with the candidate's
+  Reply-To address — and is logged on the timeline (`kind: custom`).
+  `POST /api/candidates/{id}/mail`, manage access required. New template type
+  "Personal email" (`custom`) with a built-in skeleton.
+- A template picker in every compose dialog (rejection, bulk rejection and
+  closing an opening, offer, interview invitation, write email), listing the
+  built-in and the custom templates of that type. The mail preview returns the
+  templates of the type and the id of the template it used.
+- Candidates have a language (`recruiting_candidates.language`): chosen on
+  the public application form (preselected from the browser), optional in the
+  referral form and in manual entry, editable in the profile. Templates have
+  an optional language (`recruiting_templates.language`). Anonymization
+  clears the candidate language.
+- A **Today** page as the app's start page: offers waiting for your approval,
+  your confirmed interviews of the next seven days, candidates waiting for
+  your vote, stuck candidates in the openings you manage (the board's "Stuck"
+  rules), and for recruiters the triage count and the mailbox heartbeat.
+  `GET /api/today`; every entry is permission-checked.
+- A Nextcloud Dashboard widget "Recruiting today" with the same items, shown
+  only to recruiters, hiring-team members, screeners and offer approvers.
+- Link previews: a pasted candidate link (`…/apps/recruiting/#/candidate/42`)
+  shows name, opening and stage — only to users who may view that candidate.
+
+### Changed
+
+- Candidate mail is written in the candidate's language: the default template
+  is the custom default in that language, else the language-neutral custom
+  default, else the built-in rendered in the candidate's language. Built-ins
+  for candidates without a language use the instance default language instead
+  of the language of whoever sends. This covers automatic mails too (receipt
+  confirmation, interview reminders) and the appended talent-pool and
+  scheduling-link sentences, dates in reminders and offers, and the mail
+  footer. Assistant drafts are asked for the candidate's language when set.
+- There is one default template per type and language; "Customize" on a
+  built-in prefills your language.
+- Bulk rejection with an unedited template sends each candidate that template
+  in their own language (`templateId` instead of `subject`/`body`).
+- The profile no longer opens the local mail program for the address; the
+  address opens "Write email" and can be copied with a button.
+- The start page no longer jumps to the first opening; openings stay in the
+  navigation.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

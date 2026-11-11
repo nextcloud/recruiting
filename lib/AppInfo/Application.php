@@ -8,9 +8,11 @@ declare(strict_types=1);
 
 namespace OCA\Recruiting\AppInfo;
 
+use OCA\Recruiting\Dashboard\TodayWidget;
 use OCA\Recruiting\Listener\AiTaskListener;
 use OCA\Recruiting\Listener\UserDeletedListener;
 use OCA\Recruiting\Notification\Notifier;
+use OCA\Recruiting\Reference\CandidateReferenceProvider;
 use OCA\Recruiting\Search\RecruitingSearchProvider;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -34,6 +36,8 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(UserDeletedEvent::class, UserDeletedListener::class);
 		$context->registerEventListener(TaskSuccessfulEvent::class, AiTaskListener::class);
 		$context->registerEventListener(TaskFailedEvent::class, AiTaskListener::class);
+		$context->registerDashboardWidget(TodayWidget::class);
+		$context->registerReferenceProvider(CandidateReferenceProvider::class);
 	}
 
 	#[\Override]

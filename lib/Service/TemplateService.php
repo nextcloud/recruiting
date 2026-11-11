@@ -39,6 +39,7 @@ class TemplateService {
 	public function __construct(
 		private MailTemplateMapper $mapper,
 		private IL10N $l10n,
+		private LanguageService $languages,
 	) {
 	}
 
@@ -51,41 +52,79 @@ class TemplateService {
 	}
 
 	/**
-	 * The effective template for a type: the custom default if one is
-	 * marked, the built-in otherwise.
+	 * The templates a compose dialog offers for one mail type: the built-in
+	 * first, then the custom ones.
 	 *
-	 * @return array{subject: string, body: string}
+	 * @return list<array{id: int|string, name: string, language: ?string, isDefault: bool, builtin: bool}>
 	 */
-	public function effectiveFor(string $type): array {
-		foreach ($this->mapper->findByType($type) as $template) {
-			if ($template->getIsDefault()) {
-				return ['subject' => $template->getSubject(), 'body' => $template->getBody()];
-			}
-		}
+	public function listForType(string $type): array {
+		$result = [];
 		$builtin = $this->builtins()[$type] ?? null;
-		if ($builtin === null) {
-			throw new ValidationException($this->l10n->t('Unknown template type'));
+		if ($builtin !== null) {
+			$result[] = self::summary($builtin);
 		}
-		return ['subject' => $builtin['subject'], 'body' => $builtin['body']];
+		foreach ($this->mapper->findByType($type) as $template) {
+			$result[] = self::summary($template->jsonSerialize());
+		}
+		return $result;
 	}
 
 	/**
-	 * @return array{subject: string, body: string}
+	 * The effective template for a type and a candidate language: the
+	 * custom default in that language, else one in its base language ("de"
+	 * for "de_DE"), else the language-neutral custom default, else the
+	 * built-in rendered in that language. A missing language means the
+	 * instance default.
+	 *
+	 * @return array{id: int|string, subject: string, body: string, language: ?string}
 	 * @throws ValidationException
 	 */
-	public function resolve(string $type, ?string $templateId): array {
-		if ($templateId === null || $templateId === '' || str_starts_with($templateId, 'builtin:')) {
-			if ($templateId !== null && str_starts_with($templateId, 'builtin:')) {
-				$builtinType = substr($templateId, strlen('builtin:'));
-				$builtin = $this->builtins()[$builtinType] ?? null;
-				if ($builtin !== null) {
-					return ['subject' => $builtin['subject'], 'body' => $builtin['body']];
+	public function effectiveFor(string $type, ?string $language = null): array {
+		$language = $this->languages->effectiveLanguage($language);
+		$defaults = array_values(array_filter(
+			$this->mapper->findByType($type),
+			static fn (MailTemplate $template) => $template->getIsDefault(),
+		));
+		$primary = strtolower(explode('_', $language)[0]);
+		$matches = [
+			static fn (?string $l) => $l !== null && strcasecmp($l, $language) === 0,
+			static fn (?string $l) => $l !== null && strtolower(explode('_', $l)[0]) === $primary,
+			static fn (?string $l) => $l === null || $l === '',
+		];
+		foreach ($matches as $match) {
+			foreach ($defaults as $template) {
+				if ($match($template->getLanguage())) {
+					return self::content($template->jsonSerialize());
 				}
 			}
-			return $this->effectiveFor($type);
 		}
-		$template = $this->mapper->find((int)$templateId);
-		return ['subject' => $template->getSubject(), 'body' => $template->getBody()];
+		$builtin = $this->builtinsIn($language)[$type] ?? null;
+		if ($builtin === null) {
+			throw new ValidationException($this->l10n->t('Unknown template type'));
+		}
+		return array_merge(self::content($builtin), ['language' => $language]);
+	}
+
+	/**
+	 * The template a mail is written from: the chosen one, or the effective
+	 * default when none was chosen. Built-ins are rendered in $language.
+	 *
+	 * @return array{id: int|string, subject: string, body: string, language: ?string}
+	 * @throws ValidationException
+	 */
+	public function resolve(string $type, ?string $templateId, ?string $language = null): array {
+		if ($templateId === null || $templateId === '') {
+			return $this->effectiveFor($type, $language);
+		}
+		if (str_starts_with($templateId, 'builtin:')) {
+			$language = $this->languages->effectiveLanguage($language);
+			$builtin = $this->builtinsIn($language)[substr($templateId, strlen('builtin:'))] ?? null;
+			if ($builtin === null) {
+				return $this->effectiveFor($type, $language);
+			}
+			return array_merge(self::content($builtin), ['language' => $language]);
+		}
+		return self::content($this->mapper->find((int)$templateId)->jsonSerialize());
 	}
 
 	/**
@@ -98,6 +137,7 @@ class TemplateService {
 		$template->setName($name);
 		$template->setSubject($subject);
 		$template->setBody($body);
+		$template->setLanguage($this->languages->parse($data['language'] ?? null));
 		$template = $this->mapper->insert($template);
 		if ((bool)($data['isDefault'] ?? false)) {
 			$this->markDefault($template);
@@ -114,14 +154,17 @@ class TemplateService {
 		$template->setName($name);
 		$template->setSubject($subject);
 		$template->setBody($body);
+		if (array_key_exists('language', $data)) {
+			$template->setLanguage($this->languages->parse($data['language']));
+		}
 		$this->mapper->update($template);
-		if (array_key_exists('isDefault', $data)) {
-			if ((bool)$data['isDefault']) {
-				$this->markDefault($template);
-			} else {
-				$template->setIsDefault(false);
-				$this->mapper->update($template);
-			}
+		$isDefault = array_key_exists('isDefault', $data) ? (bool)$data['isDefault'] : $template->getIsDefault();
+		if ($isDefault) {
+			// also after a language change: one default per type and language
+			$this->markDefault($template);
+		} elseif ($template->getIsDefault()) {
+			$template->setIsDefault(false);
+			$this->mapper->update($template);
 		}
 		return $this->mapper->find($id);
 	}
@@ -165,9 +208,47 @@ class TemplateService {
 	}
 
 	private function markDefault(MailTemplate $template): void {
-		$this->mapper->clearDefault($template->getType());
+		$this->mapper->clearDefault($template->getType(), $template->getLanguage());
 		$template->setIsDefault(true);
 		$this->mapper->update($template);
+	}
+
+	/**
+	 * @return array{id: int|string, subject: string, body: string, language: ?string}
+	 */
+	private static function content(array $template): array {
+		return [
+			'id' => $template['id'],
+			'subject' => (string)$template['subject'],
+			'body' => (string)$template['body'],
+			'language' => $template['language'] ?? null,
+		];
+	}
+
+	/**
+	 * @return array{id: int|string, name: string, language: ?string, isDefault: bool, builtin: bool}
+	 */
+	private static function summary(array $template): array {
+		return [
+			'id' => $template['id'],
+			'name' => (string)$template['name'],
+			'language' => $template['language'] ?? null,
+			'isDefault' => (bool)$template['isDefault'],
+			'builtin' => (bool)$template['builtin'],
+		];
+	}
+
+	/**
+	 * The built-ins in a candidate's language. They are translatable
+	 * strings, so they are rendered with that language's translations
+	 * instead of the sender's.
+	 *
+	 * @return array<string, array>
+	 */
+	private function builtinsIn(string $language): array {
+		$localized = clone $this;
+		$localized->l10n = $this->languages->l10nFor($language);
+		return $localized->builtins();
 	}
 
 	/**
@@ -217,6 +298,15 @@ class TemplateService {
 				'name' => $this->l10n->t('Interview reminder (built-in)'),
 				'subject' => $this->l10n->t('Reminder: your interview on {{interview_date}}'),
 				'body' => $this->l10n->t("Dear {{candidate_name}},\n\nThis is a friendly reminder of your interview ({{interview_title}}) for the {{opening_title}} position on {{interview_date}} at {{interview_time}}.\n\nWhere: {{interview_location}}\n\nAll details are on your interview page, where you can also let us know if you need to reschedule:\n{{interview_link}}\n\nYour application overview: {{portal_link}}\n\nWe are looking forward to meeting you!\n\nKind regards\n{{sender_name}}\n{{company}}"),
+				'isDefault' => false,
+				'builtin' => true,
+			],
+			MailTemplate::TYPE_CUSTOM => [
+				'id' => 'builtin:' . MailTemplate::TYPE_CUSTOM,
+				'type' => MailTemplate::TYPE_CUSTOM,
+				'name' => $this->l10n->t('Personal email (built-in)'),
+				'subject' => $this->l10n->t('Your application at {{company}}'),
+				'body' => $this->l10n->t("Dear {{candidate_name}},\n\n\n\nKind regards\n{{sender_name}}\n{{company}}"),
 				'isDefault' => false,
 				'builtin' => true,
 			],

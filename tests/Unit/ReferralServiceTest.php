@@ -20,6 +20,7 @@ use OCA\Recruiting\Service\CandidateService;
 use OCA\Recruiting\Service\CandidateStatus;
 use OCA\Recruiting\Service\ConfigService;
 use OCA\Recruiting\Service\DocumentService;
+use OCA\Recruiting\Service\LanguageService;
 use OCA\Recruiting\Service\ReferralService;
 use OCA\Recruiting\Service\TimelineService;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -34,6 +35,7 @@ class ReferralServiceTest extends TestCase {
 	private CandidateService&MockObject $candidates;
 	private DocumentService&MockObject $documents;
 	private TimelineService&MockObject $timeline;
+	private LanguageService&MockObject $languages;
 	private ReferralService $service;
 
 	protected function setUp(): void {
@@ -51,9 +53,10 @@ class ReferralServiceTest extends TestCase {
 		$this->candidates = $this->createMock(CandidateService::class);
 		$this->documents = $this->createMock(DocumentService::class);
 		$this->timeline = $this->createMock(TimelineService::class);
+		$this->languages = $this->createMock(LanguageService::class);
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(static fn (string $s) => $s);
-		$this->service = new ReferralService($this->config, $this->openingMapper, $this->candidateMapper, $this->candidates, $this->documents, $this->timeline, $l10n);
+		$this->service = new ReferralService($this->config, $this->openingMapper, $this->candidateMapper, $this->candidates, $this->documents, $this->timeline, $l10n, $this->languages);
 	}
 
 	private function opening(int $id, string $status): Opening {
@@ -96,7 +99,7 @@ class ReferralServiceTest extends TestCase {
 	public function testReferralCreatesACandidateWithSourceAndReferrer(): void {
 		$candidate = $this->created();
 		$this->candidates->expects($this->once())->method('insertCandidate')
-			->with(1, 'Grace Hopper', 'grace@example.org', '+1 555 0100', Candidate::SOURCE_REFERRAL, 'bob', 'bob')
+			->with(1, 'Grace Hopper', 'grace@example.org', '+1 555 0100', Candidate::SOURCE_REFERRAL, 'bob', 'bob', null)
 			->willReturn($candidate);
 		$this->timeline->expects($this->once())->method('record')
 			->with(42, TimelineEvent::TYPE_REFERRAL_NOTE, 'bob', ['note' => 'Brilliant compiler engineer, we worked together.']);
@@ -105,6 +108,21 @@ class ReferralServiceTest extends TestCase {
 		$result = $this->service->create('bob', $this->valid(), null);
 		$this->assertSame(CandidateStatus::RECEIVED, $result['status']);
 		$this->assertSame('Opening 1', $result['openingTitle']);
+	}
+
+	public function testTheReferrerCanSetTheCandidatesLanguage(): void {
+		$this->languages->method('parse')->with('de')->willReturn('de');
+		$this->candidates->expects($this->once())->method('insertCandidate')
+			->with(1, 'Grace Hopper', 'grace@example.org', '+1 555 0100', Candidate::SOURCE_REFERRAL, 'bob', 'bob', 'de')
+			->willReturn($this->created());
+		$this->service->create('bob', $this->valid(['language' => 'de']), null);
+	}
+
+	public function testAnUnknownLanguageStopsTheReferralBeforeAnythingIsCreated(): void {
+		$this->languages->method('parse')->willThrowException(new ValidationException('Unknown language'));
+		$this->candidates->expects($this->never())->method('insertCandidate');
+		$this->expectException(ValidationException::class);
+		$this->service->create('bob', $this->valid(['language' => 'klingon']), null);
 	}
 
 	public function testTheCvBecomesADocument(): void {
@@ -155,7 +173,7 @@ class ReferralServiceTest extends TestCase {
 		$config->method('isReferralsEnabled')->willReturn(false);
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnArgument(0);
-		$service = new ReferralService($config, $this->openingMapper, $this->candidateMapper, $this->candidates, $this->documents, $this->timeline, $l10n);
+		$service = new ReferralService($config, $this->openingMapper, $this->candidateMapper, $this->candidates, $this->documents, $this->timeline, $l10n, $this->languages);
 		$this->candidates->expects($this->never())->method('insertCandidate');
 		$this->expectException(NotPermittedException::class);
 		$service->create('bob', $this->valid(), null);

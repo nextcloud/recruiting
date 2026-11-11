@@ -25,8 +25,17 @@ class ConfigController extends Controller {
 		private \OCA\Recruiting\Service\ConfigService $config,
 		private \OCA\Recruiting\Service\PermissionService $permissions,
 		private \OCP\IUserSession $userSession,
+		private \OCA\Recruiting\Service\LanguageService $languages,
 	) {
 		parent::__construct($appName, $request);
+	}
+
+	/**
+	 * Languages a candidate or a mail template can have.
+	 */
+	#[NoAdminRequired]
+	public function languages(): DataResponse {
+		return $this->handle(fn () => $this->languages->languages());
 	}
 
 	#[NoAdminRequired]

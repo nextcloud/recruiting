@@ -104,6 +104,12 @@
 					{{ t('recruiting', 'This candidate has no email address. Copy the scheduling link and send it yourself.') }}
 				</NcNoteCard>
 
+				<TemplatePicker
+					v-if="candidate.email"
+					:templates="templates"
+					:modelValue="templateId"
+					:disabled="loadingTemplate"
+					@update:modelValue="loadTemplate" />
 				<NcTextField v-model="mailSubject" :label="t('recruiting', 'Subject')" :disabled="!candidate.email" />
 				<NcTextArea
 					v-model="mailBody"
@@ -161,6 +167,7 @@ import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import SendOutline from 'vue-material-design-icons/SendOutline.vue'
 import AiAssist from './AiAssist.vue'
+import TemplatePicker from './TemplatePicker.vue'
 import api, { errorMessage } from '../api.js'
 import { useOpeningsStore, useSessionStore, useSidebarStore } from '../store.js'
 import { copyToClipboard } from '../utils/clipboard.js'
@@ -183,6 +190,7 @@ export default {
 		NcTextField,
 		Plus,
 		SendOutline,
+		TemplatePicker,
 	},
 
 	props: {
@@ -214,6 +222,9 @@ export default {
 			interview: null,
 			mailSubject: '',
 			mailBody: '',
+			templates: [],
+			templateId: null,
+			loadingTemplate: false,
 			sending: false,
 		}
 	},
@@ -312,11 +323,36 @@ export default {
 				this.interview = data.interview
 				this.mailSubject = data.inviteDraft.subject
 				this.mailBody = data.inviteDraft.body
+				this.templateId = String(data.inviteDraft.templateId)
 				this.step = 2
+				if (this.candidate.email) {
+					this.loadTemplate(this.templateId, false)
+				}
 			} catch (error) {
 				showError(errorMessage(error, this.t('recruiting', 'Could not create the interview')))
 			} finally {
 				this.creating = false
+			}
+		},
+
+		/**
+		 * @param {string} templateId the template to write the invitation from
+		 * @param {boolean} replaceText false: only load the list of templates
+		 */
+		async loadTemplate(templateId, replaceText = true) {
+			this.loadingTemplate = true
+			try {
+				const { data } = await api.previewMail(this.candidate.id, 'interview_invite', templateId, { interviewId: this.interview.id })
+				this.templates = data.templates ?? []
+				if (replaceText) {
+					this.mailSubject = data.subject
+					this.mailBody = data.body
+					this.templateId = String(data.templateId)
+				}
+			} catch (error) {
+				showError(errorMessage(error, this.t('recruiting', 'Could not load the mail template')))
+			} finally {
+				this.loadingTemplate = false
 			}
 		},
 
